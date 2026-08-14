@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart LLM Router</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">⚡</span>
+      <div>
+        <h1>Smart LLM Router</h1>
+        <p>Understand the query first, then decide which model answers it.</p>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="chat">Chat</button>
+      <button class="tab" data-tab="dashboard">Dashboard</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ================= CHAT TAB ================= -->
+    <section id="tab-chat" class="tab-panel active">
+      <div class="chat-layout">
+        <div class="chat-col">
+          <div id="messages" class="messages">
+            <div class="msg assistant">
+              <div class="bubble">
+                <p>Hi! I route every query through a <strong>context analyzer</strong> and a
+                <strong>smart routing engine</strong> that picks the most cost-effective model
+                for your question. Try a few different kinds of queries and watch the
+                model choice change.</p>
+                <div class="suggestions">
+                  <button class="chip">What is HTML?</button>
+                  <button class="chip">Write a Python loop to print even numbers</button>
+                  <button class="chip">Debug this: my React component re-renders infinitely</button>
+                  <button class="chip">Prove that the square root of 2 is irrational</button>
+                  <button class="chip">Design a distributed database system for a social network</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <form id="chat-form" class="composer">
+            <textarea id="query-input" rows="2" placeholder="Ask anything..." required></textarea>
+            <button id="send-btn" type="submit">Send ↵</button>
+          </form>
+        </div>
+
+        <aside class="meta-col">
+          <div id="meta-empty" class="meta-card">
+            <h3>Routing transparency</h3>
+            <p>Send a query to see <em>which</em> model was chosen and <em>why</em>.</p>
+          </div>
+          <div id="meta-card" class="meta-card hidden">
+            <div class="meta-head">
+              <span id="model-badge" class="model-badge">—</span>
+              <span id="demo-tag" class="demo-tag hidden">demo</span>
+            </div>
+            <div class="meta-row">
+              <span>Complexity</span>
+              <div class="meter"><div id="complexity-bar" class="meter-fill"></div></div>
+              <span id="complexity-val" class="mono">0.00</span>
+            </div>
+            <div class="meta-row">
+              <span>Reasoning</span><span id="reasoning-val" class="mono">—</span>
+            </div>
+            <div class="meta-row">
+              <span>Task type</span><span id="task-val" class="mono">—</span>
+            </div>
+            <div class="meta-row">
+              <span>Latency</span><span id="latency-val" class="mono">—</span>
+            </div>
+            <div class="meta-row">
+              <span>Tokens (in/out)</span><span id="tokens-val" class="mono">—</span>
+            </div>
+            <div class="meta-row">
+              <span>Est. cost</span><span id="cost-val" class="mono">—</span>
+            </div>
+            <details class="why-box">
+              <summary>Why this model?</summary>
+              <p id="reason-text"></p>
+              <div id="scores"></div>
+              <div id="signals"></div>
+            </details>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ================= DASHBOARD TAB ================= -->
+    <section id="tab-dashboard" class="tab-panel">
+      <div id="dash-loading" class="loading">Loading analytics…</div>
+      <div id="dash" class="dash hidden">
+        <div class="cards">
+          <div class="card"><h3>Total requests</h3><p id="d-total">—</p></div>
+          <div class="card"><h3>Success rate</h3><p id="d-success">—</p></div>
+          <div class="card"><h3>Avg latency</h3><p id="d-latency">—</p></div>
+          <div class="card"><h3>Total est. cost</h3><p id="d-cost">—</p></div>
+          <div class="card highlight"><h3>Estimated savings</h3><p id="d-savings">—</p></div>
+        </div>
+
+        <div class="dash-grid">
+          <div class="panel">
+            <h3>Model usage distribution</h3>
+            <div id="d-distribution" class="bars"></div>
+          </div>
+          <div class="panel">
+            <h3>Cost: without vs with router</h3>
+            <div class="bars">
+              <div class="bar-row">
+                <span class="bar-label">Without</span>
+                <div class="meter-lg"><div id="d-baseline" class="meter-fill red"></div></div>
+                <span id="d-baseline-val" class="mono">—</span>
+              </div>
+              <div class="bar-row">
+                <span class="bar-label">With</span>
+                <div class="meter-lg"><div id="d-with" class="meter-fill green"></div></div>
+                <span id="d-with-val" class="mono">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Feedback</h3>
+            <div class="bars">
+              <div class="bar-row">
+                <span class="bar-label">👍 Good</span>
+                <div class="meter-lg"><div id="d-good" class="meter-fill green"></div></div>
+                <span id="d-good-val" class="mono">—</span>
+              </div>
+              <div class="bar-row">
+                <span class="bar-label">👎 Poor</span>
+                <div class="meter-lg"><div id="d-poor" class="meter-fill red"></div></div>
+                <span id="d-poor-val" class="mono">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="panel wide">
+            <h3>Recent requests</h3>
+            <table id="d-history">
+              <thead><tr><th>Time</th><th>Query</th><th>Task</th><th>Complexity</th><th>Model</th><th>Latency</th><th>Cost</th><th>Status</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
