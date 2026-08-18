@@ -1,21 +1,61 @@
-"""Smart Routing Engine: multi-factor scoring over the model registry.
+"""Smart Routing Engine: Multi-factor scoring, model resolution, and fallback ordering.
 
-For every query the router scores each available model on five axes:
-quality suitability, complexity compatibility, cost efficiency, latency
-efficiency and historical performance. Weights are configurable via
-`routing_weights` in Settings.
-
-The decision record keeps the full score breakdown so the UI (and the
-user) can see exactly why a model was chosen. No hard-coded
-simple/medium/complex rules — the winner emerges from the scoring.
+Scores candidate models along:
+- Quality suitability
+- Complexity compatibility
+- Reasoning requirement
+- Coding requirement
+- Cost efficiency
+- Latency efficiency
+- Historical reliability
 """
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from .analyzer import QueryAnalysis
+from .analyzer_llm import AnalyzerDecision
 from .config import settings
 from .registry import ModelSpec, registry
+
+
+class BudgetExceededError(RuntimeError):
+    """Raised when no model fits the configured per-request cost cap."""
+
+
+STRATEGIES: Dict[str, Dict[str, float]] = {
+    "balanced": {
+        "quality_suitability": 1.0,
+        "complexity_compatibility": 1.0,
+        "reasoning_compatibility": 1.0,
+        "coding_compatibility": 1.0,
+        "cost_efficiency": 1.0,
+        "latency_efficiency": 1.0,
+    },
+    "lowest_cost": {
+        "quality_suitability": 0.6,
+        "complexity_compatibility": 0.8,
+        "reasoning_compatibility": 0.7,
+        "coding_compatibility": 0.8,
+        "cost_efficiency": 3.0,
+        "latency_efficiency": 1.5,
+    },
+    "fastest": {
+        "quality_suitability": 0.7,
+        "complexity_compatibility": 0.9,
+        "reasoning_compatibility": 0.8,
+        "coding_compatibility": 0.8,
+        "cost_efficiency": 1.0,
+        "latency_efficiency": 3.0,
+    },
+    "highest_quality": {
+        "quality_suitability": 2.5,
+        "complexity_compatibility": 1.2,
+        "reasoning_compatibility": 2.0,
+        "coding_compatibility": 2.0,
+        "cost_efficiency": 0.3,
+        "latency_efficiency": 0.5,
+    },
+}
 
 
 @dataclass
@@ -23,161 +63,145 @@ class ModelScore:
     model: ModelSpec
     quality_suitability: float
     complexity_compatibility: float
+    reasoning_compatibility: float
+    coding_compatibility: float
     cost_efficiency: float
     latency_efficiency: float
-    historical_performance: float
     total: float
+
+    def factors(self) -> Dict[str, float]:
+        return {
+            "quality_suitability": self.quality_suitability,
+            "complexity_compatibility": self.complexity_compatibility,
+            "reasoning_compatibility": self.reasoning_compatibility,
+            "coding_compatibility": self.coding_compatibility,
+            "cost_efficiency": self.cost_efficiency,
+            "latency_efficiency": self.latency_efficiency,
+            "total": self.total,
+        }
 
 
 @dataclass
-class RoutingDecision:
-    model: ModelSpec
+class RoutingResult:
+    primary_model: ModelSpec
+    fallback_chain: List[ModelSpec]
     scores: Dict[str, ModelScore]
     reason: str
+    strategy: str
 
-    @property
-    def winner(self) -> ModelScore:
-        return self.scores[self.model.model_id]
-
-
-def _capability_fit(capability: float, required: float) -> float:
-    """Fitness of a model's capability for a required level.
-
-    Underpowered models are penalised heavily; overpowered models get a
-    mild 'overkill' penalty so the router avoids wasting money.
-    """
-    if required <= 0:
-        return 1.0
-    if capability >= required:
-        surplus = (capability - required) / required
-        return max(0.0, 1.0 - 0.25 * surplus)
-    deficit = (required - capability) / required
-    return max(0.0, 1.0 - 2.0 * deficit)
-
-
-def _requirements(analysis: QueryAnalysis) -> Dict[str, float]:
-    """Map an analysis to required capability levels in 0..1."""
-    task_floor = {
-        "coding": {"coding": 0.55},
-        "math": {"reasoning": 0.60},
-        "reasoning": {"reasoning": 0.60},
-        "creative": {"quality": 0.55},
-        "factual": {},
-        "general": {},
-    }.get(analysis.task_type, {})
-    required = {
-        "quality": analysis.complexity,
-        "reasoning": analysis.complexity,
-        "coding": analysis.complexity,
-    }
-    for cap, floor in task_floor.items():
-        required[cap] = max(required[cap], floor)
-    if analysis.reasoning_required == "high":
-        required["reasoning"] = max(required["reasoning"], 0.72)
-        required["quality"] = max(required["quality"], 0.68)
-    elif analysis.reasoning_required == "medium":
-        required["reasoning"] = max(required["reasoning"], 0.45)
-    return required
+    def candidates(self) -> List[dict]:
+        rows = []
+        for s in sorted(self.scores.values(), key=lambda s: -s.total):
+            expected_cost = s.model.price_per_1k * 1.5  # ~1.5K tokens
+            rows.append({
+                "model_id": s.model.model_id,
+                "name": s.model.name,
+                "provider": s.model.provider,
+                "tier": s.model.tier,
+                "total": round(s.total, 3),
+                "expected_cost_usd": round(expected_cost, 6),
+                "expected_latency_ms": s.model.expected_latency_ms,
+                "selected": s.model.model_id == self.primary_model.model_id,
+                "factors": s.factors(),
+            })
+        return rows
 
 
 class SmartRouter:
     def __init__(self, weights: Optional[Dict[str, float]] = None):
         w = weights or settings.routing_weights
-        total = sum(w.values()) or 1.0
-        self.weights = {k: v / total for k, v in w.items()}
+        self.base_weights = {
+            "quality_suitability": w.get("quality_suitability", 0.30),
+            "complexity_compatibility": w.get("complexity_compatibility", 0.15),
+            "reasoning_compatibility": w.get("reasoning_compatibility", 0.15),
+            "coding_compatibility": w.get("task_compatibility", 0.15),
+            "cost_efficiency": w.get("cost_efficiency", 0.15),
+            "latency_efficiency": w.get("latency_efficiency", 0.10),
+        }
 
-    def _history_score(self, model: ModelSpec, task_type: str,
-                       history_stats: Dict[str, Dict[str, float]]) -> float:
-        """Blend of the model's average feedback for this task type and its
-        reliability, toward a neutral 0.5 when there is no data."""
-        stats = history_stats.get(task_type, {}).get(model.model_id)
-        if not stats:
-            return 0.5
-        n = stats.get("n", 0)
-        avg_rating = stats.get("avg_feedback", 0.0)  # -1..1
-        success_rate = stats.get("success_rate", 1.0)
-        confidence = min(n / 20.0, 1.0)
-        quality_signal = 0.5 + 0.5 * avg_rating  # -1..1 -> 0..1
-        return 0.5 + (quality_signal * success_rate - 0.5) * confidence
+    def effective_weights(self, strategy: str) -> Dict[str, float]:
+        strat_profile = STRATEGIES.get(strategy, STRATEGIES["balanced"])
+        scaled = {k: self.base_weights.get(k, 0.1) * strat_profile.get(k, 1.0) for k in self.base_weights}
+        total = sum(scaled.values()) or 1.0
+        return {k: v / total for k, v in scaled.items()}
 
-    def route(self, analysis: QueryAnalysis,
-              history_stats: Optional[Dict[str, Dict[str, float]]] = None) -> RoutingDecision:
-        history_stats = history_stats or {}
-        models = registry.available()
-        if not models:
-            raise RuntimeError("No models available. Configure an API key or enable mock models.")
+    def resolve(self, decision: AnalyzerDecision, strategy: str = "balanced") -> RoutingResult:
+        available = [m for m in registry.available() if m.tier != "analyzer"]
+        if not available:
+            raise RuntimeError("No execution models available in registry.")
 
-        required = _requirements(analysis)
+        weights = self.effective_weights(strategy)
+        min_price = min(m.price_per_1k for m in available)
+        min_latency = min(m.expected_latency_ms for m in available)
 
-        # Hard eligibility gate: a model that is clearly underpowered for
-        # the query must never win on cost/latency alone. Below the gate a
-        # model is excluded from contention (still usable as fallback).
-        gate = required["quality"] * 0.8 if required["quality"] > 0.35 else 0.0
-        contenders = [m for m in models if m.quality >= gate] or models
+        scores: Dict[str, ModelScore] = {}
+        for m in available:
+            # 1. Quality suitability
+            q_fit = 1.0 - abs(m.quality - decision.complexity_score)
+            if m.quality < decision.complexity_score:
+                q_fit *= 0.6  # penalize underpowered models
 
-        cheapest = min(m.price_per_1k for m in contenders)
-        fastest = min(m.expected_latency_ms for m in contenders)
+            # 2. Complexity compatibility
+            c_fit = 1.0 if m.quality >= decision.complexity_score else (m.quality / max(0.01, decision.complexity_score))
 
-        scored: Dict[str, ModelScore] = {}
-        for m in contenders:
-            quality_fit = _capability_fit(m.quality, required["quality"])
-            complexity_fit = 1.0 - min(0.8 * abs(m.quality - analysis.complexity), 0.8)
-            if m.quality < analysis.complexity:
-                complexity_fit = max(0.0, complexity_fit - 0.5 * (analysis.complexity - m.quality))
-            cost_fit = min(1.0, cheapest / m.price_per_1k) if m.price_per_1k > 0 else 1.0
-            latency_fit = min(1.0, fastest / m.expected_latency_ms) if m.expected_latency_ms > 0 else 1.0
-            history_fit = self._history_score(m, analysis.task_type, history_stats)
+            # 3. Reasoning compatibility
+            r_fit = m.reasoning if decision.reasoning_required else (1.0 - 0.2 * m.reasoning)
+
+            # 4. Coding compatibility
+            cd_fit = m.coding if decision.coding_required else (1.0 - 0.1 * m.coding)
+
+            # 5. Cost efficiency
+            cost_fit = (min_price / m.price_per_1k) if m.price_per_1k > 0 else 1.0
+
+            # 6. Latency efficiency
+            lat_fit = (min_latency / m.expected_latency_ms) if m.expected_latency_ms > 0 else 1.0
+
+            # Bonus for matching target provider and tier
+            provider_bonus = 0.20 if m.provider == decision.target_provider else 0.0
+            tier_bonus = 0.25 if decision.target_tier in m.tier else 0.0
 
             total = (
-                self.weights["quality_suitability"] * quality_fit
-                + self.weights["complexity_compatibility"] * complexity_fit
-                + self.weights["cost_efficiency"] * cost_fit
-                + self.weights["latency_efficiency"] * latency_fit
-                + self.weights["historical_performance"] * history_fit
+                weights["quality_suitability"] * q_fit
+                + weights["complexity_compatibility"] * c_fit
+                + weights["reasoning_compatibility"] * r_fit
+                + weights["coding_compatibility"] * cd_fit
+                + weights["cost_efficiency"] * cost_fit
+                + weights["latency_efficiency"] * lat_fit
+                + provider_bonus
+                + tier_bonus
             )
-            scored[m.model_id] = ModelScore(
+
+            scores[m.model_id] = ModelScore(
                 model=m,
-                quality_suitability=round(quality_fit, 4),
-                complexity_compatibility=round(complexity_fit, 4),
-                cost_efficiency=round(cost_fit, 4),
-                latency_efficiency=round(latency_fit, 4),
-                historical_performance=round(history_fit, 4),
-                total=round(total, 4),
+                quality_suitability=round(q_fit, 3),
+                complexity_compatibility=round(c_fit, 3),
+                reasoning_compatibility=round(r_fit, 3),
+                coding_compatibility=round(cd_fit, 3),
+                cost_efficiency=round(cost_fit, 3),
+                latency_efficiency=round(lat_fit, 3),
+                total=round(total, 3),
             )
 
-        winner_id = max(scored, key=lambda k: (scored[k].total, -scored[k].model.price_per_1k))
-        winner = scored[winner_id].model
-        reason = self._build_reason(analysis, scored[winner_id], required)
-        return RoutingDecision(model=winner, scores=scored, reason=reason)
+        # Primary selection: match target provider + tier if available, otherwise highest score
+        target_model = registry.get_by_provider_and_tier(decision.target_provider, decision.target_tier)
+        if not target_model:
+            target_model = registry.get_by_tier(decision.target_tier)
+        if not target_model:
+            target_model = max(scores.values(), key=lambda s: s.total).model
 
-    def ranking(self, decision: RoutingDecision) -> List[ModelSpec]:
-        """Fallback chain: best model first."""
-        return [s.model for s in sorted(decision.scores.values(), key=lambda s: -s.total)]
+        # Build fallback chain
+        fallback_chain = [target_model]
+        for s in sorted(scores.values(), key=lambda s: -s.total):
+            if s.model.model_id != target_model.model_id:
+                fallback_chain.append(s.model)
 
-    def _build_reason(self, analysis: QueryAnalysis, winner: ModelScore, required: Dict[str, float]) -> str:
-        parts = [f"Query classified as '{analysis.task_type}' with complexity {analysis.complexity:.2f}"]
-        if required["reasoning"] >= 0.72:
-            parts.append("high reasoning needs")
-        elif required["reasoning"] >= 0.45:
-            parts.append("moderate reasoning needs")
-        else:
-            parts.append("low reasoning needs")
-        parts.append(
-            f"'{winner.model.name}' scored best at {winner.total:.3f} "
-            f"(quality {winner.quality_suitability:.2f}, complexity-fit {winner.complexity_compatibility:.2f}, "
-            f"cost {winner.cost_efficiency:.2f}, latency {winner.latency_efficiency:.2f}, "
-            f"history {winner.historical_performance:.2f})"
+        return RoutingResult(
+            primary_model=target_model,
+            fallback_chain=fallback_chain,
+            scores=scores,
+            reason=decision.reason,
+            strategy=strategy,
         )
-        return ". ".join(parts) + "."
-
-
-def compute_history_stats() -> Dict[str, Dict[str, Dict[str, float]]]:
-    """Aggregate stored request/feedback data for the router.
-
-    Shape: {task_type: {model_id: {n, avg_feedback, success_rate}}}
-    """
-    from .tracker import tracker
-    return tracker.history_stats()
 
 
 router = SmartRouter()

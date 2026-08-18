@@ -3,151 +3,360 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart LLM Router</title>
+  <title>Context-Aware Smart LLM Router | Cost & Performance Optimization</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+  <!-- TOPBAR -->
   <header class="topbar">
     <div class="brand">
-      <span class="logo">⚡</span>
-      <div>
-        <h1>Smart LLM Router</h1>
-        <p>Understand the query first, then decide which model answers it.</p>
+      <div class="logo-icon">⚡</div>
+      <div class="brand-text">
+        <span class="brand-title">Smart LLM Switcher</span>
+        <span class="brand-tagline">Context-Aware Cost & Performance Orchestrator</span>
       </div>
     </div>
-    <nav class="tabs">
-      <button class="tab active" data-tab="chat">Chat</button>
-      <button class="tab" data-tab="dashboard">Dashboard</button>
+
+    <nav class="nav-tabs">
+      <button class="nav-tab active" data-tab="chat">
+        <span class="tab-icon">💬</span> Chat Studio
+      </button>
+      <button class="nav-tab" data-tab="dashboard">
+        <span class="tab-icon">📊</span> Telemetry & Analytics
+      </button>
+      <button class="nav-tab" data-tab="benchmark">
+        <span class="tab-icon">🧪</span> Research Benchmark
+      </button>
+      <button class="nav-tab" data-tab="health">
+        <span class="tab-icon">🔌</span> Provider Health
+      </button>
     </nav>
+
+    <div class="topbar-status">
+      <div class="status-indicator">
+        <span class="status-dot pulse"></span>
+        <span class="status-text" id="engine-status">3 Providers Active</span>
+      </div>
+    </div>
   </header>
 
-  <main>
-    <!-- ================= CHAT TAB ================= -->
-    <section id="tab-chat" class="tab-panel active">
-      <div class="chat-layout">
-        <div class="chat-col">
-          <div id="messages" class="messages">
-            <div class="msg assistant">
-              <div class="bubble">
-                <p>Hi! I route every query through a <strong>context analyzer</strong> and a
-                <strong>smart routing engine</strong> that picks the most cost-effective model
-                for your question. Try a few different kinds of queries and watch the
-                model choice change.</p>
-                <div class="suggestions">
-                  <button class="chip">What is HTML?</button>
-                  <button class="chip">Write a Python loop to print even numbers</button>
-                  <button class="chip">Debug this: my React component re-renders infinitely</button>
-                  <button class="chip">Prove that the square root of 2 is irrational</button>
-                  <button class="chip">Design a distributed database system for a social network</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <form id="chat-form" class="composer">
-            <textarea id="query-input" rows="2" placeholder="Ask anything..." required></textarea>
-            <button id="send-btn" type="submit">Send ↵</button>
-          </form>
+  <!-- MAIN VIEW CONTAINER -->
+  <main class="main-container">
+    
+    <!-- 1. CHAT STUDIO TAB -->
+    <section id="tab-chat" class="tab-view active">
+      <div class="chat-container">
+        <!-- Quick Starter Chips -->
+        <div class="quick-prompts" id="quick-prompts">
+          <span class="quick-label">Try sample queries:</span>
+          <button class="quick-chip" data-query="What is an API and how does REST work?">
+            <span class="chip-tier fast">Fast</span> What is an API?
+          </button>
+          <button class="quick-chip" data-query="Write a Python implementation of Dijkstra's algorithm with priority queue.">
+            <span class="chip-tier coding">Coding</span> Dijkstra in Python
+          </button>
+          <button class="quick-chip" data-query="Design a fault-tolerant distributed cache architecture with replication and failover for 10 million concurrent users.">
+            <span class="chip-tier reasoning">Reasoning</span> Distributed Cache Architecture
+          </button>
+          <button class="quick-chip" data-query="Now optimize the space complexity of that previous implementation.">
+            <span class="chip-tier context">Context</span> Follow-up: Optimize it
+          </button>
         </div>
 
-        <aside class="meta-col">
-          <div id="meta-empty" class="meta-card">
-            <h3>Routing transparency</h3>
-            <p>Send a query to see <em>which</em> model was chosen and <em>why</em>.</p>
+        <!-- Messages Stream -->
+        <div id="chat-messages" class="chat-messages">
+          <div class="welcome-card">
+            <div class="welcome-icon">🧠</div>
+            <h2>Context-Aware Smart LLM Switching</h2>
+            <p>Every request is evaluated by the <strong>OpenRouter Analyzer LLM</strong>, which assesses complexity, task type, coding/reasoning needs, and conversation context—then automatically routes to <strong>Google Gemini</strong> (Fast/Low-Cost) or <strong>Groq</strong> (Coding/Reasoning).</p>
+            <div class="architecture-pills">
+              <div class="arch-pill"><span class="pill-dot gemini"></span> Gemini: Fast / Simple</div>
+              <div class="arch-pill"><span class="pill-dot groq"></span> Groq: Qwen Coder</div>
+              <div class="arch-pill"><span class="pill-dot groq"></span> Groq: 120B Reasoning</div>
+              <div class="arch-pill"><span class="pill-dot openrouter"></span> OpenRouter: Analyzer</div>
+            </div>
           </div>
-          <div id="meta-card" class="meta-card hidden">
-            <div class="meta-head">
-              <span id="model-badge" class="model-badge">—</span>
-              <span id="demo-tag" class="demo-tag hidden">demo</span>
+        </div>
+
+        <!-- Composer Form -->
+        <form id="chat-form" class="composer-card">
+          <div class="composer-controls">
+            <div class="strategy-picker">
+              <label for="strategy-select">Strategy:</label>
+              <select id="strategy-select">
+                <option value="balanced">⚖️ Balanced (Recommended)</option>
+                <option value="lowest_cost">💰 Lowest Cost</option>
+                <option value="fastest">⚡ Ultra Fast</option>
+                <option value="highest_quality">🎯 Maximum Quality</option>
+              </select>
             </div>
-            <div class="meta-row">
-              <span>Complexity</span>
-              <div class="meter"><div id="complexity-bar" class="meter-fill"></div></div>
-              <span id="complexity-val" class="mono">0.00</span>
+            <div class="context-indicator" id="context-indicator" title="Conversation memory size">
+              <span>Memory: <strong id="context-count">0</strong> turns</span>
+              <button type="button" class="btn-text" id="clear-history-btn" title="Clear context">Clear</button>
             </div>
-            <div class="meta-row">
-              <span>Reasoning</span><span id="reasoning-val" class="mono">—</span>
-            </div>
-            <div class="meta-row">
-              <span>Task type</span><span id="task-val" class="mono">—</span>
-            </div>
-            <div class="meta-row">
-              <span>Latency</span><span id="latency-val" class="mono">—</span>
-            </div>
-            <div class="meta-row">
-              <span>Tokens (in/out)</span><span id="tokens-val" class="mono">—</span>
-            </div>
-            <div class="meta-row">
-              <span>Est. cost</span><span id="cost-val" class="mono">—</span>
-            </div>
-            <details class="why-box">
-              <summary>Why this model?</summary>
-              <p id="reason-text"></p>
-              <div id="scores"></div>
-              <div id="signals"></div>
-            </details>
           </div>
-        </aside>
+          <div class="composer-input-row">
+            <textarea id="query-input" rows="1" placeholder="Enter any question, coding task, or reasoning challenge..." required></textarea>
+            <button type="submit" id="send-btn" class="btn-send" title="Send (Enter)">
+              <span class="send-icon">▲</span>
+            </button>
+          </div>
+        </form>
       </div>
     </section>
 
-    <!-- ================= DASHBOARD TAB ================= -->
-    <section id="tab-dashboard" class="tab-panel">
-      <div id="dash-loading" class="loading">Loading analytics…</div>
-      <div id="dash" class="dash hidden">
-        <div class="cards">
-          <div class="card"><h3>Total requests</h3><p id="d-total">—</p></div>
-          <div class="card"><h3>Success rate</h3><p id="d-success">—</p></div>
-          <div class="card"><h3>Avg latency</h3><p id="d-latency">—</p></div>
-          <div class="card"><h3>Total est. cost</h3><p id="d-cost">—</p></div>
-          <div class="card highlight"><h3>Estimated savings</h3><p id="d-savings">—</p></div>
+    <!-- 2. ANALYTICS & TELEMETRY DASHBOARD TAB -->
+    <section id="tab-dashboard" class="tab-view">
+      <div class="dashboard-container">
+        <div class="view-header">
+          <div>
+            <h2>Real Execution Telemetry</h2>
+            <p class="subtitle">Live metrics calculated directly from SQLite database records.</p>
+          </div>
+          <button id="refresh-dashboard-btn" class="btn-secondary">
+            <span>↻</span> Refresh Telemetry
+          </button>
         </div>
 
-        <div class="dash-grid">
-          <div class="panel">
-            <h3>Model usage distribution</h3>
-            <div id="d-distribution" class="bars"></div>
+        <!-- KPI Metrics Grid -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <span class="metric-label">Total Requests</span>
+            <span class="metric-val" id="stat-total-requests">—</span>
+            <span class="metric-sub" id="stat-success-rate">Success: —</span>
           </div>
-          <div class="panel">
-            <h3>Cost: without vs with router</h3>
-            <div class="bars">
-              <div class="bar-row">
-                <span class="bar-label">Without</span>
-                <div class="meter-lg"><div id="d-baseline" class="meter-fill red"></div></div>
-                <span id="d-baseline-val" class="mono">—</span>
-              </div>
-              <div class="bar-row">
-                <span class="bar-label">With</span>
-                <div class="meter-lg"><div id="d-with" class="meter-fill green"></div></div>
-                <span id="d-with-val" class="mono">—</span>
-              </div>
-            </div>
+          <div class="metric-card highlight-savings">
+            <span class="metric-label">Estimated Cost Savings</span>
+            <span class="metric-val text-green" id="stat-savings-usd">—</span>
+            <span class="metric-sub text-green" id="stat-savings-pct">— savings vs powerful baseline</span>
           </div>
-          <div class="panel">
-            <h3>Feedback</h3>
-            <div class="bars">
-              <div class="bar-row">
-                <span class="bar-label">👍 Good</span>
-                <div class="meter-lg"><div id="d-good" class="meter-fill green"></div></div>
-                <span id="d-good-val" class="mono">—</span>
-              </div>
-              <div class="bar-row">
-                <span class="bar-label">👎 Poor</span>
-                <div class="meter-lg"><div id="d-poor" class="meter-fill red"></div></div>
-                <span id="d-poor-val" class="mono">—</span>
-              </div>
-            </div>
+          <div class="metric-card">
+            <span class="metric-label">Avg Total Latency</span>
+            <span class="metric-val" id="stat-avg-latency">—</span>
+            <span class="metric-sub" id="stat-analyzer-latency">Analyzer + Generation</span>
           </div>
-          <div class="panel wide">
-            <h3>Recent requests</h3>
-            <table id="d-history">
-              <thead><tr><th>Time</th><th>Query</th><th>Task</th><th>Complexity</th><th>Model</th><th>Latency</th><th>Cost</th><th>Status</th></tr></thead>
-              <tbody></tbody>
+          <div class="metric-card">
+            <span class="metric-label">Total Real Cost</span>
+            <span class="metric-val" id="stat-total-cost">—</span>
+            <span class="metric-sub" id="stat-baseline-cost">Baseline: —</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Tokens Processed</span>
+            <span class="metric-val" id="stat-total-tokens">—</span>
+            <span class="metric-sub">Real provider token counts</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">Resilient Fallbacks</span>
+            <span class="metric-val" id="stat-fallbacks">0</span>
+            <span class="metric-sub">Auto-recovered failovers</span>
+          </div>
+        </div>
+
+        <!-- Charts & Distributions -->
+        <div class="dashboard-panels-grid">
+          <div class="panel-card">
+            <h3>Provider & Model Distribution</h3>
+            <div id="chart-model-dist" class="bar-chart-container"></div>
+          </div>
+          <div class="panel-card">
+            <h3>Routing Tier Share</h3>
+            <div id="chart-tier-dist" class="bar-chart-container"></div>
+          </div>
+          <div class="panel-card">
+            <h3>Task Type Classification</h3>
+            <div id="chart-task-dist" class="bar-chart-container"></div>
+          </div>
+          <div class="panel-card">
+            <h3>Complexity Breakdown</h3>
+            <div id="chart-complexity-dist" class="bar-chart-container"></div>
+          </div>
+        </div>
+
+        <!-- Recent Requests Stream -->
+        <div class="panel-card table-panel">
+          <div class="table-header">
+            <h3>Live Request Stream</h3>
+            <span class="table-hint">Click any row to inspect complete routing scoreboard & tokens</span>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table" id="history-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Query</th>
+                  <th>Task Type</th>
+                  <th>Complexity</th>
+                  <th>Served Model</th>
+                  <th>Latency</th>
+                  <th>Cost</th>
+                  <th>Fallback</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="history-tbody">
+                <tr><td colspan="9" class="empty-state">Loading telemetry...</td></tr>
+              </tbody>
             </table>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- 3. RESEARCH BENCHMARK LAB TAB -->
+    <section id="tab-benchmark" class="tab-view">
+      <div class="benchmark-container">
+        <div class="view-header">
+          <div>
+            <h2>Research Objective & Baseline Comparison</h2>
+            <p class="subtitle">Empirical investigation comparing Baseline 1 (Always Powerful), Baseline 2 (Static Routing), and our Context-Aware Smart Switching Router.</p>
+          </div>
+          <button id="run-benchmark-btn" class="btn-primary">
+            <span>▶</span> Run Multi-Domain Benchmark
+          </button>
+        </div>
+
+        <!-- Benchmark Summary Cards -->
+        <div class="benchmark-summary-grid" id="benchmark-summary-cards" style="display:none;">
+          <div class="summary-card text-center highlight">
+            <span class="card-title">Overall Cost Reduction</span>
+            <span class="big-metric text-green" id="bm-overall-savings">0%</span>
+            <span class="card-desc" id="bm-saved-dollars">$0.00 saved vs Baseline 1</span>
+          </div>
+          <div class="summary-card text-center">
+            <span class="card-title">Latency Speedup</span>
+            <span class="big-metric text-blue" id="bm-overall-speedup">0%</span>
+            <span class="card-desc">Faster overall turnaround</span>
+          </div>
+          <div class="summary-card text-center">
+            <span class="card-title">Smart Router Total Cost</span>
+            <span class="big-metric" id="bm-smart-cost">$0.00</span>
+            <span class="card-desc" id="bm-baseline-cost">vs Baseline 1: $0.00</span>
+          </div>
+        </div>
+
+        <!-- Comparison Table -->
+        <div class="panel-card table-panel">
+          <h3>Benchmark Evaluation Matrix</h3>
+          <div class="table-responsive">
+            <table class="data-table benchmark-table" id="benchmark-table">
+              <thead>
+                <tr>
+                  <th>Query & Category</th>
+                  <th>Baseline 1 (Always Powerful)</th>
+                  <th>Baseline 2 (Static Routing)</th>
+                  <th>Our Smart Switcher</th>
+                  <th>Cost Savings</th>
+                  <th>Speedup</th>
+                </tr>
+              </thead>
+              <tbody id="benchmark-tbody">
+                <tr>
+                  <td colspan="6" class="empty-state">
+                    Click "Run Multi-Domain Benchmark" to execute the comparative evaluation.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. PROVIDER HEALTH & SETTINGS TAB -->
+    <section id="tab-health" class="tab-view">
+      <div class="health-container">
+        <div class="view-header">
+          <div>
+            <h2>Provider Connectivity & Health Monitoring</h2>
+            <p class="subtitle">Live status, latency pings, and model configurations for active LLM providers.</p>
+          </div>
+          <button id="test-providers-btn" class="btn-secondary">
+            <span>⚡</span> Ping All Providers
+          </button>
+        </div>
+
+        <div class="providers-grid">
+          <!-- OpenRouter Card -->
+          <div class="provider-card" id="card-openrouter">
+            <div class="p-header">
+              <div class="p-brand">
+                <span class="p-badge openrouter">OpenRouter</span>
+                <h4>Analyzer LLM Engine</h4>
+              </div>
+              <span class="p-status-pill checking" id="status-openrouter">Checking...</span>
+            </div>
+            <div class="p-body">
+              <div class="p-row"><span>Configured Model:</span> <code id="cfg-openrouter-model">meta-llama/llama-3.2-3b-instruct</code></div>
+              <div class="p-row"><span>Role:</span> <strong>Classification & Structured Routing Brain</strong></div>
+              <div class="p-row"><span>Ping Latency:</span> <strong id="ping-openrouter">—</strong></div>
+              <div class="p-row"><span>Fallback Tiers:</span> <span>Fast, Balanced, Coding, Reasoning, Powerful</span></div>
+            </div>
+          </div>
+
+          <!-- Gemini Card -->
+          <div class="provider-card" id="card-gemini">
+            <div class="p-header">
+              <div class="p-brand">
+                <span class="p-badge gemini">Google Gemini</span>
+                <h4>Fast / Low-Cost Model</h4>
+              </div>
+              <span class="p-status-pill checking" id="status-gemini">Checking...</span>
+            </div>
+            <div class="p-body">
+              <div class="p-row"><span>Configured Model:</span> <code id="cfg-gemini-model">gemini-2.5-flash-lite</code></div>
+              <div class="p-row"><span>Role:</span> <strong>Factual, General & Low-Complexity Tasks</strong></div>
+              <div class="p-row"><span>Ping Latency:</span> <strong id="ping-gemini">—</strong></div>
+              <div class="p-row"><span>Cost Profile:</span> <span>$0.075 / 1M input · $0.30 / 1M output</span></div>
+            </div>
+          </div>
+
+          <!-- Groq Card -->
+          <div class="provider-card" id="card-groq">
+            <div class="p-header">
+              <div class="p-brand">
+                <span class="p-badge groq">Groq LPU</span>
+                <h4>Coding & Reasoning Models</h4>
+              </div>
+              <span class="p-status-pill checking" id="status-groq">Checking...</span>
+            </div>
+            <div class="p-body">
+              <div class="p-row"><span>Coding Model:</span> <code id="cfg-groq-coding">qwen/qwen3.6-27b</code></div>
+              <div class="p-row"><span>Reasoning Model:</span> <code id="cfg-groq-reasoning">openai/gpt-oss-120b</code></div>
+              <div class="p-row"><span>Role:</span> <strong>Specialized Programming, Math & Architecture</strong></div>
+              <div class="p-row"><span>Ping Latency:</span> <strong id="ping-groq">—</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-card" style="margin-top:24px;">
+          <h3>Security & Architectural Guarantees</h3>
+          <ul class="security-list">
+            <li>🔒 <strong>Server-Side Secret Management:</strong> All API keys are loaded strictly from the server-side environment (`.env`) and never transmitted to the browser.</li>
+            <li>⚡ <strong>Zero Fake Data:</strong> All responses, latencies, token counts, and price calculations are 100% real executions.</li>
+            <li>🔄 <strong>Resilient Fallbacks:</strong> If any provider API fails or hits rate limits, the orchestrator automatically cascades to the next eligible model.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
   </main>
+
+  <!-- REQUEST INSPECTOR MODAL -->
+  <div id="inspector-modal" class="modal hidden">
+    <div class="modal-backdrop" onclick="closeInspector()"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-title">Request Telemetry Inspector</h3>
+        <button class="btn-close" onclick="closeInspector()" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <div class="loading-spinner">Loading detailed telemetry...</div>
+      </div>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>
