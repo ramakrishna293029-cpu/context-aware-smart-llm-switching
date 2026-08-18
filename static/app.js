@@ -1,127 +1,680 @@
 /* ============================================================
    Context-Aware Smart LLM Switcher - Client Application
+   Milestone 4: Modern ChatGPT-Style Frontend Architecture
    ============================================================ */
 
-const $ = (id) => document.getElementById(id);
-const chatHistory = [];
-let lastRequestId = null;
-let dashboardRefreshInterval = null;
+"use strict";
 
-// Initialize on DOM load
-document.addEventListener("DOMContentLoaded", () => {
-  setupTabs();
-  setupChat();
-  setupQuickChips();
-  setupDashboard();
-  setupBenchmark();
-  setupHealthCheck();
-});
+// Helper for element selection
+const $ = (id) => document.getElementById(id);
+const $$ = (sel) => document.querySelectorAll(sel);
 
 /* ============================================================
-   1. Tab Navigation
+   1. Storage & State Managers
    ============================================================ */
-function setupTabs() {
-  document.querySelectorAll(".nav-tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
-      document.querySelectorAll(".tab-view").forEach(v => v.classList.remove("active"));
 
-      tab.classList.add("active");
-      const targetId = `tab-${tab.dataset.tab}`;
-      const targetView = $(targetId);
-      if (targetView) targetView.classList.add("active");
+/**
+ * SettingsManager handles persistence of API keys, custom endpoints,
+ * model tier overrides, and preferences in localStorage.
+ */
+class SettingsManager {
+  static STORAGE_KEY = "smart_llm_settings";
 
-      // Actions on tab switch
-      if (tab.dataset.tab === "dashboard") {
-        loadDashboardStats();
-        startDashboardAutoRefresh();
-      } else {
-        stopDashboardAutoRefresh();
+  static getDefaults() {
+    return {
+      apiKeys: {
+        gemini: "",
+        groq: "",
+        openrouter: "",
+        openai: "",
+        custom: "",
+      },
+      customEndpoints: {
+        custom: "",
+      },
+      providerModels: {
+        geminiFast: "",
+        groqCoding: "",
+        groqReasoning: "",
+        openrouterAnalyzer: "",
+        openrouterPowerful: "",
+        openai: "",
+        custom: "",
+      },
+      tierOverrides: {
+        analyzer: "",
+        fast: "",
+        coding: "",
+        reasoning: "",
+        powerful: "",
+      },
+      preferences: {
+        theme: "dark",
+        strategy: "balanced",
+        autoScroll: true,
+      },
+    };
+  }
+
+  static load() {
+    try {
+      const raw = localStorage.getItem(this.STORAGE_KEY);
+      if (!raw) return this.getDefaults();
+      const parsed = JSON.parse(raw);
+      return {
+        apiKeys: { ...this.getDefaults().apiKeys, ...(parsed.apiKeys || {}) },
+        customEndpoints: { ...this.getDefaults().customEndpoints, ...(parsed.customEndpoints || {}) },
+        providerModels: { ...this.getDefaults().providerModels, ...(parsed.providerModels || {}) },
+        tierOverrides: { ...this.getDefaults().tierOverrides, ...(parsed.tierOverrides || {}) },
+        preferences: { ...this.getDefaults().preferences, ...(parsed.preferences || {}) },
+      };
+    } catch (e) {
+      console.warn("Failed to load settings from localStorage:", e);
+      return this.getDefaults();
+    }
+  }
+
+  static save(settings) {
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings));
+    } catch (e) {
+      console.error("Failed to save settings to localStorage:", e);
+    }
+  }
+
+  static clearKeys() {
+    const settings = this.load();
+    settings.apiKeys = this.getDefaults().apiKeys;
+    settings.customEndpoints = this.getDefaults().customEndpoints;
+    settings.providerModels = this.getDefaults().providerModels;
+    settings.tierOverrides = this.getDefaults().tierOverrides;
+    this.save(settings);
+  }
+
+  static getHeaders() {
+    const settings = this.load();
+    const headers = {
+      "Content-Type": "application/json",
+    };
+
+    const keys = settings.apiKeys || {};
+    if (keys.gemini) headers["X-Gemini-Key"] = keys.gemini.trim();
+    if (keys.groq) headers["X-Groq-Key"] = keys.groq.trim();
+    if (keys.openrouter) headers["X-OpenRouter-Key"] = keys.openrouter.trim();
+    if (keys.openai) headers["X-OpenAI-Key"] = keys.openai.trim();
+    if (keys.custom) headers["X-Custom-Key"] = keys.custom.trim();
+
+    const customUrl = (settings.customEndpoints?.custom || "").trim();
+    if (customUrl) {
+      headers["X-Custom-Base-URL"] = customUrl;
+      headers["X-Custom-Endpoint"] = customUrl;
+    }
+
+    const providerModels = settings.providerModels || {};
+    const customModel = (providerModels.custom || "").trim();
+    if (customModel) {
+      headers["X-Custom-Model"] = customModel;
+    }
+
+    const tiers = settings.tierOverrides || {};
+    const analyzerModel = (tiers.analyzer || providerModels.openrouterAnalyzer || "").trim();
+    if (analyzerModel) {
+      headers["X-Base-Model"] = analyzerModel;
+      headers["X-Analyzer-Model"] = analyzerModel;
+    }
+
+    const fastModel = (tiers.fast || providerModels.geminiFast || "").trim();
+    if (fastModel) headers["X-Fast-Model"] = fastModel;
+
+    const codingModel = (tiers.coding || providerModels.groqCoding || "").trim();
+    if (codingModel) headers["X-Coding-Model"] = codingModel;
+
+    const reasoningModel = (tiers.reasoning || providerModels.groqReasoning || "").trim();
+    if (reasoningModel) headers["X-Reasoning-Model"] = reasoningModel;
+
+    const powerfulModel = (tiers.powerful || providerModels.openrouterPowerful || "").trim();
+    if (powerfulModel) headers["X-Powerful-Model"] = powerfulModel;
+
+    return headers;
+  }
+}
+
+/**
+ * Centralized API Fetch Helper
+ * Injects dynamic credentials and tier overrides into every request.
+ */
+async function apiFetch(url, options = {}) {
+  const defaultHeaders = SettingsManager.getHeaders();
+  const customHeaders = options.headers || {};
+  const mergedHeaders = { ...defaultHeaders, ...customHeaders };
+  return fetch(url, { ...options, headers: mergedHeaders });
+}
+
+/**
+ * SessionManager handles multi-session conversation history stored in localStorage.
+ */
+class SessionManager {
+  static SESSIONS_KEY = "smart_llm_sessions";
+  static ACTIVE_KEY = "smart_llm_active_session";
+
+  constructor() {
+    this.sessions = [];
+    this.activeSessionId = null;
+    this.load();
+  }
+
+  load() {
+    try {
+      const raw = localStorage.getItem(SessionManager.SESSIONS_KEY);
+      this.sessions = raw ? JSON.parse(raw) : [];
+      this.activeSessionId = localStorage.getItem(SessionManager.ACTIVE_KEY);
+
+      if (!Array.isArray(this.sessions)) this.sessions = [];
+
+      // If no sessions exist or active is invalid, initialize one
+      if (this.sessions.length === 0) {
+        this.createSession("New Conversation", false);
+      } else if (!this.activeSessionId || !this.sessions.some(s => s.id === this.activeSessionId)) {
+        this.activeSessionId = this.sessions[0].id;
+        this.persistActiveId();
       }
+    } catch (e) {
+      console.warn("Failed to load sessions from localStorage:", e);
+      this.sessions = [];
+      this.createSession("New Conversation", false);
+    }
+  }
 
-      if (tab.dataset.tab === "health") {
-        checkProviderHealth();
+  save() {
+    try {
+      localStorage.setItem(SessionManager.SESSIONS_KEY, JSON.stringify(this.sessions));
+      this.persistActiveId();
+    } catch (e) {
+      console.error("Failed to save sessions to localStorage:", e);
+    }
+  }
+
+  persistActiveId() {
+    if (this.activeSessionId) {
+      localStorage.setItem(SessionManager.ACTIVE_KEY, this.activeSessionId);
+    }
+  }
+
+  getAll() {
+    return this.sessions;
+  }
+
+  getActive() {
+    return this.sessions.find(s => s.id === this.activeSessionId) || this.sessions[0];
+  }
+
+  createSession(title = "New Conversation", activate = true) {
+    const newSession = {
+      id: "sess_" + Date.now() + "_" + Math.random().toString(36).substring(2, 8),
+      title: title,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      messages: [],
+    };
+    this.sessions.unshift(newSession);
+    if (activate) {
+      this.activeSessionId = newSession.id;
+    }
+    this.save();
+    return newSession;
+  }
+
+  switchSession(id) {
+    if (this.sessions.some(s => s.id === id)) {
+      this.activeSessionId = id;
+      this.persistActiveId();
+      return true;
+    }
+    return false;
+  }
+
+  renameSession(id, newTitle) {
+    const s = this.sessions.find(item => item.id === id);
+    if (s && newTitle && newTitle.trim()) {
+      s.title = newTitle.trim();
+      s.updatedAt = Date.now();
+      this.save();
+      return true;
+    }
+    return false;
+  }
+
+  deleteSession(id) {
+    const idx = this.sessions.findIndex(s => s.id === id);
+    if (idx !== -1) {
+      this.sessions.splice(idx, 1);
+      if (this.sessions.length === 0) {
+        this.createSession("New Conversation", true);
+      } else if (this.activeSessionId === id) {
+        this.activeSessionId = this.sessions[0].id;
       }
-    });
-  });
+      this.save();
+      return true;
+    }
+    return false;
+  }
+
+  clearAll() {
+    this.sessions = [];
+    this.createSession("New Conversation", true);
+    this.save();
+  }
+
+  addMessage(role, content, telemetry = null) {
+    const active = this.getActive();
+    if (!active) return null;
+
+    const msg = {
+      id: "msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      role: role,
+      content: content,
+      telemetry: telemetry,
+      timestamp: Date.now(),
+    };
+
+    active.messages.push(msg);
+    active.updatedAt = Date.now();
+
+    // Auto-generate title on first user query
+    if (active.messages.length === 1 && role === "user") {
+      const generatedTitle = content.length > 32 ? content.substring(0, 32).trim() + "..." : content;
+      active.title = generatedTitle;
+    }
+
+    this.save();
+    return msg;
+  }
+
+  getRecentHistoryForAPI(maxMessages = 10) {
+    const active = this.getActive();
+    if (!active || !active.messages) return [];
+    return active.messages.slice(-maxMessages).map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+  }
+}
+
+/**
+ * ThemeManager handles Dark / Light mode switching with localStorage persistence.
+ */
+class ThemeManager {
+  static THEME_KEY = "smart_llm_theme";
+
+  static init() {
+    const saved = localStorage.getItem(this.THEME_KEY) || "dark";
+    this.setTheme(saved);
+  }
+
+  static setTheme(theme) {
+    const root = document.documentElement;
+    const isLight = theme === "light";
+    root.setAttribute("data-theme", isLight ? "light" : "dark");
+    localStorage.setItem(this.THEME_KEY, isLight ? "light" : "dark");
+
+    // Update icons
+    const icon = $("theme-icon");
+    const headerIcon = $("header-theme-btn");
+    const text = $("theme-text");
+
+    if (icon) icon.textContent = isLight ? "☀️" : "🌙";
+    if (headerIcon) headerIcon.textContent = isLight ? "☀️" : "🌙";
+    if (text) text.textContent = isLight ? "Light Mode" : "Dark Mode";
+  }
+
+  static toggle() {
+    const current = document.documentElement.getAttribute("data-theme") || "dark";
+    this.setTheme(current === "dark" ? "light" : "dark");
+  }
 }
 
 /* ============================================================
-   2. Chat Studio & Streaming
+   2. Global Variables & Initialization
    ============================================================ */
-function setupChat() {
-  const chatForm = $("chat-form");
-  const queryInput = $("query-input");
-  const clearHistoryBtn = $("clear-history-btn");
 
-  // Auto-resize textarea
-  queryInput.addEventListener("input", () => {
-    queryInput.style.height = "auto";
-    queryInput.style.height = `${Math.min(queryInput.scrollHeight, 160)}px`;
+let sessionManager = null;
+let activeAbortController = null;
+let dashboardRefreshInterval = null;
+let isUserScrolledUp = false;
+
+document.addEventListener("DOMContentLoaded", () => {
+  ThemeManager.init();
+  sessionManager = new SessionManager();
+
+  setupSidebar();
+  setupCanvasNavigation();
+  setupComposer();
+  setupQuickChips();
+  setupSettingsModal();
+  setupInspectorModal();
+  setupDashboardView();
+  setupBenchmarkView();
+
+  renderSidebarSessions();
+  renderActiveSessionMessages();
+  checkInitialHealth();
+});
+
+/* ============================================================
+   3. Sidebar & Session Navigation
+   ============================================================ */
+
+function setupSidebar() {
+  const sidebar = $("sidebar");
+  const collapseBtn = $("sidebar-collapse-btn");
+  const openBtn = $("sidebar-open-btn");
+  const backdrop = $("sidebar-backdrop");
+  const newChatBtn = $("new-chat-btn");
+  const searchInput = $("session-search-input");
+  const clearSearchBtn = $("clear-search-btn");
+  const themeToggleBtn = $("theme-toggle-btn");
+  const headerThemeBtn = $("header-theme-btn");
+  const clearAllBtn = $("clear-all-sessions-btn");
+
+  // Collapse / Open
+  collapseBtn?.addEventListener("click", () => {
+    sidebar.classList.add("collapsed");
+    sidebar.classList.remove("mobile-open");
+    backdrop?.classList.remove("active");
   });
 
-  // Enter to send (Shift+Enter for newline)
-  queryInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      chatForm.requestSubmit();
+  openBtn?.addEventListener("click", () => {
+    sidebar.classList.remove("collapsed");
+    sidebar.classList.add("mobile-open");
+    backdrop?.classList.add("active");
+  });
+
+  backdrop?.addEventListener("click", () => {
+    sidebar.classList.remove("mobile-open");
+    backdrop.classList.remove("active");
+  });
+
+  // New Chat
+  newChatBtn?.addEventListener("click", () => {
+    sessionManager.createSession("New Conversation", true);
+    renderSidebarSessions();
+    renderActiveSessionMessages();
+    switchView("chat");
+    if (window.innerWidth <= 768) {
+      sidebar.classList.remove("mobile-open");
+      backdrop?.classList.remove("active");
     }
   });
 
-  // Clear history
-  clearHistoryBtn?.addEventListener("click", () => {
-    chatHistory.length = 0;
-    updateContextCounter();
-    const msgsContainer = $("chat-messages");
-    msgsContainer.innerHTML = `
-      <div class="welcome-card">
-        <div class="welcome-icon">🧠</div>
-        <h2>Conversation History Cleared</h2>
-        <p>You have started a fresh context session. Ask any query to begin.</p>
-      </div>
-    `;
+  // Search Sessions
+  searchInput?.addEventListener("input", () => {
+    const q = searchInput.value.trim().toLowerCase();
+    if (q) {
+      clearSearchBtn?.classList.remove("hidden");
+    } else {
+      clearSearchBtn?.classList.add("hidden");
+    }
+    renderSidebarSessions(q);
   });
 
-  chatForm.addEventListener("submit", async (e) => {
+  clearSearchBtn?.addEventListener("click", () => {
+    searchInput.value = "";
+    clearSearchBtn.classList.add("hidden");
+    renderSidebarSessions();
+    searchInput.focus();
+  });
+
+  // Theme Toggles
+  themeToggleBtn?.addEventListener("click", () => ThemeManager.toggle());
+  headerThemeBtn?.addEventListener("click", () => ThemeManager.toggle());
+
+  // Clear All Sessions
+  clearAllBtn?.addEventListener("click", () => {
+    if (confirm("Are you sure you want to clear all conversation sessions?")) {
+      sessionManager.clearAll();
+      renderSidebarSessions();
+      renderActiveSessionMessages();
+      showToast("All conversations cleared", "info");
+    }
+  });
+}
+
+function renderSidebarSessions(filterQuery = "") {
+  const list = $("session-list");
+  const countBadge = $("sessions-count-badge");
+  if (!list) return;
+
+  const sessions = sessionManager.getAll();
+  const active = sessionManager.getActive();
+
+  let filtered = sessions;
+  if (filterQuery) {
+    filtered = sessions.filter(s => s.title.toLowerCase().includes(filterQuery));
+  }
+
+  if (countBadge) countBadge.textContent = sessions.length;
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="empty-state" style="padding:16px 8px;font-size:12px;">No matching chats</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(s => {
+    const isActive = active && active.id === s.id;
+    return `
+      <div class="session-item ${isActive ? 'active' : ''}" data-id="${s.id}" onclick="handleSessionClick('${s.id}')">
+        <div class="session-item-left">
+          <span class="session-icon">💬</span>
+          <span class="session-title" title="${escapeHtml(s.title)}">${escapeHtml(s.title)}</span>
+        </div>
+        <div class="session-actions" onclick="event.stopPropagation()">
+          <button class="btn-session-action" onclick="promptRenameSession('${s.id}')" title="Rename">✏️</button>
+          <button class="btn-session-action delete" onclick="handleDeleteSession('${s.id}')" title="Delete">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+window.handleSessionClick = function(id) {
+  sessionManager.switchSession(id);
+  renderSidebarSessions();
+  renderActiveSessionMessages();
+  switchView("chat");
+
+  if (window.innerWidth <= 768) {
+    $("sidebar")?.classList.remove("mobile-open");
+    $("sidebar-backdrop")?.classList.remove("active");
+  }
+};
+
+window.promptRenameSession = function(id) {
+  const s = sessionManager.getAll().find(item => item.id === id);
+  if (!s) return;
+  const newTitle = prompt("Enter new title for this conversation:", s.title);
+  if (newTitle && newTitle.trim()) {
+    sessionManager.renameSession(id, newTitle);
+    renderSidebarSessions();
+    updateActiveSessionHeader();
+  }
+};
+
+window.handleDeleteSession = function(id) {
+  if (confirm("Delete this conversation?")) {
+    sessionManager.deleteSession(id);
+    renderSidebarSessions();
+    renderActiveSessionMessages();
+  }
+};
+
+function updateActiveSessionHeader() {
+  const active = sessionManager.getActive();
+  const titleEl = $("active-session-title");
+  if (titleEl && active) {
+    titleEl.textContent = active.title || "New Conversation";
+  }
+}
+
+/* ============================================================
+   4. Canvas Navigation & View Switching
+   ============================================================ */
+
+function setupCanvasNavigation() {
+  const sidebarNavItems = $$(".sidebar-nav-item");
+
+  sidebarNavItems.forEach(item => {
+    item.addEventListener("click", () => {
+      const view = item.dataset.view;
+      switchView(view);
+      if (window.innerWidth <= 768) {
+        $("sidebar")?.classList.remove("mobile-open");
+        $("sidebar-backdrop")?.classList.remove("active");
+      }
+    });
+  });
+
+  // Canvas Header Rename Button
+  $("rename-session-btn")?.addEventListener("click", () => {
+    const active = sessionManager.getActive();
+    if (active) promptRenameSession(active.id);
+  });
+}
+
+function switchView(viewName) {
+  $$(".view-panel").forEach(p => p.classList.remove("active"));
+  $$(".sidebar-nav-item").forEach(i => i.classList.remove("active"));
+
+  const targetPanel = $(`view-${viewName}`);
+  const targetNav = $(`nav-${viewName}-btn`);
+
+  if (targetPanel) targetPanel.classList.add("active");
+  if (targetNav) targetNav.classList.add("active");
+
+  if (viewName === "dashboard") {
+    loadDashboardStats();
+    startDashboardAutoRefresh();
+  } else {
+    stopDashboardAutoRefresh();
+  }
+}
+
+/* ============================================================
+   5. Chat Rendering & Composer Handling
+   ============================================================ */
+
+function setupComposer() {
+  const form = $("composer-form");
+  const input = $("query-input");
+  const sendStopBtn = $("send-stop-btn");
+  const strategySelect = $("strategy-select");
+  const clearContextBtn = $("clear-context-btn");
+  const messagesContainer = $("chat-messages");
+
+  // Setup Scroll Listener
+  if (messagesContainer) {
+    messagesContainer.addEventListener("scroll", () => {
+      const threshold = 80;
+      const distFromBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
+      isUserScrolledUp = distFromBottom > threshold;
+    });
+  }
+
+  // Auto-resize textarea
+  input?.addEventListener("input", () => {
+    input.style.height = "auto";
+    input.style.height = `${Math.min(input.scrollHeight, 180)}px`;
+  });
+
+  // Enter to send (Shift+Enter for newline)
+  input?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  // Clear context in active session
+  clearContextBtn?.addEventListener("click", () => {
+    const active = sessionManager.getActive();
+    if (active && active.messages.length > 0) {
+      if (confirm("Clear memory for this session?")) {
+        active.messages = [];
+        sessionManager.save();
+        renderActiveSessionMessages();
+        showToast("Conversation memory cleared", "info");
+      }
+    }
+  });
+
+  // Strategy Selector change
+  strategySelect?.addEventListener("change", () => {
+    const val = strategySelect.value;
+    updateStrategyBadge(val);
+    const settings = SettingsManager.load();
+    settings.preferences.strategy = val;
+    SettingsManager.save(settings);
+  });
+
+  // Form Submit / Streaming Execution
+  form?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const query = queryInput.value.trim();
+
+    // If currently streaming, this button acts as Stop Generation
+    if (activeAbortController) {
+      stopGeneration();
+      return;
+    }
+
+    const query = input.value.trim();
     if (!query) return;
 
-    // Reset input
-    queryInput.value = "";
-    queryInput.style.height = "auto";
-    $("send-btn").disabled = true;
+    // Reset Input
+    input.value = "";
+    input.style.height = "auto";
 
-    // Append User Message
-    appendUserMessage(query);
+    // Append User Message to UI & Session
+    appendUserMessageToUI(query);
+    sessionManager.addMessage("user", query);
+    renderSidebarSessions();
+    updateActiveSessionHeader();
 
-    // Create streaming placeholder for assistant
+    // Hide welcome hero if shown
+    const welcome = $("welcome-hero");
+    if (welcome) welcome.style.display = "none";
+
+    // Build Streaming Assistant Card
     const placeholder = createStreamingPlaceholder();
-    const strategy = $("strategy-select").value;
+    const strategy = strategySelect ? strategySelect.value : "balanced";
+    const historyPayload = sessionManager.getRecentHistoryForAPI(10);
+
+    setStreamingState(true);
 
     let streamedText = "";
+    let reasoningText = "";
     let isFirstDelta = true;
-    let analyzerInfo = null;
-    let routingInfo = null;
+    let analyzerData = null;
+    let routingData = null;
 
     try {
+      activeAbortController = new AbortController();
+
       await executeStreamingChat(
-        { query, history: chatHistory.slice(-10), strategy },
+        { query, history: historyPayload, strategy },
+        activeAbortController.signal,
         // onAnalyzer
         (info) => {
-          analyzerInfo = info;
-          placeholder.updateStatus(
-            `🧠 <strong>Analyzer (${escapeHtml(info.provider.toUpperCase())}):</strong> ` +
-            `Classified as <em>${escapeHtml(info.task_type)}</em> (complexity: ${info.complexity})`
-          );
+          analyzerData = info;
+          placeholder.updateAnalyzer(info);
         },
         // onRouting
         (route) => {
-          routingInfo = route;
-          placeholder.updateStatus(
-            `🔄 <strong>Routing:</strong> Selected <em>${escapeHtml(route.target_name || route.target_model)}</em> ` +
-            `(${escapeHtml(route.target_tier.toUpperCase())} Tier) · <em>${escapeHtml(route.reason)}</em>`
-          );
+          routingData = route;
+          placeholder.updateRouting(route);
+        },
+        // onReasoningDelta
+        (chunk) => {
+          reasoningText += chunk;
+          placeholder.appendReasoningDelta(reasoningText);
         },
         // onDelta
         (chunk) => {
@@ -135,10 +688,10 @@ function setupChat() {
         // onDone
         (doneData) => {
           placeholder.card.remove();
-          appendAssistantResponse(query, doneData.response || streamedText, doneData);
-          chatHistory.push({ role: "user", content: query }, { role: "assistant", content: doneData.response || streamedText });
+          const finalResponse = doneData.response || streamedText;
+          appendAssistantResponseToUI(query, finalResponse, doneData);
+          sessionManager.addMessage("assistant", finalResponse, doneData);
           updateContextCounter();
-          lastRequestId = doneData.request_id;
         },
         // onError
         (errorMsg) => {
@@ -146,182 +699,526 @@ function setupChat() {
         }
       );
     } catch (err) {
-      // Fallback to standard POST request if SSE stream fails
-      console.warn("SSE Stream failed, falling back to /api/chat:", err);
-      try {
-        const resp = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query, history: chatHistory.slice(-10), strategy }),
-        });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.detail || "Request failed");
+      if (err.name === "AbortError") {
+        placeholder.showStoppedState(streamedText);
+        sessionManager.addMessage("assistant", streamedText || "[Generation stopped by user]", { stopped: true });
+      } else {
+        console.warn("SSE Stream failed, falling back to standard /api/chat:", err);
+        // Fallback to standard POST
+        try {
+          const resp = await apiFetch("/api/chat", {
+            method: "POST",
+            body: JSON.stringify({ query, history: historyPayload, strategy }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) throw new Error(data.detail || "Request failed");
 
-        placeholder.card.remove();
-        appendAssistantResponse(query, data.response, data);
-        chatHistory.push({ role: "user", content: query }, { role: "assistant", content: data.response });
-        updateContextCounter();
-        lastRequestId = data.request_id;
-      } catch (postErr) {
-        placeholder.showError(postErr.message);
+          placeholder.card.remove();
+          appendAssistantResponseToUI(query, data.response, data);
+          sessionManager.addMessage("assistant", data.response, data);
+          updateContextCounter();
+        } catch (postErr) {
+          placeholder.showError(postErr.message);
+        }
       }
     } finally {
-      $("send-btn").disabled = false;
-      queryInput.focus();
+      setStreamingState(false);
+      activeAbortController = null;
+      input?.focus();
     }
   });
 }
 
+function setStreamingState(isStreaming) {
+  const btn = $("send-stop-btn");
+  const icon = $("send-btn-icon");
+  if (!btn || !icon) return;
+
+  if (isStreaming) {
+    btn.classList.add("stop-state");
+    btn.title = "Stop Generation";
+    icon.textContent = "■";
+  } else {
+    btn.classList.remove("stop-state");
+    btn.title = "Send Message (Enter)";
+    icon.textContent = "▲";
+  }
+}
+
+function stopGeneration() {
+  if (activeAbortController) {
+    activeAbortController.abort();
+    activeAbortController = null;
+    showToast("Generation stopped", "info");
+  }
+}
+
+function updateStrategyBadge(strategy) {
+  const badge = $("header-strategy-badge");
+  if (!badge) return;
+
+  const map = {
+    balanced: { icon: "⚖️", label: "Balanced" },
+    lowest_cost: { icon: "💰", label: "Lowest Cost" },
+    fastest: { icon: "⚡", label: "Fastest Speed" },
+    highest_quality: { icon: "🎯", label: "Max Quality" },
+  };
+
+  const s = map[strategy] || map.balanced;
+  badge.innerHTML = `<span class="pill-icon">${s.icon}</span><span class="pill-label">${s.label}</span>`;
+}
+
 function updateContextCounter() {
-  const countEl = $("context-count");
-  if (countEl) countEl.textContent = Math.floor(chatHistory.length / 2);
+  const active = sessionManager.getActive();
+  const countEl = $("context-turn-count");
+  if (countEl && active) {
+    countEl.textContent = Math.floor(active.messages.length / 2);
+  }
 }
 
 function setupQuickChips() {
-  document.querySelectorAll(".quick-chip").forEach(chip => {
+  // Welcome hero starter prompt chips (scoped to welcome hero)
+  $$(".quick-chip-card").forEach(chip => {
     chip.addEventListener("click", () => {
       const q = chip.dataset.query;
       if (q) {
-        $("query-input").value = q;
-        $("query-input").focus();
-        $("chat-form").requestSubmit();
+        const input = $("query-input");
+        if (input) {
+          input.value = q;
+          input.style.height = "auto";
+          input.style.height = `${Math.min(input.scrollHeight, 180)}px`;
+          input.focus();
+          $("composer-form")?.requestSubmit();
+        }
       }
     });
   });
 }
 
-function appendUserMessage(text) {
+/* ============================================================
+   6. UI Message Rendering & Expandable Reasoning Drawer
+   ============================================================ */
+
+function renderActiveSessionMessages() {
   const container = $("chat-messages");
+  if (!container) return;
+
+  const active = sessionManager.getActive();
+  updateActiveSessionHeader();
+  updateContextCounter();
+
+  if (!active || active.messages.length === 0) {
+    container.innerHTML = `
+      <div class="welcome-hero" id="welcome-hero">
+        <div class="welcome-badge">
+          <span class="badge-icon">🧠</span>
+          <span>Intelligent Context-Aware Multi-Provider Switching</span>
+        </div>
+        <h2 class="welcome-title">How can I help you optimize today?</h2>
+        <p class="welcome-desc">
+          Every prompt is evaluated by our <strong>Analyzer LLM</strong>. Simple queries execute immediately in 
+          <span class="badge-mode-mini self">⚡ Self-Mode</span> with 100% downstream savings, while complex coding and reasoning tasks switch seamlessly to specialized 
+          <span class="badge-mode-mini switch">🔄 Switch-Mode</span> models (Gemini, Groq Qwen Coder, 120B Reasoning, or Custom Endpoints).
+        </p>
+
+        <div class="architecture-flow-cards">
+          <div class="arch-card gemini">
+            <div class="arch-card-header">
+              <span class="arch-dot gemini"></span>
+              <span class="arch-name">Google Gemini</span>
+            </div>
+            <div class="arch-tier">Fast / Low-Cost Tier</div>
+            <div class="arch-cost">$0.075 / 1M input · $0.30 / 1M output</div>
+          </div>
+          <div class="arch-card groq">
+            <div class="arch-card-header">
+              <span class="arch-dot groq"></span>
+              <span class="arch-name">Groq Qwen 27B</span>
+            </div>
+            <div class="arch-tier">Specialized Coding Tier</div>
+            <div class="arch-cost">300+ tok/sec Ultra-fast LPU generation</div>
+          </div>
+          <div class="arch-card groq">
+            <div class="arch-card-header">
+              <span class="arch-dot groq"></span>
+              <span class="arch-name">Groq 120B OSS</span>
+            </div>
+            <div class="arch-tier">Deep Reasoning Tier</div>
+            <div class="arch-cost">Multi-step architectural deduction</div>
+          </div>
+          <div class="arch-card openrouter">
+            <div class="arch-card-header">
+              <span class="arch-dot openrouter"></span>
+              <span class="arch-name">OpenRouter / Base</span>
+            </div>
+            <div class="arch-tier">Structured Analyzer LLM</div>
+            <div class="arch-cost">Context evaluation & zero-waste routing</div>
+          </div>
+        </div>
+
+        <div class="welcome-prompts-section">
+          <span class="welcome-prompts-label">Try a prompt to see transparent switching:</span>
+          <div class="welcome-prompts-grid" id="welcome-quick-chips">
+            <button class="quick-chip-card" data-query="What is an API and how does REST work?">
+              <div class="chip-top">
+                <span class="chip-tier-tag fast">⚡ Fast Tier</span>
+                <span class="chip-arrow">➔</span>
+              </div>
+              <div class="chip-query">What is an API and how does REST work?</div>
+            </button>
+            <button class="quick-chip-card" data-query="Write a Python implementation of Dijkstra's algorithm with priority queue.">
+              <div class="chip-top">
+                <span class="chip-tier-tag coding">💻 Coding Tier</span>
+                <span class="chip-arrow">➔</span>
+              </div>
+              <div class="chip-query">Write a Python implementation of Dijkstra's algorithm with priority queue.</div>
+            </button>
+            <button class="quick-chip-card" data-query="Design a fault-tolerant distributed cache architecture with replication and failover for 10 million concurrent users.">
+              <div class="chip-top">
+                <span class="chip-tier-tag reasoning">🧠 Reasoning Tier</span>
+                <span class="chip-arrow">➔</span>
+              </div>
+              <div class="chip-query">Design a fault-tolerant distributed cache architecture for 10M users.</div>
+            </button>
+            <button class="quick-chip-card" data-query="Now optimize the space complexity of that previous implementation.">
+              <div class="chip-top">
+                <span class="chip-tier-tag context">🔄 Context Follow-up</span>
+                <span class="chip-arrow">➔</span>
+              </div>
+              <div class="chip-query">Now optimize the space complexity of that previous implementation.</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    setupQuickChips();
+    return;
+  }
+
+  container.innerHTML = "";
+  active.messages.forEach(msg => {
+    if (msg.role === "user") {
+      appendUserMessageToUI(msg.content);
+    } else {
+      appendAssistantResponseToUI("", msg.content, msg.telemetry || {});
+    }
+  });
+
+  smoothScrollToBottom(container);
+}
+
+function appendUserMessageToUI(text) {
+  const container = $("chat-messages");
+  if (!container) return;
+
   const msgEl = document.createElement("div");
   msgEl.className = "chat-msg user";
   msgEl.innerHTML = `
-    <div class="msg-avatar">👤</div>
     <div class="msg-content-wrap">
       <div class="user-bubble">${escapeHtml(text)}</div>
     </div>
+    <div class="msg-avatar">👤</div>
   `;
   container.appendChild(msgEl);
-  container.scrollTop = container.scrollHeight;
+  smoothScrollToBottom(container);
 }
 
 function createStreamingPlaceholder() {
   const container = $("chat-messages");
   const msgEl = document.createElement("div");
   msgEl.className = "chat-msg assistant";
-
-  const card = document.createElement("div");
-  card.className = "assistant-card";
-
-  const statusWrap = document.createElement("div");
-  statusWrap.className = "streaming-step";
-  statusWrap.innerHTML = `<span class="spinner"></span> <span class="step-text">OpenRouter Analyzer LLM evaluating query & context...</span>`;
-
-  const bodyWrap = document.createElement("div");
-  bodyWrap.className = "msg-text-body";
-  bodyWrap.style.display = "none";
-
-  card.appendChild(statusWrap);
-  card.appendChild(bodyWrap);
-  msgEl.appendChild(document.createElement("div")).className = "msg-avatar";
-  msgEl.querySelector(".msg-avatar").textContent = "⚡";
-  msgEl.appendChild(card);
-  container.appendChild(msgEl);
-  container.scrollTop = container.scrollHeight;
-
-  return {
-    card: msgEl,
-    updateStatus: (html) => {
-      statusWrap.innerHTML = `<span class="spinner"></span> <span class="step-text">${html}</span>`;
-    },
-    startResponse: () => {
-      bodyWrap.style.display = "block";
-    },
-    appendDelta: (fullText) => {
-      bodyWrap.innerHTML = formatMarkdown(fullText);
-      container.scrollTop = container.scrollHeight;
-    },
-    showError: (errText) => {
-      statusWrap.innerHTML = `<span style="color:var(--accent-red)">⚠️ ${escapeHtml(errText)}</span>`;
-    }
-  };
-}
-
-function appendAssistantResponse(query, text, data) {
-  const container = $("chat-messages");
-  const msgEl = document.createElement("div");
-  msgEl.className = "chat-msg assistant";
-
-  const analyzer = data.analyzer || {};
-  const model = data.model || {};
-
-  const taskType = analyzer.task_type || "general";
-  const complexity = analyzer.complexity || "medium";
-  const targetTier = analyzer.target_tier || "fast";
-  const targetProvider = analyzer.target_provider || model.provider || "gemini";
-  const reason = data.routing_reason || analyzer.reason || model.reason || "Optimal intelligence tier";
-
-  const totalCost = data.total_cost_usd != null ? `$${data.total_cost_usd.toFixed(6)}` : "—";
-  const savingsPct = data.savings_percent != null ? `${data.savings_percent.toFixed(1)}%` : null;
-  const totalTokens = data.total_tokens ? `${data.total_tokens.toLocaleString()} tok` : "—";
-  const latency = data.total_latency_ms != null ? `${Math.round(data.total_latency_ms)} ms` : `${Math.round(data.latency_ms || 0)} ms`;
-
-  const fallbackBadge = data.fallback_used ? `<span class="tag-pill" style="border-color:var(--accent-amber);color:var(--accent-amber)">Fallback Used</span>` : "";
+  const drawerId = "drawer_stream_" + Date.now();
 
   msgEl.innerHTML = `
     <div class="msg-avatar">⚡</div>
-    <div class="msg-content-wrap" style="width:100%">
+    <div class="msg-content-wrap">
       <div class="assistant-card">
-        <!-- Routing Card -->
-        <div class="routing-card">
-          <div class="routing-header">
-            <div class="routing-flow">
-              <span class="badge-analyzer">🧠 Analyzer: ${escapeHtml(analyzer.model_name || "OpenRouter")}</span>
-              <span style="color:var(--text-muted)">➔</span>
-              <span class="badge-target ${targetTier}">🎯 Routed: ${escapeHtml(model.model_name || model.model_id || targetTier)}</span>
+        <!-- Live Reasoning Drawer -->
+        <div class="reasoning-drawer expanded" id="${drawerId}">
+          <div class="drawer-toggle" onclick="toggleReasoningDrawer('${drawerId}')">
+            <div class="drawer-summary">
+              <span class="drawer-icon pulse">🧠</span>
+              <span class="drawer-title" id="${drawerId}_title">Analyzer LLM evaluating query & context...</span>
+              <span class="drawer-badge tier" id="${drawerId}_badge">Routing</span>
             </div>
-            <div class="routing-tags">
-              <span class="tag-pill complexity-${complexity}">${complexity.toUpperCase()}</span>
-              <span class="tag-pill">${taskType.toUpperCase()}</span>
-              ${data.context_relevant ? '<span class="tag-pill" style="color:var(--accent-blue)">Context Active</span>' : ''}
-              ${fallbackBadge}
+            <div class="drawer-chevron">▾</div>
+          </div>
+          <div class="drawer-content">
+            <div class="drawer-grid">
+              <div class="drawer-stat-card">
+                <span class="stat-label">Execution Mode</span>
+                <span class="stat-val" id="${drawerId}_mode">Evaluating...</span>
+              </div>
+              <div class="drawer-stat-card">
+                <span class="stat-label">Task Type</span>
+                <span class="stat-val" id="${drawerId}_task">—</span>
+              </div>
+              <div class="drawer-stat-card">
+                <span class="stat-label">Complexity</span>
+                <div class="complexity-meter"><div class="complexity-bar" id="${drawerId}_comp_bar" style="width:50%"></div></div>
+                <span class="stat-sub" id="${drawerId}_comp_val">—</span>
+              </div>
+              <div class="drawer-stat-card">
+                <span class="stat-label">Target Model</span>
+                <span class="stat-val" id="${drawerId}_target">—</span>
+                <span class="stat-sub" id="${drawerId}_provider">—</span>
+              </div>
+            </div>
+            <div class="drawer-section" id="${drawerId}_reason_wrap">
+              <div class="section-title">🧠 Analyzer Rationale</div>
+              <div class="rationale-box" id="${drawerId}_reason">Awaiting analyzer decision...</div>
+            </div>
+            <div class="drawer-section reasoning-stream-container" id="${drawerId}_thinking_wrap" style="display:none;">
+              <div class="section-title">💭 Internal Thought Stream</div>
+              <pre class="reasoning-stream-text" id="${drawerId}_thinking"></pre>
             </div>
           </div>
-          <div class="routing-reason">"${escapeHtml(reason)}"</div>
         </div>
 
         <!-- Body -->
-        <div class="msg-text-body">
-          ${formatMarkdown(text)}
-        </div>
-
-        <!-- Telemetry Footer -->
-        <div class="telemetry-footer">
-          <div class="telemetry-chips">
-            <div class="t-chip"><span>⚡ Latency:</span> <strong>${latency}</strong></div>
-            <div class="t-chip"><span>🔢 Tokens:</span> <strong>${totalTokens}</strong></div>
-            <div class="t-chip"><span>💰 Cost:</span> <strong>${totalCost}</strong></div>
-            ${savingsPct ? `<div class="t-chip savings"><span>📉 Saved:</span> <strong>${savingsPct} vs baseline</strong></div>` : ''}
-          </div>
-          <div class="telemetry-actions">
-            <button class="btn-icon" onclick="copyText(this, ${JSON.stringify(text)})" title="Copy Answer">📋 Copy</button>
-            <button class="btn-icon" onclick="openInspector(${data.request_id})" title="Inspect Decision & Telemetry">🔍 Inspect</button>
-            <button class="btn-icon" onclick="recordFeedback(${data.request_id}, 1, this)" title="Good Response">👍</button>
-            <button class="btn-icon" onclick="recordFeedback(${data.request_id}, -1, this)" title="Poor Response">👎</button>
-          </div>
-        </div>
+        <div class="msg-text-body" id="${drawerId}_body" style="display:none;"></div>
       </div>
     </div>
   `;
 
   container.appendChild(msgEl);
-  container.scrollTop = container.scrollHeight;
+  smoothScrollToBottom(container);
+
+  return {
+    card: msgEl,
+    updateAnalyzer: (info) => {
+      const isSelf = info.answer_mode === "self";
+      const badge = $(`${drawerId}_badge`);
+      const mode = $(`${drawerId}_mode`);
+      const task = $(`${drawerId}_task`);
+      const compBar = $(`${drawerId}_comp_bar`);
+      const compVal = $(`${drawerId}_comp_val`);
+      const reason = $(`${drawerId}_reason`);
+      const title = $(`${drawerId}_title`);
+
+      if (badge) {
+        badge.className = `drawer-badge ${isSelf ? 'self' : 'switch'}`;
+        badge.textContent = isSelf ? "⚡ Self-Mode" : "🔄 Switch-Mode";
+      }
+      if (mode) mode.textContent = isSelf ? "Direct Self-Answer" : "Specialized Switch";
+      if (task) task.textContent = (info.task_type || "general").toUpperCase();
+      if (compVal) compVal.textContent = `${info.complexity || 'medium'} (${info.complexity_score ?? '0.5'})`;
+      if (compBar) compBar.style.width = `${Math.round((info.complexity_score || 0.5) * 100)}%`;
+      if (reason) reason.textContent = `"${info.reason || 'Optimal execution tier selected.'}"`;
+      if (title) title.textContent = isSelf ? "Resolved in Direct Self-Mode (0ms downstream)" : `Routing to ${info.target_provider || 'Specialized Model'}`;
+    },
+    updateRouting: (route) => {
+      const target = $(`${drawerId}_target`);
+      const provider = $(`${drawerId}_provider`);
+      const title = $(`${drawerId}_title`);
+
+      if (target) target.textContent = route.target_name || route.target_model;
+      if (provider) provider.textContent = `${(route.target_provider || '').toUpperCase()} (${route.target_tier || ''})`;
+      if (title) title.textContent = `Routed to ${route.target_name || route.target_model}`;
+    },
+    appendReasoningDelta: (fullReasoning) => {
+      const wrap = $(`${drawerId}_thinking_wrap`);
+      const text = $(`${drawerId}_thinking`);
+      if (wrap) wrap.style.display = "block";
+      if (text) text.textContent = fullReasoning;
+      smoothScrollToBottom(container);
+    },
+    startResponse: () => {
+      const body = $(`${drawerId}_body`);
+      if (body) body.style.display = "block";
+    },
+    appendDelta: (fullText) => {
+      const body = $(`${drawerId}_body`);
+      if (body) {
+        body.style.display = "block";
+        body.innerHTML = formatMarkdown(fullText);
+      }
+      smoothScrollToBottom(container);
+    },
+    showError: (err) => {
+      const title = $(`${drawerId}_title`);
+      const reason = $(`${drawerId}_reason`);
+      if (title) title.innerHTML = `<span style="color:var(--accent-red)">⚠️ Stream Error</span>`;
+      if (reason) reason.innerHTML = `<span style="color:var(--accent-red)">${escapeHtml(err)}</span>`;
+    },
+    showStoppedState: (text) => {
+      const title = $(`${drawerId}_title`);
+      if (title) title.textContent = "Generation Stopped by User";
+      const body = $(`${drawerId}_body`);
+      if (body && text) {
+        body.style.display = "block";
+        body.innerHTML = formatMarkdown(text) + `<p style="color:var(--text-muted);font-style:italic;">[Generation stopped by user]</p>`;
+      }
+    }
+  };
 }
 
-async function executeStreamingChat(payload, onAnalyzer, onRouting, onDelta, onDone, onError) {
-  const resp = await fetch("/api/chat/stream", {
+function appendAssistantResponseToUI(query, text, data = {}) {
+  const container = $("chat-messages");
+  if (!container) return;
+
+  const msgEl = document.createElement("div");
+  msgEl.className = "chat-msg assistant";
+  const drawerId = "drawer_" + (data.request_id || Date.now() + "_" + Math.random().toString(36).substring(2, 6));
+
+  const analyzer = data.analyzer || {};
+  const model = data.model || {};
+
+  const isSelf = (data.answer_mode === "self" || analyzer.answer_mode === "self");
+  const taskType = analyzer.task_type || data.task_type || "general";
+  const complexity = analyzer.complexity || data.complexity || "medium";
+  const complexityScore = analyzer.complexity_score ?? data.complexity_score ?? 0.5;
+  const targetTier = model.tier || analyzer.target_tier || "fast";
+  const targetModelName = model.model_name || model.model_id || data.selected_model || "Gemini Flash";
+  const targetProvider = model.provider || analyzer.target_provider || data.selected_provider || "gemini";
+  const routingReason = data.routing_reason || analyzer.reason || model.reason || "Cost-optimal model selection";
+
+  const totalCost = data.total_cost_usd != null ? `$${data.total_cost_usd.toFixed(6)}` : "—";
+  const baselineCost = data.baseline_cost_usd != null ? `$${data.baseline_cost_usd.toFixed(6)}` : "—";
+  const savingsUsd = data.savings_usd != null ? `$${data.savings_usd.toFixed(6)}` : "—";
+  const savingsPct = data.savings_percent != null ? `${data.savings_percent.toFixed(1)}%` : null;
+
+  const totalTokens = data.total_tokens ? `${data.total_tokens.toLocaleString()} tok` : "—";
+  const inTokens = data.input_tokens != null ? data.input_tokens : (analyzer.input_tokens || 0);
+  const outTokens = data.output_tokens != null ? data.output_tokens : (analyzer.output_tokens || 0);
+
+  const totalLatency = data.total_latency_ms != null ? `${Math.round(data.total_latency_ms)} ms` : "—";
+  const genLatency = data.latency_ms != null ? `${Math.round(data.latency_ms)} ms` : "0 ms";
+  const analyzerLatency = data.analyzer_latency_ms != null ? `${Math.round(data.analyzer_latency_ms)} ms` : "—";
+  const ttft = data.ttft_ms != null ? `${Math.round(data.ttft_ms)} ms` : "—";
+
+  const fallbackBadge = data.fallback_used ? `<span class="drawer-badge" style="background:rgba(245,158,11,0.2);color:var(--accent-amber)">⚠️ Fallback Used</span>` : "";
+
+  msgEl.innerHTML = `
+    <div class="msg-avatar">⚡</div>
+    <div class="msg-content-wrap">
+      <div class="assistant-card">
+        
+        <!-- Expandable Reasoning Drawer Accordion -->
+        <div class="reasoning-drawer collapsed" id="${drawerId}">
+          <div class="drawer-toggle" onclick="toggleReasoningDrawer('${drawerId}')">
+            <div class="drawer-summary">
+              <span class="drawer-icon">🧠</span>
+              <span class="drawer-title">${isSelf ? 'Direct Self-Mode' : 'Routed to ' + escapeHtml(targetModelName)}</span>
+              <span class="drawer-badge ${isSelf ? 'self' : 'switch'}">${isSelf ? '⚡ Self-Mode' : '🔄 Switch-Mode'}</span>
+              <span class="drawer-metric">⚡ ${totalLatency}</span>
+              ${savingsPct ? `<span class="drawer-metric text-green">📉 ${savingsPct} saved</span>` : ''}
+              ${fallbackBadge}
+            </div>
+            <div class="drawer-chevron">▾</div>
+          </div>
+
+          <div class="drawer-content">
+            <!-- 4-Stat Grid -->
+            <div class="drawer-grid">
+              <div class="drawer-stat-card">
+                <span class="stat-label">Execution Mode</span>
+                <span class="stat-val ${isSelf ? 'text-green' : 'text-cyan'}">${isSelf ? '⚡ Direct Self-Answer' : '🔄 Specialized Switch'}</span>
+                <span class="stat-sub">${isSelf ? 'Zero downstream cost' : 'Targeted model dispatched'}</span>
+              </div>
+              <div class="drawer-stat-card">
+                <span class="stat-label">Task Classification</span>
+                <span class="stat-val">${escapeHtml(taskType.toUpperCase())}</span>
+                <span class="stat-sub">Domain categorized</span>
+              </div>
+              <div class="drawer-stat-card">
+                <span class="stat-label">Complexity Score</span>
+                <div class="complexity-meter">
+                  <div class="complexity-bar" style="width: ${Math.round(complexityScore * 100)}%"></div>
+                </div>
+                <span class="stat-sub">${escapeHtml(complexity)} (${complexityScore})</span>
+              </div>
+              <div class="drawer-stat-card">
+                <span class="stat-label">Served Model</span>
+                <span class="stat-val">${escapeHtml(targetModelName)}</span>
+                <span class="stat-sub">${escapeHtml(targetProvider.toUpperCase())} · ${escapeHtml(targetTier)}</span>
+              </div>
+            </div>
+
+            <!-- Routing Rationale -->
+            <div class="drawer-section">
+              <div class="section-title">🧠 Analyzer Rationale</div>
+              <div class="rationale-box">"${escapeHtml(routingReason)}"</div>
+            </div>
+
+            <!-- Granular Performance & Cost Grid -->
+            <div class="drawer-telemetry-grid">
+              <div class="t-box">
+                <span class="t-label">Time to First Token</span>
+                <span class="t-val">${ttft}</span>
+              </div>
+              <div class="t-box">
+                <span class="t-label">Analyzer Latency</span>
+                <span class="t-val">${analyzerLatency}</span>
+              </div>
+              <div class="t-box">
+                <span class="t-label">Generation Latency</span>
+                <span class="t-val">${genLatency}</span>
+              </div>
+              <div class="t-box">
+                <span class="t-label">Token Breakdown</span>
+                <span class="t-val">${inTokens} in · ${outTokens} out</span>
+                <span class="t-sub">${totalTokens}</span>
+              </div>
+              <div class="t-box highlight-cost">
+                <span class="t-label">Actual Cost</span>
+                <span class="t-val">${totalCost}</span>
+                <span class="t-sub">Baseline: ${baselineCost}</span>
+              </div>
+              <div class="t-box highlight-savings">
+                <span class="t-label">Net Cost Reduction</span>
+                <span class="t-val text-green">${savingsUsd} (${savingsPct || '0%'})</span>
+                <span class="t-sub">vs always-powerful model</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Assistant Message Body -->
+        <div class="msg-text-body">
+          ${formatMarkdown(text)}
+        </div>
+
+        <!-- Message Footer -->
+        <div class="telemetry-footer">
+          <div class="telemetry-chips">
+            <div class="t-chip"><span>⚡ Latency:</span> <strong>${totalLatency}</strong></div>
+            <div class="t-chip"><span>🔢 Tokens:</span> <strong>${totalTokens}</strong></div>
+            <div class="t-chip"><span>💰 Cost:</span> <strong>${totalCost}</strong></div>
+            ${savingsPct ? `<div class="t-chip savings"><span>📉 Saved:</span> <strong>${savingsPct} vs baseline</strong></div>` : ''}
+          </div>
+          <div class="telemetry-actions">
+            <button class="btn-icon-action" onclick="copyMessageText(this, ${escapeAttr(text)})" title="Copy Response">📋 Copy</button>
+            ${data.request_id ? `<button class="btn-icon-action" onclick="openInspectorModal(${data.request_id})" title="Inspect Full Telemetry">🔍 Inspect</button>` : ''}
+            ${data.request_id ? `<button class="btn-icon-action" onclick="recordMessageFeedback(${data.request_id}, 1, this)" title="Good Response">👍</button>` : ''}
+            ${data.request_id ? `<button class="btn-icon-action" onclick="recordMessageFeedback(${data.request_id}, -1, this)" title="Poor Response">👎</button>` : ''}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  container.appendChild(msgEl);
+  smoothScrollToBottom(container);
+}
+
+window.toggleReasoningDrawer = function(id) {
+  const drawer = $(id);
+  if (!drawer) return;
+  drawer.classList.toggle("expanded");
+  drawer.classList.toggle("collapsed");
+};
+
+/* ============================================================
+   7. Resilient SSE Stream Consumer (R4)
+   ============================================================ */
+
+async function executeStreamingChat(payload, signal, onAnalyzer, onRouting, onReasoningDelta, onDelta, onDone, onError) {
+  const resp = await apiFetch("/api/chat/stream", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    signal: signal,
   });
 
   if (!resp.ok || !resp.body) {
@@ -339,31 +1236,394 @@ async function executeStreamingChat(payload, onAnalyzer, onRouting, onDelta, onD
 
     buffer += decoder.decode(value, { stream: true });
     const parts = buffer.split("\n\n");
-    buffer = parts.pop();
+    buffer = parts.pop(); // Keep incomplete chunk in buffer
 
     for (const part of parts) {
-      const line = part.split("\n").find(l => l.startsWith("data:"));
-      if (!line) continue;
+      const dataLine = part.split("\n").find(l => l.startsWith("data:"));
+      if (!dataLine) continue;
+
       let evt;
       try {
-        evt = JSON.parse(line.slice(5).trim());
-      } catch {
+        evt = JSON.parse(dataLine.slice(5).trim());
+      } catch (e) {
+        console.warn("Malformed SSE JSON:", dataLine);
         continue;
       }
 
-      if (evt.event === "analyzer") onAnalyzer(evt.info);
-      else if (evt.event === "routing") onRouting(evt);
-      else if (evt.event === "delta") onDelta(evt.text);
-      else if (evt.event === "done") onDone(evt);
-      else if (evt.event === "error") onError(evt.detail);
+      switch (evt.event) {
+        case "analyzer":
+          if (onAnalyzer) onAnalyzer(evt.info || evt);
+          break;
+        case "routing":
+          if (onRouting) onRouting(evt);
+          break;
+        case "reasoning_delta":
+          if (onReasoningDelta) onReasoningDelta(evt.text || "");
+          break;
+        case "delta":
+        case "content_delta":
+          if (onDelta) onDelta(evt.text || "");
+          break;
+        case "done":
+          if (onDone) onDone(evt);
+          break;
+        case "error":
+          if (onError) onError(evt.detail || "Streaming error occurred");
+          break;
+      }
     }
   }
 }
 
+function smoothScrollToBottom(container) {
+  if (!container || isUserScrolledUp) return;
+  container.scrollTo({
+    top: container.scrollHeight,
+    behavior: "smooth",
+  });
+}
+
 /* ============================================================
-   3. Telemetry & Analytics Dashboard
+   8. Markdown Parser & Code Syntax Highlighting
    ============================================================ */
-function setupDashboard() {
+
+function escapeHtml(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function escapeAttr(s) {
+  if (s === null || s === undefined) return '""';
+  return JSON.stringify(String(s)).replace(/"/g, '&quot;');
+}
+
+function highlightSyntax(code, lang = "") {
+  let escaped = escapeHtml(code);
+
+  // Common keywords
+  const keywords = /\b(def|class|import|from|return|if|else|elif|for|while|try|except|with|as|async|await|function|const|let|var|switch|case|break|continue|new|this|typeof|instanceof|null|undefined|true|false|SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|JOIN|GROUP|ORDER|BY|HAVING|LIMIT)\b/g;
+  escaped = escaped.replace(keywords, '<span class="syn-kw">$1</span>');
+
+  // Strings (quoted)
+  escaped = escaped.replace(/(&quot;[\s\S]*?&quot;|&#39;[\s\S]*?&#39;|`[\s\S]*?`)/g, '<span class="syn-str">$1</span>');
+
+  // Numbers
+  escaped = escaped.replace(/\b(\d+(\.\d+)?)\b/g, '<span class="syn-num">$1</span>');
+
+  // Comments (# or //)
+  escaped = escaped.replace(/(#.*|\/\/.*)$/gm, '<span class="syn-comment">$1</span>');
+
+  return escaped;
+}
+
+function formatMarkdown(text) {
+  if (!text) return "";
+
+  // 1. Code Blocks
+  let out = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang, code) => {
+    const cleanLang = lang ? lang.trim() : "code";
+    const highlighted = highlightSyntax(code.trim(), cleanLang);
+    return `
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-lang-label">${escapeHtml(cleanLang)}</span>
+          <button type="button" class="btn-copy-code" onclick="copyCodeBlock(this, ${escapeAttr(code.trim())})">📋 Copy Code</button>
+        </div>
+        <pre><code>${highlighted}</code></pre>
+      </div>
+    `;
+  });
+
+  // 2. Tables
+  out = out.replace(/\n\|(.+)\|\n\|[-:| ]+\|\n((?:\|.+\|\n?)+)/g, (_m, header, body) => {
+    const ths = header.split("|").filter(c => c.trim()).map(c => `<th>${escapeHtml(c.trim())}</th>`).join("");
+    const rows = body.trim().split("\n").map(row => {
+      const tds = row.split("|").filter(c => c.trim()).map(c => `<td>${escapeHtml(c.trim())}</td>`).join("");
+      return `<tr>${tds}</tr>`;
+    }).join("");
+    return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+
+  // 3. Inline Code
+  out = out.replace(/`([^`]+)`/g, (_m, code) => `<code>${escapeHtml(code)}</code>`);
+
+  // 4. Headers
+  out = out.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
+  out = out.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+  out = out.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+  out = out.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+  // 5. Bold & Italic
+  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  // 6. Blockquotes
+  out = out.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
+
+  // 7. Unordered Lists
+  out = out.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>');
+  out = out.replace(/(<li>.*<\/li>)/gims, '<ul>$1</ul>');
+
+  // 8. Paragraphs
+  const blocks = out.split("\n\n").map(b => {
+    b = b.trim();
+    if (!b) return "";
+    if (b.startsWith("<div") || b.startsWith("<table") || b.startsWith("<h") || b.startsWith("<ul") || b.startsWith("<block")) {
+      return b;
+    }
+    return `<p>${b.replace(/\n/g, "<br>")}</p>`;
+  });
+
+  return blocks.join("");
+}
+
+window.copyCodeBlock = function(btn, codeText) {
+  navigator.clipboard.writeText(codeText);
+  const orig = btn.innerHTML;
+  btn.innerHTML = `✓ Copied!`;
+  btn.style.color = "var(--accent-green)";
+  setTimeout(() => {
+    btn.innerHTML = orig;
+    btn.style.color = "";
+  }, 2000);
+  showToast("Code copied to clipboard", "success");
+};
+
+window.copyMessageText = function(btn, text) {
+  navigator.clipboard.writeText(text);
+  const orig = btn.innerHTML;
+  btn.innerHTML = `✓ Copied`;
+  setTimeout(() => { btn.innerHTML = orig; }, 2000);
+  showToast("Answer copied to clipboard", "success");
+};
+
+/* ============================================================
+   9. Dynamic Settings Modal & Provider Management (R2)
+   ============================================================ */
+
+function setupSettingsModal() {
+  const modal = $("settings-modal");
+  const openBtn = $("open-settings-btn");
+  const headerSettingsBtn = $("header-settings-btn");
+  const closeBtn = $("close-settings-btn");
+  const backdrop = $("settings-backdrop");
+  const saveBtn = $("save-settings-btn");
+  const resetBtn = $("reset-settings-btn");
+  const clearKeysBtn = $("clear-keys-btn");
+
+  // Open / Close
+  const openModal = () => {
+    loadSettingsIntoUI();
+    modal?.classList.remove("hidden");
+  };
+  const closeModal = () => {
+    modal?.classList.add("hidden");
+  };
+
+  openBtn?.addEventListener("click", openModal);
+  headerSettingsBtn?.addEventListener("click", openModal);
+  closeBtn?.addEventListener("click", closeModal);
+  backdrop?.addEventListener("click", closeModal);
+
+  // Tab switching inside settings
+  $$(".settings-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      $$(".settings-tab").forEach(t => t.classList.remove("active"));
+      $$(".settings-panel").forEach(p => p.classList.remove("active"));
+
+      tab.classList.add("active");
+      const targetPanel = $(`tab-${tab.dataset.tab}`);
+      if (targetPanel) targetPanel.classList.add("active");
+    });
+  });
+
+  // Password visibility toggles
+  $$(".btn-toggle-mask").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.dataset.target;
+      const input = $(targetId);
+      if (input) {
+        input.type = input.type === "password" ? "text" : "password";
+        btn.textContent = input.type === "password" ? "👁️" : "🔒";
+      }
+    });
+  });
+
+  // Connection Test Buttons
+  $$(".btn-test-conn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const provider = btn.dataset.provider;
+      await testProviderConnection(provider);
+    });
+  });
+
+  // Save Settings
+  saveBtn?.addEventListener("click", () => {
+    const current = SettingsManager.load();
+
+    current.apiKeys.gemini = ($("key-gemini")?.value || "").trim();
+    current.apiKeys.groq = ($("key-groq")?.value || "").trim();
+    current.apiKeys.openrouter = ($("key-openrouter")?.value || "").trim();
+    current.apiKeys.openai = ($("key-openai")?.value || "").trim();
+    current.apiKeys.custom = ($("key-custom")?.value || "").trim();
+
+    current.customEndpoints.custom = ($("url-custom")?.value || "").trim();
+
+    // Provider Specific Models (Tabs 1-5)
+    current.providerModels.geminiFast = ($("model-gemini-fast")?.value || "").trim();
+    current.providerModels.groqCoding = ($("model-groq-coding")?.value || "").trim();
+    current.providerModels.groqReasoning = ($("model-groq-reasoning")?.value || "").trim();
+    current.providerModels.openrouterAnalyzer = ($("model-openrouter-analyzer")?.value || "").trim();
+    current.providerModels.openrouterPowerful = ($("model-openrouter-powerful")?.value || "").trim();
+    current.providerModels.openai = ($("model-openai")?.value || "").trim();
+    current.providerModels.custom = ($("model-custom")?.value || "").trim();
+
+    // Tier Overrides (Tab 6 - sync with provider models if configured)
+    current.tierOverrides.analyzer = ($("override-analyzer")?.value || current.providerModels.openrouterAnalyzer || "").trim();
+    current.tierOverrides.fast = ($("override-fast")?.value || current.providerModels.geminiFast || "").trim();
+    current.tierOverrides.coding = ($("override-coding")?.value || current.providerModels.groqCoding || "").trim();
+    current.tierOverrides.reasoning = ($("override-reasoning")?.value || current.providerModels.groqReasoning || "").trim();
+    current.tierOverrides.powerful = ($("override-powerful")?.value || current.providerModels.openrouterPowerful || "").trim();
+
+    SettingsManager.save(current);
+    showToast("Settings and API keys saved successfully", "success");
+    closeModal();
+    checkInitialHealth();
+  });
+
+  // Reset to Defaults
+  resetBtn?.addEventListener("click", () => {
+    if (confirm("Reset all settings to server defaults?")) {
+      SettingsManager.save(SettingsManager.getDefaults());
+      loadSettingsIntoUI();
+      showToast("Settings reset to defaults", "info");
+    }
+  });
+
+  // Clear Keys
+  clearKeysBtn?.addEventListener("click", () => {
+    if (confirm("Clear all stored API keys and custom endpoints?")) {
+      SettingsManager.clearKeys();
+      loadSettingsIntoUI();
+      showToast("All stored keys cleared", "info");
+    }
+  });
+}
+
+function loadSettingsIntoUI() {
+  const s = SettingsManager.load();
+
+  // API Keys
+  if ($("key-gemini")) $("key-gemini").value = s.apiKeys.gemini || "";
+  if ($("key-groq")) $("key-groq").value = s.apiKeys.groq || "";
+  if ($("key-openrouter")) $("key-openrouter").value = s.apiKeys.openrouter || "";
+  if ($("key-openai")) $("key-openai").value = s.apiKeys.openai || "";
+  if ($("key-custom")) $("key-custom").value = s.apiKeys.custom || "";
+
+  // Custom Endpoint & Model
+  if ($("url-custom")) $("url-custom").value = s.customEndpoints.custom || "";
+  if ($("model-custom")) $("model-custom").value = s.providerModels?.custom || "";
+
+  // Provider Models (Tabs 1-4)
+  if ($("model-gemini-fast")) $("model-gemini-fast").value = s.providerModels?.geminiFast || s.tierOverrides?.fast || "gemini-2.5-flash-lite";
+  if ($("model-groq-coding")) $("model-groq-coding").value = s.providerModels?.groqCoding || s.tierOverrides?.coding || "qwen/qwen3.6-27b";
+  if ($("model-groq-reasoning")) $("model-groq-reasoning").value = s.providerModels?.groqReasoning || s.tierOverrides?.reasoning || "openai/gpt-oss-120b";
+  if ($("model-openrouter-analyzer")) $("model-openrouter-analyzer").value = s.providerModels?.openrouterAnalyzer || s.tierOverrides?.analyzer || "meta-llama/llama-3.2-3b-instruct";
+  if ($("model-openrouter-powerful")) $("model-openrouter-powerful").value = s.providerModels?.openrouterPowerful || s.tierOverrides?.powerful || "meta-llama/llama-3.1-70b-instruct";
+  if ($("model-openai")) $("model-openai").value = s.providerModels?.openai || "gpt-4o-mini";
+
+  // Tier Overrides (Tab 6)
+  if ($("override-analyzer")) $("override-analyzer").value = s.tierOverrides?.analyzer || s.providerModels?.openrouterAnalyzer || "";
+  if ($("override-fast")) $("override-fast").value = s.tierOverrides?.fast || s.providerModels?.geminiFast || "";
+  if ($("override-coding")) $("override-coding").value = s.tierOverrides?.coding || s.providerModels?.groqCoding || "";
+  if ($("override-reasoning")) $("override-reasoning").value = s.tierOverrides?.reasoning || s.providerModels?.groqReasoning || "";
+  if ($("override-powerful")) $("override-powerful").value = s.tierOverrides?.powerful || s.providerModels?.openrouterPowerful || "";
+}
+
+async function testProviderConnection(provider) {
+  const badge = $(`status-${provider}-test`);
+  if (badge) {
+    badge.className = "status-test-badge";
+    badge.innerHTML = `<span class="spinner-small"></span> Testing...`;
+  }
+
+  // Gather active input values
+  const s = SettingsManager.load();
+  const apiKey = ($(`key-${provider}`)?.value || s.apiKeys[provider] || "").trim();
+  const baseUrl = ($("url-custom")?.value || s.customEndpoints.custom || "").trim();
+
+  let testModel = null;
+  if (provider === "custom") {
+    testModel = ($("model-custom")?.value || s.providerModels?.custom || "").trim();
+  } else if (provider === "gemini") {
+    testModel = ($("model-gemini-fast")?.value || s.providerModels?.geminiFast || "").trim();
+  } else if (provider === "groq") {
+    testModel = ($("model-groq-coding")?.value || s.providerModels?.groqCoding || "").trim();
+  } else if (provider === "openrouter") {
+    testModel = ($("model-openrouter-analyzer")?.value || s.providerModels?.openrouterAnalyzer || "").trim();
+  } else if (provider === "openai") {
+    testModel = ($("model-openai")?.value || s.providerModels?.openai || "").trim();
+  }
+
+  try {
+    const resp = await apiFetch(`/api/providers/test/${provider}`, {
+      method: "POST",
+      body: JSON.stringify({
+        provider: provider,
+        api_key: apiKey || null,
+        base_url: baseUrl || null,
+        model: testModel || null,
+      }),
+    });
+    const data = await resp.json();
+
+    if (badge) {
+      if (resp.ok && data.ok) {
+        badge.className = "status-test-badge connected";
+        badge.textContent = `✓ Connected (${data.latency_ms}ms)`;
+      } else {
+        badge.className = "status-test-badge error";
+        badge.textContent = `✗ ${data.message || "Failed"}`;
+      }
+    }
+  } catch (err) {
+    if (badge) {
+      badge.className = "status-test-badge error";
+      badge.textContent = `✗ ${err.message}`;
+    }
+  }
+}
+
+async function checkInitialHealth() {
+  try {
+    const resp = await apiFetch("/api/providers/health");
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    const dot = $("sidebar-provider-dot");
+    const headerStatus = $("engine-status-text");
+
+    if (data.overall_status === "connected") {
+      if (dot) dot.className = "status-dot-indicator";
+      if (headerStatus) headerStatus.textContent = "Providers Active";
+    } else if (data.overall_status === "degraded") {
+      if (dot) dot.className = "status-dot-indicator checking";
+      if (headerStatus) headerStatus.textContent = "Demo / Fallback Mode";
+    } else {
+      if (dot) dot.className = "status-dot-indicator checking";
+      if (headerStatus) headerStatus.textContent = "Server Defaults";
+    }
+  } catch (err) {
+    console.warn("Initial health check failed:", err);
+  }
+}
+
+/* ============================================================
+   10. Telemetry & Analytics Dashboard View
+   ============================================================ */
+
+function setupDashboardView() {
   $("refresh-dashboard-btn")?.addEventListener("click", loadDashboardStats);
 }
 
@@ -381,21 +1641,21 @@ function stopDashboardAutoRefresh() {
 
 async function loadDashboardStats() {
   try {
-    const resp = await fetch("/api/stats");
+    const resp = await apiFetch("/api/stats");
     if (!resp.ok) return;
     const s = await resp.json();
 
-    // KPIs
-    $("stat-total-requests").textContent = s.total_requests.toLocaleString();
-    $("stat-success-rate").textContent = `Success Rate: ${(s.success_rate * 100).toFixed(1)}%`;
-    $("stat-savings-usd").textContent = `$${s.estimated_savings_usd.toFixed(4)}`;
-    $("stat-savings-pct").textContent = `${s.savings_percent.toFixed(1)}% savings vs baseline`;
-    $("stat-avg-latency").textContent = `${Math.round(s.average_total_latency_ms)} ms`;
-    $("stat-analyzer-latency").textContent = `Gen: ${Math.round(s.average_latency_ms)} ms avg`;
-    $("stat-total-cost").textContent = `$${s.total_cost_usd.toFixed(6)}`;
-    $("stat-baseline-cost").textContent = `Baseline: $${s.baseline_cost_usd.toFixed(6)}`;
-    $("stat-total-tokens").textContent = s.total_tokens.toLocaleString();
-    $("stat-fallbacks").textContent = s.fallback_count.toString();
+    // Update KPI Cards
+    if ($("stat-total-requests")) $("stat-total-requests").textContent = s.total_requests.toLocaleString();
+    if ($("stat-success-rate")) $("stat-success-rate").textContent = `Success Rate: ${(s.success_rate * 100).toFixed(1)}%`;
+    if ($("stat-savings-usd")) $("stat-savings-usd").textContent = `$${s.estimated_savings_usd.toFixed(4)}`;
+    if ($("stat-savings-pct")) $("stat-savings-pct").textContent = `${s.savings_percent.toFixed(1)}% savings vs baseline`;
+    if ($("stat-avg-latency")) $("stat-avg-latency").textContent = `${Math.round(s.average_total_latency_ms)} ms`;
+    if ($("stat-analyzer-latency")) $("stat-analyzer-latency").textContent = `Gen: ${Math.round(s.average_latency_ms)} ms avg`;
+    if ($("stat-total-cost")) $("stat-total-cost").textContent = `$${s.total_cost_usd.toFixed(6)}`;
+    if ($("stat-baseline-cost")) $("stat-baseline-cost").textContent = `Baseline: $${s.baseline_cost_usd.toFixed(6)}`;
+    if ($("stat-total-tokens")) $("stat-total-tokens").textContent = s.total_tokens.toLocaleString();
+    if ($("stat-fallbacks")) $("stat-fallbacks").textContent = s.fallback_count.toString();
 
     // Render Distribution Charts
     renderBarChart("chart-model-dist", s.model_distribution || []);
@@ -403,10 +1663,10 @@ async function loadDashboardStats() {
     renderBarChart("chart-task-dist", s.task_distribution || []);
     renderBarChart("chart-complexity-dist", s.complexity_distribution || []);
 
-    // Render Recent Requests Table
+    // Render History Table
     renderHistoryTable(s.recent_requests || []);
   } catch (err) {
-    console.error("Failed to load dashboard stats:", err);
+    console.error("Failed to load dashboard statistics:", err);
   }
 }
 
@@ -452,13 +1712,13 @@ function renderHistoryTable(requests) {
     const fb = r.fallback_used ? `<span style="color:var(--accent-amber)">Yes</span>` : `<span style="color:var(--text-muted)">No</span>`;
 
     return `
-      <tr onclick="openInspector(${r.id})">
+      <tr onclick="openInspectorModal(${r.id})">
         <td>${escapeHtml(r.timestamp.split(" ")[1] || r.timestamp)}</td>
-        <td title="${escapeHtml(r.query)}" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+        <td title="${escapeHtml(r.query)}" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
           ${escapeHtml(r.query)}
         </td>
-        <td><span class="tag-pill">${escapeHtml(r.task_type)}</span></td>
-        <td><span class="tag-pill complexity-${r.complexity}">${escapeHtml(r.complexity)}</span></td>
+        <td><span class="drawer-badge tier">${escapeHtml(r.task_type)}</span></td>
+        <td><span class="drawer-badge">${escapeHtml(r.complexity)}</span></td>
         <td><code>${escapeHtml(r.selected_model)}</code></td>
         <td>${Math.round(r.total_latency_ms)} ms</td>
         <td>${cost}</td>
@@ -470,61 +1730,67 @@ function renderHistoryTable(requests) {
 }
 
 /* ============================================================
-   4. Research Benchmark Lab (Section 27)
+   11. Research Benchmark Lab
    ============================================================ */
-function setupBenchmark() {
+
+function setupBenchmarkView() {
   const runBtn = $("run-benchmark-btn");
   if (!runBtn) return;
 
   runBtn.addEventListener("click", async () => {
     runBtn.disabled = true;
-    runBtn.innerHTML = `<span class="spinner"></span> Executing Benchmark...`;
+    runBtn.innerHTML = `<span>⏳</span> Running Benchmark Suite...`;
 
     try {
-      const resp = await fetch("/api/benchmark/run", {
+      const resp = await apiFetch("/api/benchmark/run", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.detail || "Benchmark failed");
 
-      // Show summary cards
-      $("benchmark-summary-cards").style.display = "grid";
-      $("bm-overall-savings").textContent = `${data.overall_cost_savings_percent.toFixed(1)}%`;
-      $("bm-saved-dollars").textContent = `$${data.total_cost_saved_usd.toFixed(4)} saved across test suite`;
-      $("bm-overall-speedup").textContent = `${data.overall_speedup_percent.toFixed(1)}%`;
-      $("bm-smart-cost").textContent = `$${data.smart_total_cost_usd.toFixed(6)}`;
-      $("bm-baseline-cost").textContent = `vs Baseline 1: $${data.baseline1_total_cost_usd.toFixed(6)}`;
+      // Update Summary Cards
+      const cards = $("benchmark-summary-cards");
+      if (cards) cards.style.display = "grid";
 
-      // Render Table
+      if ($("bm-overall-savings")) $("bm-overall-savings").textContent = `${data.overall_cost_savings_percent.toFixed(1)}%`;
+      if ($("bm-saved-dollars")) $("bm-saved-dollars").textContent = `$${data.total_cost_saved_usd.toFixed(4)} saved across test suite`;
+      if ($("bm-overall-speedup")) $("bm-overall-speedup").textContent = `${data.overall_speedup_percent.toFixed(1)}%`;
+      if ($("bm-smart-cost")) $("bm-smart-cost").textContent = `$${data.smart_total_cost_usd.toFixed(6)}`;
+      if ($("bm-baseline-cost")) $("bm-baseline-cost").textContent = `vs Baseline 1: $${data.baseline1_total_cost_usd.toFixed(6)}`;
+
+      // Render Comparison Table
       const tbody = $("benchmark-tbody");
-      tbody.innerHTML = data.items.map(item => `
-        <tr>
-          <td>
-            <strong>${escapeHtml(item.query)}</strong>
-            <div style="margin-top:4px"><span class="tag-pill">${escapeHtml(item.task_type)}</span> <span class="tag-pill complexity-${item.complexity}">${escapeHtml(item.complexity)}</span></div>
-          </td>
-          <td>
-            <div><code>${escapeHtml(item.baseline1_model)}</code></div>
-            <div style="color:var(--text-muted);font-size:11px">$${item.baseline1_cost_usd.toFixed(6)} · ${item.baseline1_latency_ms} ms</div>
-          </td>
-          <td>
-            <div><code>${escapeHtml(item.baseline2_model)}</code></div>
-            <div style="color:var(--text-muted);font-size:11px">$${item.baseline2_cost_usd.toFixed(6)} · ${item.baseline2_latency_ms} ms</div>
-          </td>
-          <td>
-            <div style="color:var(--accent-cyan);font-weight:600"><code>${escapeHtml(item.smart_model)}</code></div>
-            <div style="color:var(--text-muted);font-size:11px">$${item.smart_cost_usd.toFixed(6)} · ${item.smart_latency_ms} ms</div>
-          </td>
-          <td>
-            <strong class="text-green">${item.smart_savings_percent.toFixed(1)}%</strong>
-          </td>
-          <td>
-            <strong class="text-blue">${item.smart_speedup_percent.toFixed(1)}%</strong>
-          </td>
-        </tr>
-      `).join("");
+      if (tbody) {
+        tbody.innerHTML = data.items.map(item => `
+          <tr>
+            <td>
+              <strong>${escapeHtml(item.query)}</strong>
+              <div style="margin-top:4px"><span class="drawer-badge tier">${escapeHtml(item.task_type)}</span> <span class="drawer-badge">${escapeHtml(item.complexity)}</span></div>
+            </td>
+            <td>
+              <div><code>${escapeHtml(item.baseline1_model)}</code></div>
+              <div style="color:var(--text-muted);font-size:11px">$${item.baseline1_cost_usd.toFixed(6)} · ${item.baseline1_latency_ms} ms</div>
+            </td>
+            <td>
+              <div><code>${escapeHtml(item.baseline2_model)}</code></div>
+              <div style="color:var(--text-muted);font-size:11px">$${item.baseline2_cost_usd.toFixed(6)} · ${item.baseline2_latency_ms} ms</div>
+            </td>
+            <td>
+              <div style="color:var(--accent-cyan);font-weight:600"><code>${escapeHtml(item.smart_model)}</code></div>
+              <div style="color:var(--text-muted);font-size:11px">$${item.smart_cost_usd.toFixed(6)} · ${item.smart_latency_ms} ms</div>
+            </td>
+            <td>
+              <strong class="text-green">${item.smart_savings_percent.toFixed(1)}%</strong>
+            </td>
+            <td>
+              <strong class="text-blue">${item.smart_speedup_percent.toFixed(1)}%</strong>
+            </td>
+          </tr>
+        `).join("");
+      }
+
+      showToast("Multi-domain benchmark completed", "success");
     } catch (err) {
       alert("Benchmark failed: " + err.message);
     } finally {
@@ -535,106 +1801,57 @@ function setupBenchmark() {
 }
 
 /* ============================================================
-   5. Provider Health Monitoring
+   12. Telemetry Inspector Modal & User Feedback
    ============================================================ */
-function setupHealthCheck() {
-  $("test-providers-btn")?.addEventListener("click", checkProviderHealth);
+
+function setupInspectorModal() {
+  const modal = $("inspector-modal");
+  const closeBtn = $("close-inspector-btn");
+  const backdrop = $("inspector-backdrop");
+
+  const closeModal = () => modal?.classList.add("hidden");
+
+  closeBtn?.addEventListener("click", closeModal);
+  backdrop?.addEventListener("click", closeModal);
 }
 
-async function checkProviderHealth() {
-  const btn = $("test-providers-btn");
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = `<span class="spinner"></span> Testing...`;
-  }
-
-  // Set checking states
-  ["openrouter", "gemini", "groq"].forEach(p => {
-    const el = $(`status-${p}`);
-    if (el) {
-      el.className = "p-status-pill checking";
-      el.textContent = "Checking...";
-    }
-  });
-
-  try {
-    const resp = await fetch("/api/providers/health");
-    const data = await resp.json();
-
-    // Update OpenRouter
-    updateProviderCard("openrouter", data.openrouter);
-    // Update Gemini
-    updateProviderCard("gemini", data.gemini);
-    // Update Groq
-    updateProviderCard("groq", data.groq);
-
-    // Update engine status header pill
-    const allConnected = (data.openrouter?.status === "connected" && data.gemini?.status === "connected" && data.groq?.status === "connected");
-    $("engine-status").textContent = allConnected ? "3 Providers Active" : "Orchestrator Online";
-  } catch (err) {
-    console.error("Health check failed:", err);
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = `<span>⚡</span> Ping All Providers`;
-    }
-  }
-}
-
-function updateProviderCard(provider, info) {
-  const pill = $(`status-${provider}`);
-  const ping = $(`ping-${provider}`);
-
-  if (!info) return;
-
-  if (info.status === "connected") {
-    pill.className = "p-status-pill connected";
-    pill.textContent = "● Connected";
-    ping.textContent = `${info.latency_ms} ms`;
-  } else {
-    pill.className = "p-status-pill error";
-    pill.textContent = "● Error";
-    ping.textContent = info.error ? escapeHtml(info.error.slice(0, 30)) : "Unavailable";
-  }
-}
-
-/* ============================================================
-   6. Inspector Modal & Feedback
-   ============================================================ */
-async function openInspector(requestId) {
+window.openInspectorModal = async function(requestId) {
   const modal = $("inspector-modal");
   const modalBody = $("modal-body");
+  if (!modal || !modalBody) return;
+
   modal.classList.remove("hidden");
-  modalBody.innerHTML = `<div class="loading-spinner">Loading telemetry for Request #${requestId}...</div>`;
+  modalBody.innerHTML = `<div class="empty-state">Loading telemetry for Request #${requestId}...</div>`;
 
   try {
-    const resp = await fetch(`/api/requests/${requestId}`);
+    const resp = await apiFetch(`/api/requests/${requestId}`);
     const r = await resp.json();
-    if (!resp.ok) throw new Error(r.detail || "Request not found");
+    if (!resp.ok) throw new Error(r.detail || "Request record not found");
 
     modalBody.innerHTML = `
-      <div class="modal-section-card">
-        <h4>Query & Classification</h4>
-        <p><strong>Query:</strong> ${escapeHtml(r.query)}</p>
-        <div style="margin-top:6px;display:flex;gap:8px">
-          <span class="tag-pill">Task: ${escapeHtml(r.task_type)}</span>
-          <span class="tag-pill complexity-${r.complexity}">Complexity: ${escapeHtml(r.complexity)} (${r.complexity_score})</span>
-          <span class="tag-pill">Strategy: ${escapeHtml(r.strategy || "balanced")}</span>
+      <div class="panel-card" style="margin-bottom:14px;">
+        <h4 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px;">Query & Classification</h4>
+        <p style="font-size:14px;font-weight:600;margin-bottom:8px;">${escapeHtml(r.query)}</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <span class="drawer-badge tier">Task: ${escapeHtml(r.task_type)}</span>
+          <span class="drawer-badge">Complexity: ${escapeHtml(r.complexity)} (${r.complexity_score})</span>
+          <span class="drawer-badge ${r.answer_mode === 'self' ? 'self' : 'switch'}">${r.answer_mode === 'self' ? '⚡ Self-Mode' : '🔄 Switch-Mode'}</span>
+          <span class="drawer-badge">Strategy: ${escapeHtml(r.strategy || 'balanced')}</span>
         </div>
       </div>
 
-      <div class="modal-grid">
-        <div class="modal-section-card">
-          <h4>Analyzer LLM Decision</h4>
+      <div class="dashboard-panels-grid" style="margin-bottom:14px;">
+        <div class="panel-card">
+          <h4 style="font-size:13px;color:var(--accent-blue);margin-bottom:8px;">🧠 Analyzer LLM Decision</h4>
           <p><strong>Analyzer Model:</strong> ${escapeHtml(r.analyzer_model)} (${escapeHtml(r.analyzer_provider)})</p>
           <p><strong>Analyzer Latency:</strong> ${Math.round(r.analyzer_latency_ms)} ms</p>
           <p><strong>Analyzer Tokens:</strong> ${r.analyzer_input_tokens || 0} in / ${r.analyzer_output_tokens || 0} out</p>
           <p><strong>Analyzer Cost:</strong> $${(r.analyzer_cost || 0).toFixed(6)}</p>
-          <p style="margin-top:6px"><strong>Reason:</strong> <em>${escapeHtml(r.routing_reason || "—")}</em></p>
+          <p style="margin-top:6px;font-style:italic;color:var(--text-secondary);">"${escapeHtml(r.routing_reason || '—')}"</p>
         </div>
 
-        <div class="modal-section-card">
-          <h4>Execution & Served Model</h4>
+        <div class="panel-card">
+          <h4 style="font-size:13px;color:var(--accent-cyan);margin-bottom:8px;">🎯 Execution & Served Model</h4>
           <p><strong>Served Model:</strong> <code>${escapeHtml(r.selected_model)}</code> (${escapeHtml(r.selected_provider)})</p>
           <p><strong>Generation Latency:</strong> ${Math.round(r.latency_ms)} ms ${r.ttft_ms ? `(TTFT: ${Math.round(r.ttft_ms)}ms)` : ''}</p>
           <p><strong>Model Tokens:</strong> ${r.input_tokens || 0} in / ${r.output_tokens || 0} out</p>
@@ -643,92 +1860,88 @@ async function openInspector(requestId) {
         </div>
       </div>
 
-      <div class="modal-section-card">
-        <h4>Cost & Latency Optimization Outcome</h4>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-          <div><span>Total End-to-End Latency:</span> <strong>${Math.round(r.total_latency_ms)} ms</strong></div>
-          <div><span>Total Request Cost:</span> <strong>$${((r.estimated_cost || 0) + (r.analyzer_cost || 0)).toFixed(6)}</strong></div>
-          <div><span>Savings vs Baseline:</span> <strong class="text-green">${(r.savings_percent || 0).toFixed(1)}% ($${(r.savings_usd || 0).toFixed(6)})</strong></div>
+      <div class="panel-card" style="margin-bottom:14px;">
+        <h4 style="font-size:13px;color:var(--accent-green);margin-bottom:8px;">💰 Optimization Summary</h4>
+        <div class="drawer-telemetry-grid">
+          <div class="t-box">
+            <span class="t-label">Total Latency</span>
+            <span class="t-val">${Math.round(r.total_latency_ms)} ms</span>
+          </div>
+          <div class="t-box">
+            <span class="t-label">Total Cost</span>
+            <span class="t-val">$${((r.estimated_cost || 0) + (r.analyzer_cost || 0)).toFixed(6)}</span>
+          </div>
+          <div class="t-box highlight-savings">
+            <span class="t-label">Net Cost Reduction</span>
+            <span class="t-val text-green">${(r.savings_percent || 0).toFixed(1)}% ($${(r.savings_usd || 0).toFixed(6)})</span>
+          </div>
         </div>
       </div>
 
       ${r.candidates && r.candidates.length > 0 ? `
-        <div class="modal-section-card">
-          <h4>Multi-Factor Candidate Scoreboard</h4>
-          <table class="data-table" style="margin-top:6px">
-            <thead>
-              <tr><th>Candidate Model</th><th>Provider</th><th>Tier</th><th>Score</th><th>Est. Cost</th></tr>
-            </thead>
-            <tbody>
-              ${r.candidates.map(c => `
-                <tr class="${c.selected ? 'cand-selected' : ''}">
-                  <td><code>${escapeHtml(c.model_id)}</code> ${c.selected ? '✓' : ''}</td>
-                  <td>${escapeHtml(c.provider)}</td>
-                  <td>${escapeHtml(c.tier)}</td>
-                  <td><strong>${c.total.toFixed(3)}</strong></td>
-                  <td>$${c.expected_cost_usd.toFixed(6)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+        <div class="panel-card">
+          <h4 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;">Multi-Factor Candidate Scoreboard</h4>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr><th>Candidate Model</th><th>Provider</th><th>Tier</th><th>Score</th><th>Est. Cost</th></tr>
+              </thead>
+              <tbody>
+                ${r.candidates.map(c => `
+                  <tr>
+                    <td><code>${escapeHtml(c.model_id)}</code> ${c.selected ? '✓' : ''}</td>
+                    <td>${escapeHtml(c.provider)}</td>
+                    <td>${escapeHtml(c.tier)}</td>
+                    <td><strong>${c.total.toFixed(3)}</strong></td>
+                    <td>$${c.expected_cost_usd.toFixed(6)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>
       ` : ''}
     `;
   } catch (err) {
-    modalBody.innerHTML = `<div class="empty-state" style="color:var(--accent-red)">Failed to load: ${escapeHtml(err.message)}</div>`;
+    modalBody.innerHTML = `<div class="empty-state text-red">Failed to load telemetry record: ${escapeHtml(err.message)}</div>`;
   }
-}
+};
 
-function closeInspector() {
-  $("inspector-modal").classList.add("hidden");
-}
-
-async function recordFeedback(requestId, rating, btn) {
+window.recordMessageFeedback = async function(requestId, rating, btn) {
   try {
-    const resp = await fetch("/api/feedback", {
+    const resp = await apiFetch("/api/feedback", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ request_id: requestId, rating }),
+      body: JSON.stringify({ request_id: requestId, rating: rating }),
     });
     if (resp.ok) {
       btn.style.color = rating === 1 ? "var(--accent-green)" : "var(--accent-red)";
       btn.style.borderColor = rating === 1 ? "var(--accent-green)" : "var(--accent-red)";
+      showToast(rating === 1 ? "Feedback recorded: Positive" : "Feedback recorded: Negative", "info");
     }
   } catch (e) {
     console.error("Feedback failed:", e);
   }
-}
-
-function copyText(btn, text) {
-  navigator.clipboard.writeText(text);
-  const orig = btn.textContent;
-  btn.textContent = "✓ Copied";
-  setTimeout(() => { btn.textContent = orig; }, 2000);
-}
+};
 
 /* ============================================================
-   7. Helpers
+   13. Toast Notification Helper
    ============================================================ */
-function escapeHtml(s) {
-  return String(s || "").replace(/[&<>"']/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[c]));
-}
 
-function formatMarkdown(text) {
-  if (!text) return "";
-  let formatted = text
-    .replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) => `<pre><code>${escapeHtml(code.trim())}</code></pre>`)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
-  
-  // Wrap non-pre text into paragraphs
-  const paragraphs = formatted.split("\n\n").map(p => {
-    p = p.trim();
-    if (p.startsWith("<pre>") || p.startsWith("<ul>") || p.startsWith("<ol>")) return p;
-    return `<p>${p.replace(/\n/g, "<br>")}</p>`;
-  });
+function showToast(message, type = "info", duration = 3000) {
+  const container = $("toast-container");
+  if (!container) return;
 
-  return paragraphs.join("");
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+
+  const icon = type === "success" ? "✓" : (type === "error" ? "✗" : "ℹ");
+  toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(message)}</span>`;
+
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(12px) scale(0.95)";
+    setTimeout(() => toast.remove(), 200);
+  }, duration);
 }

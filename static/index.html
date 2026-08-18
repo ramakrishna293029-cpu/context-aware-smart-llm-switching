@@ -1,363 +1,630 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Context-Aware Smart LLM Router | Cost & Performance Optimization</title>
+  <title>Smart LLM Switcher | Context-Aware Cost & Performance Optimization</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <!-- TOPBAR -->
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo-icon">⚡</div>
-      <div class="brand-text">
-        <span class="brand-title">Smart LLM Switcher</span>
-        <span class="brand-tagline">Context-Aware Cost & Performance Orchestrator</span>
-      </div>
-    </div>
-
-    <nav class="nav-tabs">
-      <button class="nav-tab active" data-tab="chat">
-        <span class="tab-icon">💬</span> Chat Studio
-      </button>
-      <button class="nav-tab" data-tab="dashboard">
-        <span class="tab-icon">📊</span> Telemetry & Analytics
-      </button>
-      <button class="nav-tab" data-tab="benchmark">
-        <span class="tab-icon">🧪</span> Research Benchmark
-      </button>
-      <button class="nav-tab" data-tab="health">
-        <span class="tab-icon">🔌</span> Provider Health
-      </button>
-    </nav>
-
-    <div class="topbar-status">
-      <div class="status-indicator">
-        <span class="status-dot pulse"></span>
-        <span class="status-text" id="engine-status">3 Providers Active</span>
-      </div>
-    </div>
-  </header>
-
-  <!-- MAIN VIEW CONTAINER -->
-  <main class="main-container">
+  <div class="app-layout" id="app-layout">
     
-    <!-- 1. CHAT STUDIO TAB -->
-    <section id="tab-chat" class="tab-view active">
-      <div class="chat-container">
-        <!-- Quick Starter Chips -->
-        <div class="quick-prompts" id="quick-prompts">
-          <span class="quick-label">Try sample queries:</span>
-          <button class="quick-chip" data-query="What is an API and how does REST work?">
-            <span class="chip-tier fast">Fast</span> What is an API?
-          </button>
-          <button class="quick-chip" data-query="Write a Python implementation of Dijkstra's algorithm with priority queue.">
-            <span class="chip-tier coding">Coding</span> Dijkstra in Python
-          </button>
-          <button class="quick-chip" data-query="Design a fault-tolerant distributed cache architecture with replication and failover for 10 million concurrent users.">
-            <span class="chip-tier reasoning">Reasoning</span> Distributed Cache Architecture
-          </button>
-          <button class="quick-chip" data-query="Now optimize the space complexity of that previous implementation.">
-            <span class="chip-tier context">Context</span> Follow-up: Optimize it
-          </button>
-        </div>
-
-        <!-- Messages Stream -->
-        <div id="chat-messages" class="chat-messages">
-          <div class="welcome-card">
-            <div class="welcome-icon">🧠</div>
-            <h2>Context-Aware Smart LLM Switching</h2>
-            <p>Every request is evaluated by the <strong>OpenRouter Analyzer LLM</strong>, which assesses complexity, task type, coding/reasoning needs, and conversation context—then automatically routes to <strong>Google Gemini</strong> (Fast/Low-Cost) or <strong>Groq</strong> (Coding/Reasoning).</p>
-            <div class="architecture-pills">
-              <div class="arch-pill"><span class="pill-dot gemini"></span> Gemini: Fast / Simple</div>
-              <div class="arch-pill"><span class="pill-dot groq"></span> Groq: Qwen Coder</div>
-              <div class="arch-pill"><span class="pill-dot groq"></span> Groq: 120B Reasoning</div>
-              <div class="arch-pill"><span class="pill-dot openrouter"></span> OpenRouter: Analyzer</div>
-            </div>
+    <!-- ============================================================ -->
+    <!-- 1. COLLAPSIBLE LEFT SIDEBAR                                  -->
+    <!-- ============================================================ -->
+    <aside class="sidebar" id="sidebar">
+      <!-- Sidebar Header -->
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="logo-icon">⚡</div>
+          <div class="brand-text">
+            <span class="brand-title">Smart Switcher</span>
+            <span class="brand-tagline">Cost & Latency Router</span>
           </div>
         </div>
-
-        <!-- Composer Form -->
-        <form id="chat-form" class="composer-card">
-          <div class="composer-controls">
-            <div class="strategy-picker">
-              <label for="strategy-select">Strategy:</label>
-              <select id="strategy-select">
-                <option value="balanced">⚖️ Balanced (Recommended)</option>
-                <option value="lowest_cost">💰 Lowest Cost</option>
-                <option value="fastest">⚡ Ultra Fast</option>
-                <option value="highest_quality">🎯 Maximum Quality</option>
-              </select>
-            </div>
-            <div class="context-indicator" id="context-indicator" title="Conversation memory size">
-              <span>Memory: <strong id="context-count">0</strong> turns</span>
-              <button type="button" class="btn-text" id="clear-history-btn" title="Clear context">Clear</button>
-            </div>
-          </div>
-          <div class="composer-input-row">
-            <textarea id="query-input" rows="1" placeholder="Enter any question, coding task, or reasoning challenge..." required></textarea>
-            <button type="submit" id="send-btn" class="btn-send" title="Send (Enter)">
-              <span class="send-icon">▲</span>
-            </button>
-          </div>
-        </form>
+        <button class="btn-icon sidebar-collapse-btn" id="sidebar-collapse-btn" title="Collapse Sidebar" aria-label="Collapse Sidebar">
+          <span class="icon">◀</span>
+        </button>
       </div>
-    </section>
 
-    <!-- 2. ANALYTICS & TELEMETRY DASHBOARD TAB -->
-    <section id="tab-dashboard" class="tab-view">
-      <div class="dashboard-container">
-        <div class="view-header">
-          <div>
-            <h2>Real Execution Telemetry</h2>
-            <p class="subtitle">Live metrics calculated directly from SQLite database records.</p>
-          </div>
-          <button id="refresh-dashboard-btn" class="btn-secondary">
-            <span>↻</span> Refresh Telemetry
-          </button>
-        </div>
+      <!-- New Chat Button -->
+      <div class="sidebar-actions">
+        <button class="btn-new-chat" id="new-chat-btn">
+          <span class="plus-icon">＋</span>
+          <span>New Chat</span>
+        </button>
+      </div>
 
-        <!-- KPI Metrics Grid -->
-        <div class="metrics-grid">
-          <div class="metric-card">
-            <span class="metric-label">Total Requests</span>
-            <span class="metric-val" id="stat-total-requests">—</span>
-            <span class="metric-sub" id="stat-success-rate">Success: —</span>
-          </div>
-          <div class="metric-card highlight-savings">
-            <span class="metric-label">Estimated Cost Savings</span>
-            <span class="metric-val text-green" id="stat-savings-usd">—</span>
-            <span class="metric-sub text-green" id="stat-savings-pct">— savings vs powerful baseline</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">Avg Total Latency</span>
-            <span class="metric-val" id="stat-avg-latency">—</span>
-            <span class="metric-sub" id="stat-analyzer-latency">Analyzer + Generation</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">Total Real Cost</span>
-            <span class="metric-val" id="stat-total-cost">—</span>
-            <span class="metric-sub" id="stat-baseline-cost">Baseline: —</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">Tokens Processed</span>
-            <span class="metric-val" id="stat-total-tokens">—</span>
-            <span class="metric-sub">Real provider token counts</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">Resilient Fallbacks</span>
-            <span class="metric-val" id="stat-fallbacks">0</span>
-            <span class="metric-sub">Auto-recovered failovers</span>
-          </div>
-        </div>
-
-        <!-- Charts & Distributions -->
-        <div class="dashboard-panels-grid">
-          <div class="panel-card">
-            <h3>Provider & Model Distribution</h3>
-            <div id="chart-model-dist" class="bar-chart-container"></div>
-          </div>
-          <div class="panel-card">
-            <h3>Routing Tier Share</h3>
-            <div id="chart-tier-dist" class="bar-chart-container"></div>
-          </div>
-          <div class="panel-card">
-            <h3>Task Type Classification</h3>
-            <div id="chart-task-dist" class="bar-chart-container"></div>
-          </div>
-          <div class="panel-card">
-            <h3>Complexity Breakdown</h3>
-            <div id="chart-complexity-dist" class="bar-chart-container"></div>
-          </div>
-        </div>
-
-        <!-- Recent Requests Stream -->
-        <div class="panel-card table-panel">
-          <div class="table-header">
-            <h3>Live Request Stream</h3>
-            <span class="table-hint">Click any row to inspect complete routing scoreboard & tokens</span>
-          </div>
-          <div class="table-responsive">
-            <table class="data-table" id="history-table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Query</th>
-                  <th>Task Type</th>
-                  <th>Complexity</th>
-                  <th>Served Model</th>
-                  <th>Latency</th>
-                  <th>Cost</th>
-                  <th>Fallback</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody id="history-tbody">
-                <tr><td colspan="9" class="empty-state">Loading telemetry...</td></tr>
-              </tbody>
-            </table>
-          </div>
+      <!-- Session Search Filter -->
+      <div class="sidebar-search">
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="session-search-input" placeholder="Search conversations..." autocomplete="off" />
+          <button class="btn-clear-search hidden" id="clear-search-btn" title="Clear search">✕</button>
         </div>
       </div>
-    </section>
 
-    <!-- 3. RESEARCH BENCHMARK LAB TAB -->
-    <section id="tab-benchmark" class="tab-view">
-      <div class="benchmark-container">
-        <div class="view-header">
-          <div>
-            <h2>Research Objective & Baseline Comparison</h2>
-            <p class="subtitle">Empirical investigation comparing Baseline 1 (Always Powerful), Baseline 2 (Static Routing), and our Context-Aware Smart Switching Router.</p>
-          </div>
-          <button id="run-benchmark-btn" class="btn-primary">
-            <span>▶</span> Run Multi-Domain Benchmark
-          </button>
+      <!-- Scrollable Conversation Sessions List -->
+      <div class="sidebar-sessions-section">
+        <div class="sessions-label-row">
+          <span class="sessions-label">Recent Chats</span>
+          <span class="sessions-count" id="sessions-count-badge">0</span>
         </div>
-
-        <!-- Benchmark Summary Cards -->
-        <div class="benchmark-summary-grid" id="benchmark-summary-cards" style="display:none;">
-          <div class="summary-card text-center highlight">
-            <span class="card-title">Overall Cost Reduction</span>
-            <span class="big-metric text-green" id="bm-overall-savings">0%</span>
-            <span class="card-desc" id="bm-saved-dollars">$0.00 saved vs Baseline 1</span>
-          </div>
-          <div class="summary-card text-center">
-            <span class="card-title">Latency Speedup</span>
-            <span class="big-metric text-blue" id="bm-overall-speedup">0%</span>
-            <span class="card-desc">Faster overall turnaround</span>
-          </div>
-          <div class="summary-card text-center">
-            <span class="card-title">Smart Router Total Cost</span>
-            <span class="big-metric" id="bm-smart-cost">$0.00</span>
-            <span class="card-desc" id="bm-baseline-cost">vs Baseline 1: $0.00</span>
-          </div>
-        </div>
-
-        <!-- Comparison Table -->
-        <div class="panel-card table-panel">
-          <h3>Benchmark Evaluation Matrix</h3>
-          <div class="table-responsive">
-            <table class="data-table benchmark-table" id="benchmark-table">
-              <thead>
-                <tr>
-                  <th>Query & Category</th>
-                  <th>Baseline 1 (Always Powerful)</th>
-                  <th>Baseline 2 (Static Routing)</th>
-                  <th>Our Smart Switcher</th>
-                  <th>Cost Savings</th>
-                  <th>Speedup</th>
-                </tr>
-              </thead>
-              <tbody id="benchmark-tbody">
-                <tr>
-                  <td colspan="6" class="empty-state">
-                    Click "Run Multi-Domain Benchmark" to execute the comparative evaluation.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        <div class="session-list" id="session-list">
+          <!-- Dynamic session items inserted here -->
         </div>
       </div>
-    </section>
 
-    <!-- 4. PROVIDER HEALTH & SETTINGS TAB -->
-    <section id="tab-health" class="tab-view">
-      <div class="health-container">
-        <div class="view-header">
-          <div>
-            <h2>Provider Connectivity & Health Monitoring</h2>
-            <p class="subtitle">Live status, latency pings, and model configurations for active LLM providers.</p>
+      <!-- Sidebar Navigation Links -->
+      <div class="sidebar-nav-section">
+        <button class="sidebar-nav-item active" id="nav-chat-btn" data-view="chat">
+          <span class="nav-icon">💬</span>
+          <span class="nav-text">Chat Studio</span>
+        </button>
+        <button class="sidebar-nav-item" id="nav-dashboard-btn" data-view="dashboard">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">Telemetry & Analytics</span>
+        </button>
+        <button class="sidebar-nav-item" id="nav-benchmark-btn" data-view="benchmark">
+          <span class="nav-icon">🧪</span>
+          <span class="nav-text">Research Benchmark</span>
+        </button>
+      </div>
+
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <button class="sidebar-footer-btn" id="open-settings-btn" title="Provider Settings & API Keys">
+          <div class="footer-btn-left">
+            <span class="status-dot-indicator" id="sidebar-provider-dot" title="Checking providers..."></span>
+            <span class="footer-btn-text">Settings & Keys</span>
           </div>
-          <button id="test-providers-btn" class="btn-secondary">
-            <span>⚡</span> Ping All Providers
+          <span class="gear-icon">⚙️</span>
+        </button>
+        <div class="sidebar-footer-row">
+          <button class="btn-sidebar-tool" id="theme-toggle-btn" title="Toggle Dark/Light Theme">
+            <span class="theme-icon" id="theme-icon">🌙</span>
+            <span class="tool-text" id="theme-text">Dark Mode</span>
+          </button>
+          <button class="btn-sidebar-tool danger" id="clear-all-sessions-btn" title="Clear all chat history">
+            <span class="trash-icon">🗑️</span>
+            <span class="tool-text">Clear All</span>
           </button>
         </div>
+      </div>
+    </aside>
 
-        <div class="providers-grid">
-          <!-- OpenRouter Card -->
-          <div class="provider-card" id="card-openrouter">
-            <div class="p-header">
-              <div class="p-brand">
-                <span class="p-badge openrouter">OpenRouter</span>
-                <h4>Analyzer LLM Engine</h4>
+    <!-- Sidebar Backdrop for Mobile -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    <!-- ============================================================ -->
+    <!-- 2. MAIN CONVERSATIONAL CANVAS                                -->
+    <!-- ============================================================ -->
+    <main class="main-canvas" id="main-canvas">
+      
+      <!-- Canvas Top Navigation Bar -->
+      <header class="canvas-header">
+        <div class="header-left">
+          <button class="btn-icon sidebar-open-btn" id="sidebar-open-btn" title="Open Sidebar" aria-label="Open Sidebar">
+            <span class="icon">☰</span>
+          </button>
+          <div class="session-info">
+            <h1 class="active-session-title" id="active-session-title" title="Click to rename">New Conversation</h1>
+            <button class="btn-icon-tiny" id="rename-session-btn" title="Rename Session">✏️</button>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <div class="strategy-badge-pill" id="header-strategy-badge" title="Active Routing Strategy">
+            <span class="pill-icon">⚖️</span>
+            <span class="pill-label">Balanced</span>
+          </div>
+          <div class="engine-status-pill" id="engine-status-badge" title="Provider Connectivity">
+            <span class="status-pulse-dot"></span>
+            <span class="status-text" id="engine-status-text">Router Online</span>
+          </div>
+          <button class="btn-icon header-tool-btn" id="header-settings-btn" title="Settings & API Keys">⚙️</button>
+          <button class="btn-icon header-tool-btn" id="header-theme-btn" title="Toggle Theme">🌙</button>
+        </div>
+      </header>
+
+      <!-- View Containers -->
+      <div class="views-wrapper">
+        
+        <!-- ------------------------------------------------------------ -->
+        <!-- VIEW 1: CHAT STUDIO & STREAMING CANVAS                       -->
+        <!-- ------------------------------------------------------------ -->
+        <section class="view-panel active" id="view-chat">
+          <div class="chat-canvas-inner">
+            
+            <!-- Chat Messages Container -->
+            <div class="chat-messages" id="chat-messages">
+              <!-- Dynamically rendered by app.js (Welcome Hero or Conversation History) -->
+            </div>
+
+            <!-- Floating Input Composer -->
+            <div class="composer-container">
+              <!-- Main Composer Form -->
+              <form class="composer-card" id="composer-form">
+                
+                <!-- Composer Controls Header -->
+                <div class="composer-topbar">
+                  <div class="strategy-selector-wrapper">
+                    <label for="strategy-select" class="strategy-label">Strategy:</label>
+                    <div class="select-styled-wrap">
+                      <select id="strategy-select" class="strategy-select">
+                        <option value="balanced" selected>⚖️ Balanced (Quality & Cost)</option>
+                        <option value="lowest_cost">💰 Lowest Cost (Budget First)</option>
+                        <option value="fastest">⚡ Ultra Fast (Lowest Latency)</option>
+                        <option value="highest_quality">🎯 Maximum Quality (Strongest)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="composer-topbar-right">
+                    <div class="context-pill" id="context-pill" title="Conversation Context Window">
+                      <span class="context-icon">🧠</span>
+                      <span>Memory: <strong id="context-turn-count">0</strong> turns</span>
+                      <button type="button" class="btn-clear-context" id="clear-context-btn" title="Reset Conversation Memory">Clear</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Composer Input Area -->
+                <div class="composer-input-row">
+                  <textarea 
+                    id="query-input" 
+                    class="query-input" 
+                    rows="1" 
+                    placeholder="Ask any question, coding task, or reasoning challenge... (Shift+Enter for newline)"
+                    required
+                  ></textarea>
+
+                  <!-- Send / Stop Button Morph -->
+                  <button type="submit" id="send-stop-btn" class="btn-send-stop" title="Send Message (Enter)">
+                    <span class="btn-icon-inner" id="send-btn-icon">▲</span>
+                  </button>
+                </div>
+
+                <div class="composer-bottom-bar">
+                  <span class="composer-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift + Enter</kbd> for new line · Live multi-factor routing & cost optimization</span>
+                </div>
+              </form>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ------------------------------------------------------------ -->
+        <!-- VIEW 2: TELEMETRY & ANALYTICS DASHBOARD                      -->
+        <!-- ------------------------------------------------------------ -->
+        <section class="view-panel" id="view-dashboard">
+          <div class="dashboard-container">
+            <div class="view-header">
+              <div class="view-title-group">
+                <h2>Real Execution Telemetry & Performance</h2>
+                <p class="subtitle">Live metrics calculated directly from database execution records.</p>
               </div>
-              <span class="p-status-pill checking" id="status-openrouter">Checking...</span>
+              <button id="refresh-dashboard-btn" class="btn-secondary">
+                <span>↻</span> Refresh Telemetry
+              </button>
             </div>
-            <div class="p-body">
-              <div class="p-row"><span>Configured Model:</span> <code id="cfg-openrouter-model">meta-llama/llama-3.2-3b-instruct</code></div>
-              <div class="p-row"><span>Role:</span> <strong>Classification & Structured Routing Brain</strong></div>
-              <div class="p-row"><span>Ping Latency:</span> <strong id="ping-openrouter">—</strong></div>
-              <div class="p-row"><span>Fallback Tiers:</span> <span>Fast, Balanced, Coding, Reasoning, Powerful</span></div>
+
+            <!-- KPI Cards Grid -->
+            <div class="metrics-grid">
+              <div class="metric-card">
+                <span class="metric-label">Total Requests</span>
+                <span class="metric-val" id="stat-total-requests">—</span>
+                <span class="metric-sub" id="stat-success-rate">Success: —</span>
+              </div>
+              <div class="metric-card highlight-savings">
+                <span class="metric-label">Estimated Cost Reduction</span>
+                <span class="metric-val text-green" id="stat-savings-usd">—</span>
+                <span class="metric-sub text-green" id="stat-savings-pct">— savings vs baseline</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Avg Total Latency</span>
+                <span class="metric-val" id="stat-avg-latency">—</span>
+                <span class="metric-sub" id="stat-analyzer-latency">Analyzer + Generation</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Total Real Cost</span>
+                <span class="metric-val" id="stat-total-cost">—</span>
+                <span class="metric-sub" id="stat-baseline-cost">Baseline: —</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Tokens Processed</span>
+                <span class="metric-val" id="stat-total-tokens">—</span>
+                <span class="metric-sub">Real provider token counts</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Resilient Fallbacks</span>
+                <span class="metric-val" id="stat-fallbacks">0</span>
+                <span class="metric-sub">Auto-recovered failovers</span>
+              </div>
+            </div>
+
+            <!-- Distribution Charts Grid -->
+            <div class="dashboard-panels-grid">
+              <div class="panel-card">
+                <h3>Provider & Model Distribution</h3>
+                <div id="chart-model-dist" class="bar-chart-container"></div>
+              </div>
+              <div class="panel-card">
+                <h3>Routing Tier Share</h3>
+                <div id="chart-tier-dist" class="bar-chart-container"></div>
+              </div>
+              <div class="panel-card">
+                <h3>Task Type Classification</h3>
+                <div id="chart-task-dist" class="bar-chart-container"></div>
+              </div>
+              <div class="panel-card">
+                <h3>Complexity Breakdown</h3>
+                <div id="chart-complexity-dist" class="bar-chart-container"></div>
+              </div>
+            </div>
+
+            <!-- Live Request Stream Table -->
+            <div class="panel-card table-panel">
+              <div class="table-header">
+                <div class="table-title-group">
+                  <h3>Live Request Stream</h3>
+                  <span class="table-hint">Click any row to inspect complete routing scoreboard & tokens</span>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table" id="history-table">
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Query</th>
+                      <th>Task Type</th>
+                      <th>Complexity</th>
+                      <th>Served Model</th>
+                      <th>Latency</th>
+                      <th>Cost</th>
+                      <th>Fallback</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="history-tbody">
+                    <tr><td colspan="9" class="empty-state">Loading telemetry records...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ------------------------------------------------------------ -->
+        <!-- VIEW 3: RESEARCH BENCHMARK LAB                               -->
+        <!-- ------------------------------------------------------------ -->
+        <section class="view-panel" id="view-benchmark">
+          <div class="benchmark-container">
+            <div class="view-header">
+              <div class="view-title-group">
+                <h2>Research Objective & Baseline Comparison</h2>
+                <p class="subtitle">Empirical evaluation comparing Baseline 1 (Always Powerful), Baseline 2 (Static Routing), and our Context-Aware Smart Switching Router.</p>
+              </div>
+              <button id="run-benchmark-btn" class="btn-primary">
+                <span>▶</span> Run Multi-Domain Benchmark
+              </button>
+            </div>
+
+            <!-- Benchmark KPI Summary Cards -->
+            <div class="benchmark-summary-grid" id="benchmark-summary-cards" style="display:none;">
+              <div class="summary-card text-center highlight">
+                <span class="card-title">Overall Cost Reduction</span>
+                <span class="big-metric text-green" id="bm-overall-savings">0%</span>
+                <span class="card-desc" id="bm-saved-dollars">$0.00 saved vs Baseline 1</span>
+              </div>
+              <div class="summary-card text-center">
+                <span class="card-title">Latency Speedup</span>
+                <span class="big-metric text-blue" id="bm-overall-speedup">0%</span>
+                <span class="card-desc">Faster overall turnaround</span>
+              </div>
+              <div class="summary-card text-center">
+                <span class="card-title">Smart Router Total Cost</span>
+                <span class="big-metric" id="bm-smart-cost">$0.00</span>
+                <span class="card-desc" id="bm-baseline-cost">vs Baseline 1: $0.00</span>
+              </div>
+            </div>
+
+            <!-- Evaluation Matrix Table -->
+            <div class="panel-card table-panel">
+              <div class="table-header">
+                <div class="table-title-group">
+                  <h3>Benchmark Evaluation Matrix</h3>
+                  <span class="table-hint">Side-by-side cost and latency comparison across query domains</span>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table benchmark-table" id="benchmark-table">
+                  <thead>
+                    <tr>
+                      <th>Query & Category</th>
+                      <th>Baseline 1 (Always Powerful)</th>
+                      <th>Baseline 2 (Static Routing)</th>
+                      <th>Our Smart Switcher</th>
+                      <th>Cost Savings (Est.)</th>
+                      <th>Speedup (Est.)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="benchmark-tbody">
+                    <tr>
+                      <td colspan="6" class="empty-state">
+                        Click "Run Multi-Domain Benchmark" to execute the comparative evaluation suite.
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 3. DYNAMIC SETTINGS & PROVIDER MODAL (R2)                     -->
+  <!-- ============================================================ -->
+  <div class="modal hidden" id="settings-modal">
+    <div class="modal-backdrop" id="settings-backdrop"></div>
+    <div class="modal-content settings-modal-content">
+      
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h3>⚙️ Provider Configuration & API Keys</h3>
+          <p class="modal-subtitle">Configure your API credentials, custom endpoints, and model tier overrides.</p>
+        </div>
+        <button class="btn-close" id="close-settings-btn" aria-label="Close Settings">✕</button>
+      </div>
+
+      <!-- Modal Body with Provider Tabs -->
+      <div class="modal-body settings-body">
+        
+        <!-- Provider Navigation Tabs -->
+        <div class="settings-nav-tabs">
+          <button class="settings-tab active" data-tab="gemini">Google Gemini</button>
+          <button class="settings-tab" data-tab="groq">Groq LPU</button>
+          <button class="settings-tab" data-tab="openrouter">OpenRouter</button>
+          <button class="settings-tab" data-tab="openai">OpenAI</button>
+          <button class="settings-tab" data-tab="custom">Custom / Local Endpoint</button>
+          <button class="settings-tab" data-tab="tiers">Model Tier Overrides</button>
+        </div>
+
+        <!-- Provider Tab Panels -->
+        <div class="settings-panels-container">
+          
+          <!-- TAB 1: Google Gemini -->
+          <div class="settings-panel active" id="tab-gemini">
+            <div class="panel-desc">
+              <strong>Google Gemini</strong> powers the <em>Fast / Low-Cost Tier</em> for factual, general, and low-complexity tasks.
+            </div>
+            <div class="form-group">
+              <label for="key-gemini">Gemini API Key</label>
+              <div class="input-password-wrap">
+                <input type="password" id="key-gemini" placeholder="AIzaSy..." autocomplete="off" />
+                <button type="button" class="btn-toggle-mask" data-target="key-gemini" title="Show/Hide Key">👁️</button>
+              </div>
+              <span class="field-hint">Leave blank to use the server-side GEMINI_API_KEY from .env</span>
+            </div>
+            <div class="form-group">
+              <label for="model-gemini-fast">Fast Tier Model</label>
+              <input type="text" id="model-gemini-fast" placeholder="gemini-2.5-flash-lite" value="gemini-2.5-flash-lite" />
+            </div>
+            <div class="test-connection-row">
+              <button type="button" class="btn-test-conn" id="test-btn-gemini" data-provider="gemini">
+                <span>⚡</span> Test Gemini Connection
+              </button>
+              <span class="status-test-badge" id="status-gemini-test">Not tested</span>
             </div>
           </div>
 
-          <!-- Gemini Card -->
-          <div class="provider-card" id="card-gemini">
-            <div class="p-header">
-              <div class="p-brand">
-                <span class="p-badge gemini">Google Gemini</span>
-                <h4>Fast / Low-Cost Model</h4>
-              </div>
-              <span class="p-status-pill checking" id="status-gemini">Checking...</span>
+          <!-- TAB 2: Groq LPU -->
+          <div class="settings-panel" id="tab-groq">
+            <div class="panel-desc">
+              <strong>Groq LPU</strong> delivers ultra-high token velocity for <em>Specialized Coding</em> and <em>Deep Reasoning</em>.
             </div>
-            <div class="p-body">
-              <div class="p-row"><span>Configured Model:</span> <code id="cfg-gemini-model">gemini-2.5-flash-lite</code></div>
-              <div class="p-row"><span>Role:</span> <strong>Factual, General & Low-Complexity Tasks</strong></div>
-              <div class="p-row"><span>Ping Latency:</span> <strong id="ping-gemini">—</strong></div>
-              <div class="p-row"><span>Cost Profile:</span> <span>$0.075 / 1M input · $0.30 / 1M output</span></div>
+            <div class="form-group">
+              <label for="key-groq">Groq API Key</label>
+              <div class="input-password-wrap">
+                <input type="password" id="key-groq" placeholder="gsk_..." autocomplete="off" />
+                <button type="button" class="btn-toggle-mask" data-target="key-groq" title="Show/Hide Key">👁️</button>
+              </div>
+              <span class="field-hint">Leave blank to use server-side GROQ_API_KEY from .env</span>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="model-groq-coding">Coding Model</label>
+                <input type="text" id="model-groq-coding" placeholder="qwen/qwen3.6-27b" value="qwen/qwen3.6-27b" />
+              </div>
+              <div class="form-group">
+                <label for="model-groq-reasoning">Reasoning Model</label>
+                <input type="text" id="model-groq-reasoning" placeholder="openai/gpt-oss-120b" value="openai/gpt-oss-120b" />
+              </div>
+            </div>
+            <div class="test-connection-row">
+              <button type="button" class="btn-test-conn" id="test-btn-groq" data-provider="groq">
+                <span>⚡</span> Test Groq Connection
+              </button>
+              <span class="status-test-badge" id="status-groq-test">Not tested</span>
             </div>
           </div>
 
-          <!-- Groq Card -->
-          <div class="provider-card" id="card-groq">
-            <div class="p-header">
-              <div class="p-brand">
-                <span class="p-badge groq">Groq LPU</span>
-                <h4>Coding & Reasoning Models</h4>
+          <!-- TAB 3: OpenRouter -->
+          <div class="settings-panel" id="tab-openrouter">
+            <div class="panel-desc">
+              <strong>OpenRouter</strong> acts as the unified gateway hosting the <em>Analyzer LLM</em> and the powerful baseline model.
+            </div>
+            <div class="form-group">
+              <label for="key-openrouter">OpenRouter API Key</label>
+              <div class="input-password-wrap">
+                <input type="password" id="key-openrouter" placeholder="sk-or-v1-..." autocomplete="off" />
+                <button type="button" class="btn-toggle-mask" data-target="key-openrouter" title="Show/Hide Key">👁️</button>
               </div>
-              <span class="p-status-pill checking" id="status-groq">Checking...</span>
+              <span class="field-hint">Leave blank to use server-side OPENROUTER_API_KEY from .env</span>
             </div>
-            <div class="p-body">
-              <div class="p-row"><span>Coding Model:</span> <code id="cfg-groq-coding">qwen/qwen3.6-27b</code></div>
-              <div class="p-row"><span>Reasoning Model:</span> <code id="cfg-groq-reasoning">openai/gpt-oss-120b</code></div>
-              <div class="p-row"><span>Role:</span> <strong>Specialized Programming, Math & Architecture</strong></div>
-              <div class="p-row"><span>Ping Latency:</span> <strong id="ping-groq">—</strong></div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="model-openrouter-analyzer">Base / Analyzer Model</label>
+                <input type="text" id="model-openrouter-analyzer" placeholder="meta-llama/llama-3.2-3b-instruct" value="meta-llama/llama-3.2-3b-instruct" />
+              </div>
+              <div class="form-group">
+                <label for="model-openrouter-powerful">Powerful Baseline Model</label>
+                <input type="text" id="model-openrouter-powerful" placeholder="meta-llama/llama-3.1-70b-instruct" value="meta-llama/llama-3.1-70b-instruct" />
+              </div>
             </div>
+            <div class="test-connection-row">
+              <button type="button" class="btn-test-conn" id="test-btn-openrouter" data-provider="openrouter">
+                <span>⚡</span> Test OpenRouter Connection
+              </button>
+              <span class="status-test-badge" id="status-openrouter-test">Not tested</span>
+            </div>
+          </div>
+
+          <!-- TAB 4: OpenAI -->
+          <div class="settings-panel" id="tab-openai">
+            <div class="panel-desc">
+              <strong>OpenAI Direct</strong> integration for official GPT-4o, GPT-4o-mini, and o3-mini models.
+            </div>
+            <div class="form-group">
+              <label for="key-openai">OpenAI API Key</label>
+              <div class="input-password-wrap">
+                <input type="password" id="key-openai" placeholder="sk-proj-..." autocomplete="off" />
+                <button type="button" class="btn-toggle-mask" data-target="key-openai" title="Show/Hide Key">👁️</button>
+              </div>
+              <span class="field-hint">Leave blank to use server-side OPENAI_API_KEY from .env</span>
+            </div>
+            <div class="form-group">
+              <label for="model-openai">OpenAI Model</label>
+              <input type="text" id="model-openai" placeholder="gpt-4o-mini" value="gpt-4o-mini" />
+            </div>
+            <div class="test-connection-row">
+              <button type="button" class="btn-test-conn" id="test-btn-openai" data-provider="openai">
+                <span>⚡</span> Test OpenAI Connection
+              </button>
+              <span class="status-test-badge" id="status-openai-test">Not tested</span>
+            </div>
+          </div>
+
+          <!-- TAB 5: Custom Endpoint -->
+          <div class="settings-panel" id="tab-custom">
+            <div class="panel-desc">
+              Connect any <strong>OpenAI-compatible endpoint</strong> (Ollama, vLLM, LMStudio, LocalAI, Azure OpenAI).
+            </div>
+            <div class="form-group">
+              <label for="url-custom">Custom Base URL</label>
+              <input type="text" id="url-custom" placeholder="http://localhost:11434/v1" />
+              <span class="field-hint">e.g., http://localhost:11434/v1 for Ollama, http://localhost:8000/v1 for vLLM</span>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="key-custom">Custom API Key (Optional)</label>
+                <div class="input-password-wrap">
+                  <input type="password" id="key-custom" placeholder="sk-custom..." autocomplete="off" />
+                  <button type="button" class="btn-toggle-mask" data-target="key-custom" title="Show/Hide Key">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="model-custom">Custom Model Name</label>
+                <input type="text" id="model-custom" placeholder="llama3.2:latest" />
+              </div>
+            </div>
+            <div class="test-connection-row">
+              <button type="button" class="btn-test-conn" id="test-btn-custom" data-provider="custom">
+                <span>⚡</span> Test Custom Endpoint
+              </button>
+              <span class="status-test-badge" id="status-custom-test">Not tested</span>
+            </div>
+          </div>
+
+          <!-- TAB 6: Model Tier Overrides -->
+          <div class="settings-panel" id="tab-tiers">
+            <div class="panel-desc">
+              Override dynamic model targets across intelligence tiers for fine-grained routing customization.
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label for="override-analyzer">Base / Analyzer Model</label>
+                <input type="text" id="override-analyzer" placeholder="meta-llama/llama-3.2-3b-instruct" />
+              </div>
+              <div class="form-group">
+                <label for="override-fast">Fast Tier Model</label>
+                <input type="text" id="override-fast" placeholder="gemini-2.5-flash-lite" />
+              </div>
+              <div class="form-group">
+                <label for="override-coding">Coding Tier Model</label>
+                <input type="text" id="override-coding" placeholder="qwen/qwen3.6-27b" />
+              </div>
+              <div class="form-group">
+                <label for="override-reasoning">Reasoning Tier Model</label>
+                <input type="text" id="override-reasoning" placeholder="openai/gpt-oss-120b" />
+              </div>
+              <div class="form-group" style="grid-column:1/-1;">
+                <label for="override-powerful">Powerful Baseline Model</label>
+                <input type="text" id="override-powerful" placeholder="meta-llama/llama-3.1-70b-instruct" />
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Security Guarantee Notice -->
+        <div class="settings-security-box">
+          <span class="lock-icon">🔒</span>
+          <div class="security-text">
+            <strong>Client-Side Storage Guarantee:</strong> Your API keys are saved exclusively in your browser's <code>localStorage</code> and transmitted via encrypted headers (<code>X-Gemini-Key</code>, <code>X-Groq-Key</code>, <code>X-OpenRouter-Key</code>, etc.) on demand. If left blank, server-side environment variables are used seamlessly.
           </div>
         </div>
 
-        <div class="panel-card" style="margin-top:24px;">
-          <h3>Security & Architectural Guarantees</h3>
-          <ul class="security-list">
-            <li>🔒 <strong>Server-Side Secret Management:</strong> All API keys are loaded strictly from the server-side environment (`.env`) and never transmitted to the browser.</li>
-            <li>⚡ <strong>Zero Fake Data:</strong> All responses, latencies, token counts, and price calculations are 100% real executions.</li>
-            <li>🔄 <strong>Resilient Fallbacks:</strong> If any provider API fails or hits rate limits, the orchestrator automatically cascades to the next eligible model.</li>
-          </ul>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer">
+        <div class="footer-left-actions">
+          <button type="button" class="btn-text danger" id="clear-keys-btn">Clear All Keys</button>
+          <button type="button" class="btn-secondary" id="reset-settings-btn">Reset Defaults</button>
+        </div>
+        <div class="footer-right-actions">
+          <button type="button" class="btn-primary" id="save-settings-btn">Save & Apply Settings</button>
         </div>
       </div>
-    </section>
 
-  </main>
+    </div>
+  </div>
 
-  <!-- REQUEST INSPECTOR MODAL -->
-  <div id="inspector-modal" class="modal hidden">
-    <div class="modal-backdrop" onclick="closeInspector()"></div>
+  <!-- ============================================================ -->
+  <!-- 4. REQUEST TELEMETRY INSPECTOR MODAL                         -->
+  <!-- ============================================================ -->
+  <div class="modal hidden" id="inspector-modal">
+    <div class="modal-backdrop" id="inspector-backdrop"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h3 id="modal-title">Request Telemetry Inspector</h3>
-        <button class="btn-close" onclick="closeInspector()" aria-label="Close">✕</button>
+        <div class="modal-title-group">
+          <h3 id="modal-title">🔍 Request Telemetry Inspector</h3>
+          <p class="modal-subtitle">Full routing scoreboard, token breakdown, and cost optimization telemetry.</p>
+        </div>
+        <button class="btn-close" id="close-inspector-btn" aria-label="Close Inspector">✕</button>
       </div>
       <div class="modal-body" id="modal-body">
-        <div class="loading-spinner">Loading detailed telemetry...</div>
+        <div class="loading-spinner">Loading detailed telemetry record...</div>
       </div>
     </div>
   </div>
 
+  <!-- ============================================================ -->
+  <!-- 5. TOAST NOTIFICATIONS CONTAINER                             -->
+  <!-- ============================================================ -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Application Script -->
   <script src="/static/app.js"></script>
 </body>
 </html>

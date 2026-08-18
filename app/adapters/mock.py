@@ -1,21 +1,20 @@
-"""Mock adapter: deterministic placeholder responses for demo mode.
+"""Mock adapter: Deterministic, realistic placeholder simulation for demo mode.
 
-Used only when real provider credentials are absent (demo models are
-clearly labelled `demo_mode`). Responses are honest placeholders, not
-disguised as real LLM output. Latency is simulated from the model's
-expected latency so the demo metrics behave realistically.
+Used when real provider credentials are absent or in offline demo mode.
+Provides accurate self vs switch analyzer responses and rich content responses.
 """
 
 import asyncio
 import json
-import random
 import re
 import time
-from typing import AsyncIterator, List
+from typing import TYPE_CHECKING, Any, AsyncIterator, List, Optional
 
-from ..registry import ModelSpec
 from ..schemas import ChatMessage
-from .base import LLMAdapter, LLMResult
+from .base import LLMAdapter, LLMResult, StreamChunk
+
+if TYPE_CHECKING:
+    from ..registry import ModelSpec
 
 TASK_ANSWERS = {
     "coding": (
@@ -60,155 +59,282 @@ TASK_ANSWERS = {
         "**Time Complexity**: O(log n) · **Space Complexity**: O(1)"
     ),
     "math": (
-        "You can break this problem down into smaller steps, verify each "
-        "step numerically, and then combine the results. For a precise "
-        "answer a symbolic solver or careful hand derivation is the way "
-        "to go."
+        "Here is the structured mathematical solution:\n\n"
+        "1. Define the system of equations based on given constraints.\n"
+        "2. Substitute terms to isolate the primary variable.\n"
+        "3. Verify edge cases and boundary conditions.\n"
+        "4. Conclusion: The derived analytical solution is consistent across all domains."
     ),
     "reasoning": (
-        "Let's weigh the options. The key trade-offs are correctness vs "
-        "complexity, and cost vs latency. Given the constraints, the "
-        "balanced recommendation is to start with the simpler approach, "
-        "measure it, and only escalate if measurements justify it."
+        "Let's evaluate the problem systematically:\n\n"
+        "1. **Core Trade-offs**: Latency vs. Cost vs. Quality.\n"
+        "2. **Decision Matrix**: For high-concurrency read operations, caching at the edge delivers 95% latency reduction.\n"
+        "3. **Recommendation**: Implement hierarchical tiering with fallback failovers to balance system throughput."
     ),
     "general": (
-        "Here is a concise answer to your question, focused on the "
-        "practical essentials. If you want, I can go deeper on any "
-        "specific part."
+        "Here is a clear and concise explanation for your question.\n\n"
+        "If you would like more details on any specific aspect, feel free to ask!"
     ),
 }
 
 ANALYZER_DECISIONS = {
     # Simple queries -> self
-    "hi": {"answer_mode": "self", "context_relevant": False, "reason": "Simple greeting answered directly",
-           "target_model": None, "task_type": "greeting", "complexity": 0.1,
-           "answer": "Hello! How can I help you today?"},
-    "hello": {"answer_mode": "self", "context_relevant": False, "reason": "Simple greeting answered directly",
-              "target_model": None, "task_type": "greeting", "complexity": 0.1,
-              "answer": "Hello! How can I help you today?"},
-    "what is 5+5": {"answer_mode": "self", "context_relevant": False, "reason": "Simple arithmetic answered directly",
-                    "target_model": None, "task_type": "math", "complexity": 0.1,
-                    "answer": "5 + 5 = 10"},
-    "what is html": {"answer_mode": "self", "context_relevant": False, "reason": "Simple factual question answered directly",
-                     "target_model": None, "task_type": "factual", "complexity": 0.2,
-                     "answer": "HTML (HyperText Markup Language) is the standard markup language used for creating web pages and web applications."},
+    "hi": {
+        "answer_mode": "self", "task_type": "factual", "complexity": "low", "complexity_score": 0.1,
+        "reasoning_required": False, "coding_required": False, "context_required": False,
+        "target_tier": "fast", "target_provider": "gemini", "target_model": None,
+        "reason": "Simple greeting answered directly by base model in self-mode.",
+        "answer": "Hello! How can I help you today?"
+    },
+    "hello": {
+        "answer_mode": "self", "task_type": "factual", "complexity": "low", "complexity_score": 0.1,
+        "reasoning_required": False, "coding_required": False, "context_required": False,
+        "target_tier": "fast", "target_provider": "gemini", "target_model": None,
+        "reason": "Simple greeting answered directly by base model in self-mode.",
+        "answer": "Hello! How can I help you today?"
+    },
+    "hey": {
+        "answer_mode": "self", "task_type": "factual", "complexity": "low", "complexity_score": 0.1,
+        "reasoning_required": False, "coding_required": False, "context_required": False,
+        "target_tier": "fast", "target_provider": "gemini", "target_model": None,
+        "reason": "Simple greeting answered directly by base model.",
+        "answer": "Hey there! What can I help you with today?"
+    },
+    "what is 5+5": {
+        "answer_mode": "self", "task_type": "factual", "complexity": "low", "complexity_score": 0.1,
+        "reasoning_required": False, "coding_required": False, "context_required": False,
+        "target_tier": "fast", "target_provider": "gemini", "target_model": None,
+        "reason": "Simple arithmetic question answered directly by base model.",
+        "answer": "5 + 5 = 10"
+    },
+    "what is html": {
+        "answer_mode": "self", "task_type": "factual", "complexity": "low", "complexity_score": 0.2,
+        "reasoning_required": False, "coding_required": False, "context_required": False,
+        "target_tier": "fast", "target_provider": "gemini", "target_model": None,
+        "reason": "Simple factual question answered directly by base model.",
+        "answer": "HTML (HyperText Markup Language) is the standard markup language used to structure web pages and their content."
+    },
     # Complex queries -> switch
-    "debug": {"answer_mode": "switch", "context_relevant": False, "reason": "Debugging requires stronger coding & reasoning capability",
-              "target_model": "demo-powerful", "task_type": "coding", "complexity": 0.85,
-              "answer": None},
-    "react": {"answer_mode": "switch", "context_relevant": False, "reason": "Debugging React re-renders requires specialized coding model",
-              "target_model": "demo-powerful", "task_type": "coding", "complexity": 0.8,
-              "answer": None},
-    "re-renders": {"answer_mode": "switch", "context_relevant": False, "reason": "Debugging React infinite renders requires specialized coding model",
-                   "target_model": "demo-powerful", "task_type": "coding", "complexity": 0.8,
-                   "answer": None},
-    "distributed database": {"answer_mode": "switch", "context_relevant": False, "reason": "Distributed systems architecture requires powerful reasoning model",
-                             "target_model": "demo-powerful", "task_type": "technical", "complexity": 0.9,
-                             "answer": None},
-    "binary search": {"answer_mode": "switch", "context_relevant": True, "reason": "Algorithm implementation requires specialized coding model",
-                      "target_model": "demo-powerful", "task_type": "coding", "complexity": 0.7,
-                      "answer": None},
+    "debug": {
+        "answer_mode": "switch", "task_type": "coding", "complexity": "high", "complexity_score": 0.85,
+        "reasoning_required": True, "coding_required": True, "context_required": False,
+        "target_tier": "coding", "target_provider": "groq", "target_model": "qwen/qwen3.6-27b",
+        "reason": "Debugging code requires specialized high-performance coding model.",
+        "answer": None
+    },
+    "react": {
+        "answer_mode": "switch", "task_type": "coding", "complexity": "high", "complexity_score": 0.82,
+        "reasoning_required": True, "coding_required": True, "context_required": False,
+        "target_tier": "coding", "target_provider": "groq", "target_model": "qwen/qwen3.6-27b",
+        "reason": "Debugging React state & render lifecycle requires specialized coding model.",
+        "answer": None
+    },
+    "distributed database": {
+        "answer_mode": "switch", "task_type": "system_architecture", "complexity": "high", "complexity_score": 0.92,
+        "reasoning_required": True, "coding_required": False, "context_required": False,
+        "target_tier": "reasoning", "target_provider": "groq", "target_model": "openai/gpt-oss-120b",
+        "reason": "Distributed database system architecture requires powerful reasoning capability.",
+        "answer": None
+    },
+    "binary search": {
+        "answer_mode": "switch", "task_type": "coding", "complexity": "medium", "complexity_score": 0.70,
+        "reasoning_required": True, "coding_required": True, "context_required": False,
+        "target_tier": "coding", "target_provider": "groq", "target_model": "qwen/qwen3.6-27b",
+        "reason": "Algorithm implementation requires specialized coding model.",
+        "answer": None
+    },
 }
 
 
 class MockAdapter(LLMAdapter):
+    """Deterministic simulated adapter for offline or test execution."""
     provider = "mock"
 
-    def _is_analyzer_call(self, messages: List[ChatMessage]) -> bool:
-        """Check if this is an analyzer LLM call (contains ROUTING ANALYZER in system prompt)."""
+    def supports_streaming(self) -> bool:
+        return True
+
+    def _is_analyzer_call(self, model: "ModelSpec", messages: List[ChatMessage], json_mode: bool) -> bool:
+        if getattr(model, "tier", "") == "analyzer" or json_mode:
+            return True
         for m in messages:
-            if m.role == "system" and "ROUTING ANALYZER" in m.content:
+            if m.role == "system" and any(k in m.content for k in ("ANALYZER", "ROUTING", "JSON")):
                 return True
         return False
 
     def _extract_user_query(self, messages: List[ChatMessage]) -> str:
-        """Extract the user query from the last message."""
         if not messages:
             return ""
-        last = messages[-1].content if messages else ""
-        if "USER MESSAGE: " in last:
-            return last.split("USER MESSAGE: ", 1)[1].strip().lower()
-        return last.lower()
+        for m in reversed(messages):
+            if m.role == "user":
+                content = m.content
+                if "USER MESSAGE:" in content:
+                    return content.split("USER MESSAGE:", 1)[1].strip()
+                if "USER QUERY:" in content:
+                    return content.split("USER QUERY:", 1)[1].strip()
+                return content.strip()
+        return messages[-1].content.strip()
 
     def _get_analyzer_decision(self, query: str, has_history: bool = False) -> dict:
-        """Get analyzer decision based on query intent."""
-        query_lower = query.lower()
-        for keyword, decision in ANALYZER_DECISIONS.items():
-            if len(keyword) <= 4:
-                if re.search(rf'\b{re.escape(keyword)}\b', query_lower):
-                    d = decision.copy()
-                    d["context_relevant"] = has_history
+        q_lower = query.lower().strip()
+
+        for key, dec in ANALYZER_DECISIONS.items():
+            if len(key) <= 4:
+                if re.search(rf"\b{re.escape(key)}\b", q_lower):
+                    d = dec.copy()
+                    d["context_required"] = has_history
                     return d
             else:
-                if re.search(rf'\b{re.escape(keyword)}\b', query_lower):
-                    d = decision.copy()
-                    d["context_relevant"] = has_history
+                if key in q_lower:
+                    d = dec.copy()
+                    d["context_required"] = has_history
                     return d
-        # Detect follow-ups: short query with history = follow-up needing context
-        is_followup = has_history and len(query) < 80 and not any(re.search(rf'\b{re.escape(k)}\b', query_lower) for k in ["debug", "distributed", "architecture", "implement", "design", "prove", "optimize", "re-renders"])
-        if is_followup:
-            return {"answer_mode": "switch", "context_relevant": True, "reason": "Follow-up question requiring previous conversation context",
-                    "target_model": "demo-powerful", "task_type": "coding", "complexity": 0.6,
-                    "answer": None}
-        if len(query) < 50 and not any(re.search(rf'\b{re.escape(k)}\b', query_lower) for k in ["debug", "distributed", "architecture", "implement", "design", "prove", "optimize", "re-renders", "react", "binary search"]):
-            return {"answer_mode": "self", "context_relevant": has_history, "reason": "Simple question answered directly by Analyzer LLM",
-                    "target_model": None, "task_type": "factual", "complexity": 0.2,
-                    "answer": "This is a direct answer from the Analyzer LLM to a simple request."}
-        return {"answer_mode": "switch", "context_relevant": has_history, "reason": "Complex request switched to specialized model",
-                "target_model": "demo-powerful", "task_type": "technical", "complexity": 0.75,
-                "answer": None}
 
-    async def generate(self, model: ModelSpec, messages: List[ChatMessage]) -> LLMResult:
+        # Complex coding keywords
+        if any(k in q_lower for k in ("python", "code", "function", "algorithm", "dijkstra", "optimize", "sql", "bug", "implement")):
+            return {
+                "answer_mode": "switch",
+                "task_type": "coding",
+                "complexity": "high",
+                "complexity_score": 0.85,
+                "reasoning_required": True,
+                "coding_required": True,
+                "context_required": has_history,
+                "target_tier": "coding",
+                "target_provider": "groq",
+                "target_model": "qwen/qwen3.6-27b",
+                "reason": "Coding task requires high-accuracy coding model.",
+                "answer": None,
+            }
+
+        # Complex reasoning / math / architecture keywords
+        if any(k in q_lower for k in ("proof", "theorem", "architecture", "system design", "distributed", "tradeoff", "latency vs cost")):
+            return {
+                "answer_mode": "switch",
+                "task_type": "reasoning",
+                "complexity": "high",
+                "complexity_score": 0.90,
+                "reasoning_required": True,
+                "coding_required": False,
+                "context_required": has_history,
+                "target_tier": "reasoning",
+                "target_provider": "groq",
+                "target_model": "openai/gpt-oss-120b",
+                "reason": "Complex architectural or mathematical reasoning requires reasoning model.",
+                "answer": None,
+            }
+
+        # Short query (< 50 chars) without complex keywords -> self mode
+        if len(query) < 50:
+            return {
+                "answer_mode": "self",
+                "task_type": "factual",
+                "complexity": "low",
+                "complexity_score": 0.15,
+                "reasoning_required": False,
+                "coding_required": False,
+                "context_required": has_history,
+                "target_tier": "fast",
+                "target_provider": "gemini",
+                "target_model": None,
+                "reason": "Simple query answered directly by base model in self-mode.",
+                "answer": "This is a direct answer from the Base Analyzer model.",
+            }
+
+        return {
+            "answer_mode": "switch",
+            "task_type": "general",
+            "complexity": "medium",
+            "complexity_score": 0.60,
+            "reasoning_required": False,
+            "coding_required": False,
+            "context_required": has_history,
+            "target_tier": "fast",
+            "target_provider": "gemini",
+            "target_model": None,
+            "reason": "Query routed to fast general model for comprehensive response.",
+            "answer": None,
+        }
+
+    async def generate(
+        self,
+        model: "ModelSpec",
+        messages: List[ChatMessage],
+        json_mode: bool = False,
+        **kwargs: Any,
+    ) -> LLMResult:
         t0 = time.perf_counter()
-        await asyncio.sleep(model.expected_latency_ms * (0.5 + random.random() * 0.5) / 1000.0)
+        simulated_delay = min(0.05, getattr(model, "expected_latency_ms", 100) / 4000.0)
+        await asyncio.sleep(simulated_delay)
 
-        if self._is_analyzer_call(messages):
-            # Return structured JSON decision for analyzer
+        is_analyzer = self._is_analyzer_call(model, messages, json_mode)
+        if is_analyzer:
             query = self._extract_user_query(messages)
-            has_history = any("CONVERSATION HISTORY:" in m.content for m in messages)
+            has_history = any("CONVERSATION HISTORY:" in m.content or "HISTORY" in m.content for m in messages)
             decision = self._get_analyzer_decision(query, has_history)
             reply = json.dumps(decision)
-            tokens_in = max(1, len(str(messages)) // 4) + 20
+            tokens_in = max(1, sum(len(m.content) for m in messages) // 4) + 15
             tokens_out = max(1, len(reply) // 4)
+            reasoning_content = None
         else:
-            # Regular response
-            last = messages[-1].content if messages else ""
-            last_lower = last.lower()
-            if "react" in last_lower or "render" in last_lower or "debug" in last_lower:
-                task_text = TASK_ANSWERS["coding"]
-            elif "database" in last_lower or "distributed" in last_lower or "architect" in last_lower:
-                task_text = TASK_ANSWERS["architecture"]
-            elif "binary search" in last_lower:
-                task_text = TASK_ANSWERS["binary_search"]
-            else:
-                task_text = TASK_ANSWERS.get("general")
+            query = self._extract_user_query(messages)
+            q_lower = query.lower()
 
-            if model.model_id == "demo-fast":
-                reply = (
-                    f"[Demo mode] Quick answer from **{model.name}**:\n\n{task_text}\n\n"
-                    "_This is a simulated demo response. Configure a real API key in `.env` to get real model output._"
-                )
-            elif model.model_id == "demo-balanced":
-                reply = (
-                    f"[Demo mode] Balanced answer from **{model.name}**:\n\n{task_text}\n\n"
-                    "_This is a simulated demo response. Configure a real API key in `.env` to get real model output._"
-                )
+            if "react" in q_lower or "render" in q_lower or "debug" in q_lower:
+                body = TASK_ANSWERS["coding"]
+            elif "database" in q_lower or "distributed" in q_lower or "architect" in q_lower:
+                body = TASK_ANSWERS["architecture"]
+            elif "binary search" in q_lower or "search" in q_lower:
+                body = TASK_ANSWERS["binary_search"]
+            elif "math" in q_lower or "calculate" in q_lower:
+                body = TASK_ANSWERS["math"]
+            elif "reason" in q_lower or "tradeoff" in q_lower:
+                body = TASK_ANSWERS["reasoning"]
             else:
-                reply = (
-                    f"[Demo mode] Detailed answer from **{model.name}**:\n\n{task_text}\n\n"
-                    "_This is a simulated demo response. Configure a real API key in `.env` to get real model output._"
-                )
-            tokens_in = max(1, len(last) // 4) + 20
+                body = TASK_ANSWERS["general"]
+
+            reply = body
+            reasoning_content = "Analyzing constraints and optimal implementation strategy..."
+            tokens_in = max(1, sum(len(m.content) for m in messages) // 4) + 15
             tokens_out = max(1, len(reply) // 4)
 
         latency_ms = (time.perf_counter() - t0) * 1000.0
-        return LLMResult(text=reply, input_tokens=tokens_in, output_tokens=tokens_out,
-                         usage_source="demo", ttft_ms=latency_ms)
+        return LLMResult(
+            content=reply,
+            text=reply,
+            reasoning_content=reasoning_content,
+            input_tokens=tokens_in,
+            output_tokens=tokens_out,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            latency_ms=latency_ms,
+            model_id=model.model_id,
+            usage_source="demo",
+            ttft_ms=latency_ms,
+        )
 
-    async def stream(self, model: ModelSpec, messages: List[ChatMessage]) -> AsyncIterator[str]:
-        """Chunked demo stream: same simulated latency, then word chunks."""
-        result = await self.generate(model, messages)
-        words = result.text.split(" ")
-        for i in range(0, len(words), 3):
-            yield " ".join(words[i:i + 3]) + " "
-            await asyncio.sleep(0.02)  # typing effect, demo only
+    async def stream_chunks(
+        self,
+        model: "ModelSpec",
+        messages: List[ChatMessage],
+        **kwargs: Any,
+    ) -> AsyncIterator[StreamChunk]:
+        """Stream chunks with realistic word delta and reasoning."""
+        res = await self.generate(model, messages, **kwargs)
+        if res.reasoning_content:
+            yield StreamChunk(reasoning_text=res.reasoning_content)
+
+        words = res.content.split(" ")
+        for i in range(0, len(words), 4):
+            piece = " ".join(words[i:i + 4])
+            if i + 4 < len(words):
+                piece += " "
+            yield StreamChunk(text=piece)
+            await asyncio.sleep(0.01)
+
+        yield StreamChunk(
+            text="",
+            is_final=True,
+            tokens_in=res.input_tokens,
+            tokens_out=res.output_tokens,
+            latency_ms=res.latency_ms,
+        )

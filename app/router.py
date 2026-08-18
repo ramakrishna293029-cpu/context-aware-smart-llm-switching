@@ -7,7 +7,7 @@ Scores candidate models along:
 - Coding requirement
 - Cost efficiency
 - Latency efficiency
-- Historical reliability
+- Historical reliability and provider/tier affinity
 """
 
 from dataclasses import dataclass
@@ -15,11 +15,8 @@ from typing import Dict, List, Optional
 
 from .analyzer_llm import AnalyzerDecision
 from .config import settings
-from .registry import ModelSpec, registry
-
-
-class BudgetExceededError(RuntimeError):
-    """Raised when no model fits the configured per-request cost cap."""
+from .registry import ModelRegistry, ModelSpec, registry as default_registry
+from .schemas import CandidateInfo
 
 
 STRATEGIES: Dict[str, Dict[str, float]] = {
@@ -90,6 +87,7 @@ class RoutingResult:
     strategy: str
 
     def candidates(self) -> List[dict]:
+        """Returns candidate list formatted as raw dictionary rows."""
         rows = []
         for s in sorted(self.scores.values(), key=lambda s: -s.total):
             expected_cost = s.model.price_per_1k * 1.5  # ~1.5K tokens
@@ -106,10 +104,29 @@ class RoutingResult:
             })
         return rows
 
+    def to_candidate_infos(self) -> List[CandidateInfo]:
+        """Returns candidate list formatted as Pydantic CandidateInfo objects."""
+        return [
+            CandidateInfo(
+                model_id=row["model_id"],
+                name=row["name"],
+                provider=row["provider"],
+                tier=row["tier"],
+                total=row["total"],
+                expected_cost_usd=row["expected_cost_usd"],
+                expected_latency_ms=row["expected_latency_ms"],
+                selected=row["selected"],
+                factors=row["factors"],
+            )
+            for row in self.candidates()
+        ]
+
 
 class SmartRouter:
+    """Multi-factor scoring and model resolution engine."""
+
     def __init__(self, weights: Optional[Dict[str, float]] = None):
-        w = weights or settings.routing_weights
+        w = weights or getattr(settings, "routing_weights", {})
         self.base_weights = {
             "quality_suitability": w.get("quality_suitability", 0.30),
             "complexity_compatibility": w.get("complexity_compatibility", 0.15),
@@ -120,22 +137,35 @@ class SmartRouter:
         }
 
     def effective_weights(self, strategy: str) -> Dict[str, float]:
-        strat_profile = STRATEGIES.get(strategy, STRATEGIES["balanced"])
+        strat_key = strategy.lower().strip() if strategy else "balanced"
+        strat_profile = STRATEGIES.get(strat_key, STRATEGIES["balanced"])
         scaled = {k: self.base_weights.get(k, 0.1) * strat_profile.get(k, 1.0) for k in self.base_weights}
         total = sum(scaled.values()) or 1.0
         return {k: v / total for k, v in scaled.items()}
 
-    def resolve(self, decision: AnalyzerDecision, strategy: str = "balanced") -> RoutingResult:
-        available = [m for m in registry.available() if m.tier != "analyzer"]
-        if not available:
-            raise RuntimeError("No execution models available in registry.")
+    def resolve(
+        self,
+        decision: AnalyzerDecision,
+        strategy: str = "balanced",
+        registry: Optional[ModelRegistry] = None,
+        available: Optional[List[ModelSpec]] = None,
+    ) -> RoutingResult:
+        """Evaluates all candidate execution models against analyzer decision and strategy."""
+        reg = registry or default_registry
+        if available is not None:
+            candidate_pool = [m for m in available if m.tier != "analyzer" and m.available]
+        else:
+            candidate_pool = [m for m in reg.available() if m.tier != "analyzer"]
+
+        if not candidate_pool:
+            raise RuntimeError("No execution models available in registry for routing.")
 
         weights = self.effective_weights(strategy)
-        min_price = min(m.price_per_1k for m in available)
-        min_latency = min(m.expected_latency_ms for m in available)
+        min_price = min(m.price_per_1k for m in candidate_pool)
+        min_latency = min(m.expected_latency_ms for m in candidate_pool)
 
         scores: Dict[str, ModelScore] = {}
-        for m in available:
+        for m in candidate_pool:
             # 1. Quality suitability
             q_fit = 1.0 - abs(m.quality - decision.complexity_score)
             if m.quality < decision.complexity_score:
@@ -157,8 +187,8 @@ class SmartRouter:
             lat_fit = (min_latency / m.expected_latency_ms) if m.expected_latency_ms > 0 else 1.0
 
             # Bonus for matching target provider and tier
-            provider_bonus = 0.20 if m.provider == decision.target_provider else 0.0
-            tier_bonus = 0.25 if decision.target_tier in m.tier else 0.0
+            provider_bonus = 0.20 if m.provider.lower() == decision.target_provider.lower() else 0.0
+            tier_bonus = 0.25 if decision.target_tier.lower() in m.tier.lower() else 0.0
 
             total = (
                 weights["quality_suitability"] * q_fit
@@ -182,14 +212,26 @@ class SmartRouter:
                 total=round(total, 3),
             )
 
-        # Primary selection: match target provider + tier if available, otherwise highest score
-        target_model = registry.get_by_provider_and_tier(decision.target_provider, decision.target_tier)
+        # Primary selection:
+        # Priority 1: Match target provider + tier
+        target_model = None
+        for m in candidate_pool:
+            if m.provider.lower() == decision.target_provider.lower() and decision.target_tier.lower() in m.tier.lower():
+                target_model = m
+                break
+
+        # Priority 2: Match target tier on any provider
         if not target_model:
-            target_model = registry.get_by_tier(decision.target_tier)
+            for m in candidate_pool:
+                if decision.target_tier.lower() in m.tier.lower():
+                    target_model = m
+                    break
+
+        # Priority 3: Highest total score candidate
         if not target_model:
             target_model = max(scores.values(), key=lambda s: s.total).model
 
-        # Build fallback chain
+        # Build fallback chain: primary model first, then remaining sorted by total score
         fallback_chain = [target_model]
         for s in sorted(scores.values(), key=lambda s: -s.total):
             if s.model.model_id != target_model.model_id:
@@ -204,4 +246,15 @@ class SmartRouter:
         )
 
 
+# Module-level default singleton
 router = SmartRouter()
+
+
+def route_decision(
+    decision: AnalyzerDecision,
+    strategy: str = "balanced",
+    registry: Optional[ModelRegistry] = None,
+    available: Optional[List[ModelSpec]] = None,
+) -> RoutingResult:
+    """Convenience helper to route a decision using default router."""
+    return router.resolve(decision, strategy=strategy, registry=registry, available=available)

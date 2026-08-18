@@ -1,6 +1,5 @@
 """Application configuration loaded from environment variables / .env."""
 
-import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -79,6 +78,28 @@ class Settings:
     )
     groq_reasoning_model: str = field(
         default_factory=lambda: os.getenv("GROQ_REASONING_MODEL", "openai/gpt-oss-120b").strip()
+    )
+
+    # Direct OpenAI Provider
+    openai_api_key: str = field(
+        default_factory=lambda: os.getenv("OPENAI_API_KEY", "").strip()
+    )
+    openai_base_url: str = field(
+        default_factory=lambda: os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+    )
+    openai_model: str = field(
+        default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+    )
+
+    # Custom OpenAI-Compatible Endpoints (Ollama, LocalAI, vLLM, Azure OpenAI)
+    custom_base_url: str = field(
+        default_factory=lambda: os.getenv("CUSTOM_BASE_URL", "").strip().rstrip("/")
+    )
+    custom_api_key: str = field(
+        default_factory=lambda: os.getenv("CUSTOM_API_KEY", "").strip()
+    )
+    custom_model: str = field(
+        default_factory=lambda: os.getenv("CUSTOM_MODEL", "default").strip()
     )
 
     # OpenRouter fallback models (backup tiers)
@@ -177,8 +198,22 @@ class Settings:
         return bool(self.groq_api_key)
 
     @property
+    def has_openai(self) -> bool:
+        return bool(self.openai_api_key)
+
+    @property
+    def has_custom(self) -> bool:
+        return bool(self.custom_base_url)
+
+    @property
     def has_real_providers(self) -> bool:
-        return self.has_openrouter or self.has_gemini or self.has_groq
+        return (
+            self.has_openrouter
+            or self.has_gemini
+            or self.has_groq
+            or self.has_openai
+            or self.has_custom
+        )
 
 
 settings = Settings()
