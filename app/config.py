@@ -140,7 +140,7 @@ class Settings:
         default_factory=lambda: _env_float("MONTHLY_BUDGET_USD", 100.00)
     )
     max_context_tokens: int = field(
-        default_factory=lambda: max(256, _env_int("MAX_CONTEXT_TOKENS", 8000))
+        default_factory=lambda: max(256, _env_int("MAX_CONTEXT_TOKENS", 131072))
     )
     default_max_output_tokens: int = field(
         default_factory=lambda: max(128, _env_int("DEFAULT_MAX_OUTPUT_TOKENS", 4096))

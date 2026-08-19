@@ -565,8 +565,12 @@ async def chat(req: ChatRequest, request: Request):
         )
 
     # SWITCH-MODE: Prune context with ContextManager & execute specialized model with fallback
-    context_msgs = req.history if decision.context_required else []
-    messages = build_messages(context_msgs, req.query)
+    messages = build_messages(
+        history=req.history,
+        query=req.query,
+        max_tokens=primary_model.context_window,
+        tier=primary_model.tier,
+    )
 
     t_gen = time.perf_counter()
     fallback_used = False
@@ -812,8 +816,12 @@ async def chat_stream(req: ChatRequest, request: Request):
             "candidates": routing_res.candidates(),
         }) + "\n\n"
 
-        context_msgs = req.history if decision.context_required else []
-        messages = build_messages(context_msgs, req.query)
+        messages = build_messages(
+            history=req.history,
+            query=req.query,
+            max_tokens=target_model.context_window,
+            tier=target_model.tier,
+        )
 
         served_model = target_model
         full_text = []

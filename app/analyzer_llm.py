@@ -176,6 +176,7 @@ DECISION CRITERIA:
 1. SELF-MODE (answer_mode = "self"):
    - Use ONLY for: Simple greetings ("hi", "hello", "good morning"), casual dialogue, simple factual questions, short definitions, straightforward translations, simple arithmetic ("5 + 7").
    - Action: Set answer_mode to "self", provide the direct complete answer in the "answer" field, and set target_tier to "fast".
+   - Response Style: Direct, accurate, crisp, structured with bullet-bunched key points when explaining concepts, medium-to-short length, zero filler.
    - Example queries: "Hi", "Hello", "What is HTML?", "Capital of France", "Who wrote Hamlet?", "5 + 7".
 
 2. SWITCH-MODE (answer_mode = "switch"):
@@ -210,7 +211,7 @@ REQUIRED JSON OUTPUT FORMAT (Strictly valid JSON with no conversational prefix/s
     messages = [ChatMessage(role="system", content=system_prompt)]
 
     if history:
-        history_text = "\n".join([f"{m.role.upper()}: {m.content}" for m in history[-6:]])
+        history_text = "\n".join([f"{m.role.upper()}: {m.content}" for m in history[-10:]])
         messages.append(ChatMessage(role="user", content=f"CONVERSATION HISTORY:\n{history_text}\n\nUSER QUERY:\n{query}"))
     else:
         messages.append(ChatMessage(role="user", content=f"USER QUERY:\n{query}"))

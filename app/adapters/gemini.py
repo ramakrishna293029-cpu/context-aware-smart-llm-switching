@@ -53,14 +53,20 @@ def _to_gemini_payload(
     temperature: float = 0.7,
 ) -> tuple[dict, str]:
     """Convert ChatMessage list to Gemini contents payload and systemInstruction."""
-    gemini_contents = []
+    gemini_contents: List[Dict[str, Any]] = []
     system_instruction = ""
     for m in messages:
         if m.role == "system":
-            system_instruction = m.content
+            if system_instruction:
+                system_instruction += "\n\n" + m.content
+            else:
+                system_instruction = m.content
         else:
             role = "user" if m.role == "user" else "model"
-            gemini_contents.append({"role": role, "parts": [{"text": m.content}]})
+            if gemini_contents and gemini_contents[-1]["role"] == role:
+                gemini_contents[-1]["parts"].append({"text": m.content})
+            else:
+                gemini_contents.append({"role": role, "parts": [{"text": m.content}]})
 
     if not gemini_contents:
         gemini_contents = [{"role": "user", "parts": [{"text": "Hello"}]}]
