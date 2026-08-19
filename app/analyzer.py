@@ -161,17 +161,35 @@ def _try_solve_simple_arithmetic(text: str) -> Optional[str]:
 
 
 def _check_greeting(text: str) -> Tuple[bool, Optional[str]]:
-    """Checks if the query is a simple greeting and provides a friendly answer."""
+    """Checks if the query is a simple greeting, identity question, or check-in and provides a warm, natural answer."""
     clean = text.strip().lower()
+    # Normalize punctuation and whitespace
+    normalized = re.sub(r"[^\w\s\?]", "", clean).strip()
+
+    # Identity inquiries
+    if any(q in normalized for q in ["who are you", "whats your name", "what is your name", "who made you", "who created you"]):
+        return True, "I am your AI assistant. I can answer questions, write and debug code, solve complex reasoning problems, and design architectures. How can I help you today?"
+
+    # Check-ins & emotional questions
+    if any(q in normalized for q in ["how are you", "how are you doing", "how are you feeling", "hows it going", "how are things", "are you feeling good", "are you feeling bad"]):
+        return True, "I'm doing well, thank you for asking! I'm ready to help you with whatever you'd like to work on today. What's on your mind?"
+
+    # Capabilities & help
+    if normalized in ["what can you do", "what are your capabilities", "help", "help me", "how can you help"]:
+        return True, (
+            "I can assist you across a wide range of tasks:\n"
+            "- 💻 **Coding & Debugging**: Writing, optimizing, and reviewing code in any language\n"
+            "- 🧠 **Deep Reasoning**: Mathematical proofs, logic analysis, and system architecture\n"
+            "- ⚡ **Fast Answers**: Factual explanations, summaries, and calculations\n"
+            "- 🔄 **Contextual Memory**: Seamless multi-turn session awareness\n\n"
+            "What would you like to explore?"
+        )
+
+    # General greetings
     for pat in GREETING_PATTERNS:
-        if re.match(pat, clean):
-            if "who are you" in clean:
-                return True, "I am your AI assistant powered by Context-Aware Smart LLM Switching. I dynamically route your queries to the optimal specialized model to balance quality, speed, and cost."
-            if "what can you do" in clean or "help" in clean:
-                return True, "I can answer questions, write and debug code, solve complex mathematical and reasoning problems, and design system architectures while optimizing response latency and cost."
-            if "how are you" in clean:
-                return True, "I'm doing great and ready to help! What would you like to work on today?"
+        if re.match(pat, clean) or re.match(pat, normalized):
             return True, "Hello! How can I help you today?"
+
     return False, None
 
 
@@ -281,8 +299,32 @@ def _fallback_heuristics(query: str, history: Optional[List[ChatMessage]] = None
             "answer": "HTML (HyperText Markup Language) is the standard markup language used to structure web pages and their content.",
         }
 
-    # Context dependency
-    context_needed = len(history) > 0 and words < 10 and any(w in lower for w in ["it", "that", "this", "now", "optimize", "same"])
+    # Context dependency detection
+    context_needed = len(history) > 0 and (
+        words < 15 and any(w in lower for w in [
+            "it", "that", "this", "now", "optimize", "same", "yes", "yeah",
+            "sure", "yep", "ok", "okay", "why", "how", "more", "tell me",
+            "explain", "else", "what about", "instead", "previous", "continue",
+            "i meant", "i said", "i asked"
+        ]) or any(h in lower for h in ["what about", "how about", "tell me more", "go on", "why is that", "i didn't ask", "i asked"])
+    )
+
+    # 4. Short conversational follow-up in active multi-turn session (e.g. "yes", "sure", "why?")
+    if len(history) > 0 and words <= 3 and any(w in lower for w in ["yes", "yeah", "sure", "yep", "ok", "okay", "why", "how", "more"]):
+        return {
+            "answer_mode": "switch",
+            "task_type": "general",
+            "complexity": "medium",
+            "complexity_score": 0.50,
+            "reasoning_required": False,
+            "coding_required": False,
+            "context_required": True,
+            "target_tier": "fast",
+            "target_provider": "gemini",
+            "target_model": None,
+            "reason": "Conversational follow-up query requiring active session context.",
+            "answer": None,
+        }
 
     # 4. Coding & Debugging -> SWITCH-MODE
     coding_kws = [
