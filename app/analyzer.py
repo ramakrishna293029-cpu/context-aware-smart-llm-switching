@@ -246,11 +246,13 @@ def _fallback_heuristics(query: str, history: Optional[List[ChatMessage]] = None
     words = len(text.split())
     history = history or []
     
-    # 1. Greetings -> SELF-MODE
-    is_greet, greet_ans = _check_greeting(text)
+    # 1. Greetings -> heuristic classifies as trivial; the analyzer LLM is
+    # offline (that's why we're here), so route to fast tier for a real
+    # provider response instead of fabricating canned greeting text.
+    is_greet, _ = _check_greeting(text)
     if is_greet:
         return {
-            "answer_mode": "self",
+            "answer_mode": "switch",
             "task_type": "factual",
             "complexity": "low",
             "complexity_score": 0.08,
@@ -260,8 +262,8 @@ def _fallback_heuristics(query: str, history: Optional[List[ChatMessage]] = None
             "target_tier": "fast",
             "target_provider": "gemini",
             "target_model": None,
-            "reason": "Simple greeting answered directly by base model in self-mode.",
-            "answer": greet_ans or "Hello! How can I help you today?",
+            "reason": "Analyzer LLM unavailable; greeting routed to fast tier for a real response.",
+            "answer": None,
         }
 
     # 2. Simple arithmetic -> SELF-MODE
@@ -282,22 +284,9 @@ def _fallback_heuristics(query: str, history: Optional[List[ChatMessage]] = None
             "answer": arith_ans,
         }
 
-    # 3. Simple factual definitions (e.g. "what is html", "what is an api") without code demand
-    if words <= 6 and (lower.startswith("what is html") or lower == "what is html?" or lower == "what is html"):
-        return {
-            "answer_mode": "self",
-            "task_type": "factual",
-            "complexity": "low",
-            "complexity_score": 0.15,
-            "reasoning_required": False,
-            "coding_required": False,
-            "context_required": False,
-            "target_tier": "fast",
-            "target_provider": "gemini",
-            "target_model": None,
-            "reason": "Simple factual question answered directly by base model.",
-            "answer": "HTML (HyperText Markup Language) is the standard markup language used to structure web pages and their content.",
-        }
+    # 3. (Removed) Canned factual-definition branch — simple factual questions
+    # now flow through the general classification and are answered by a real
+    # provider in switch-mode. No hardcoded answer text may ever be served.
 
     # Context dependency detection
     context_needed = len(history) > 0 and (
@@ -373,10 +362,11 @@ def _fallback_heuristics(query: str, history: Optional[List[ChatMessage]] = None
             "answer": None,
         }
 
-    # 6. General / Factual -> SWITCH to Fast Tier or SELF
+    # 6. Short general / factual -> heuristic cannot answer without an LLM;
+    # route to fast tier so a real provider responds. No canned text.
     if words <= 4 and not history:
         return {
-            "answer_mode": "self",
+            "answer_mode": "switch",
             "task_type": "factual",
             "complexity": "low",
             "complexity_score": 0.15,
@@ -386,8 +376,8 @@ def _fallback_heuristics(query: str, history: Optional[List[ChatMessage]] = None
             "target_tier": "fast",
             "target_provider": "gemini",
             "target_model": None,
-            "reason": "Simple query answered directly by base model in self-mode.",
-            "answer": "This is a direct answer from the Base Analyzer model.",
+            "reason": "Short simple query routed to fast tier for a real provider response.",
+            "answer": None,
         }
 
     return {
@@ -535,15 +525,12 @@ class ContextAnalyzer:
             reasoning_required = "low"
 
         # --- answer mode & direct answer ---
-        if is_greet:
-            answer_mode = "self"
-            answer = greet_ans or "Hello! How can I help you today?"
-        elif arith_ans:
+        # Invariant: the heuristic engine may only self-serve answers it
+        # actually computed (arithmetic). Everything else must be answered by
+        # a real provider via switch-mode — canned text is prohibited.
+        if arith_ans:
             answer_mode = "self"
             answer = arith_ans
-        elif complexity < 0.20 and words <= 5 and not history and not group_hits:
-            answer_mode = "self"
-            answer = "This is a direct answer from the Base Analyzer model."
         else:
             answer_mode = "switch"
             answer = None

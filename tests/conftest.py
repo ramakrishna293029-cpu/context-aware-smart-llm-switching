@@ -15,7 +15,31 @@ sys.path.insert(0, str(ROOT_DIR))
 from tests.fake_provider import FakeProviderHandler
 
 TEST_PORT = 8999
-TEST_DB = ROOT_DIR / "data" / "test-metrics.db"
+# Fully isolated in-memory database: tests can never pollute or read the live
+# data/metrics.db. Tracker keeps one shared connection for :memory: DBs.
+TEST_DB = ":memory:"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def isolate_database():
+    """Forces in-memory database globally across all test files."""
+    from app.config import settings
+    import app.tracker
+    import app.main
+    import app.analyzer_llm
+
+    object.__setattr__(settings, "database_path", TEST_DB)
+    app.tracker.tracker = app.tracker.Tracker(TEST_DB)
+    app.main.tracker = app.tracker.tracker
+    app.analyzer_llm.clear_routing_cache()
+    yield
+    # Post-session check: ensure data/metrics.db has no test leakage
+    live_db = ROOT_DIR / "data" / "metrics.db"
+    if live_db.exists():
+        import sqlite3
+        with sqlite3.connect(str(live_db)) as conn:
+            cnt = conn.execute("SELECT count(*) FROM requests WHERE query LIKE 'Adversarial%'").fetchone()[0]
+            assert cnt == 0, f"Database leak detected: {cnt} test queries in live data/metrics.db!"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -37,17 +61,11 @@ def client(fake_server):
     import app.main
     import app.tracker
 
-    # Point test database to isolated file
-    TEST_DB.parent.mkdir(parents=True, exist_ok=True)
-    if TEST_DB.exists():
-        try:
-            TEST_DB.unlink()
-        except Exception:
-            pass
-
+    # Fully isolated in-memory database — nothing touches data/metrics.db.
     object.__setattr__(settings, "database_path", TEST_DB)
     app.tracker.tracker = app.tracker.Tracker(TEST_DB)
     app.main.tracker = app.tracker.tracker
+    app.analyzer_llm.clear_routing_cache()
 
     # Configure offline provider endpoints pointing to fake server
     object.__setattr__(settings, "openai_api_key", "test-openai-key")

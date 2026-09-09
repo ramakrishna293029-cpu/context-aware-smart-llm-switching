@@ -10,6 +10,10 @@ COPY static ./static
 
 ENV PYTHONUNBUFFERED=1
 
+# Persist telemetry database across container restarts.
+# Run with: docker run -v smart-router-data:/app/data ...
+VOLUME ["/app/data"]
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \

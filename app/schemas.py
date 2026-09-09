@@ -175,6 +175,9 @@ class BenchmarkComparisonItem(BaseModel):
     smart_savings_percent: float
     smart_speedup_percent: float
 
+    # Honesty metadata: non-empty when a branch's real provider call failed.
+    error: Optional[str] = None
+
 
 class BenchmarkResult(BaseModel):
     total_queries: int
@@ -188,6 +191,8 @@ class BenchmarkResult(BaseModel):
     overall_cost_savings_percent: float
     overall_speedup_percent: float
     items: List[BenchmarkComparisonItem] = Field(default_factory=list)
+    # "real" = live provider calls; "demo" = mock adapter (no credentials).
+    execution_mode: str = "real"
 
 
 # --- Provider Health & Test Schemas ---

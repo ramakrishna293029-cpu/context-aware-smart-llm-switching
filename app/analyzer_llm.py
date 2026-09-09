@@ -9,18 +9,69 @@ Dual-Role First-Line Responder:
    and determines the optimal target tier, provider, and candidate sequence.
 """
 
+import hashlib
 import json
 import re
 import time
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from .adapters.base import LLMResult, adapter_factory
-from .analyzer import _fallback_heuristics, _check_greeting
+from .analyzer import _fallback_heuristics, _try_solve_simple_arithmetic
 from .registry import ModelRegistry, ModelSpec, registry
 from .schemas import AnalyzerInfo, ChatMessage
 
 JSON_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
+
+# ---------------------------------------------------------------------------
+# Semantic routing cache: repeat queries skip the analyzer LLM round-trip
+# entirely (removes the serial analyzer latency for repeated/similar asks).
+# Keyed by normalized query + history + analyzer + candidate set; TTL-bounded.
+# ---------------------------------------------------------------------------
+_ROUTING_CACHE: "OrderedDict[str, tuple[float, AnalyzerDecision]]" = OrderedDict()
+_ROUTING_CACHE_MAX = 256
+_ROUTING_CACHE_TTL = 600.0  # seconds
+
+
+def _routing_cache_key(
+    query: str,
+    history: List[ChatMessage],
+    strategy: str,
+    active_analyzer: ModelSpec,
+    avail_models: List[ModelSpec],
+) -> str:
+    h = hashlib.sha1()
+    h.update(query.strip().lower().encode("utf-8"))
+    h.update(b"\x00")
+    h.update("\n".join(m.content for m in history[-10:]).encode("utf-8"))
+    h.update(f"\x00{strategy}\x00{active_analyzer.model_id}\x00".encode("utf-8"))
+    h.update(",".join(m.model_id for m in avail_models).encode("utf-8"))
+    return h.hexdigest()
+
+
+def _routing_cache_get(key: str) -> Optional["AnalyzerDecision"]:
+    entry = _ROUTING_CACHE.get(key)
+    if not entry:
+        return None
+    ts, dec = entry
+    if time.monotonic() - ts > _ROUTING_CACHE_TTL:
+        _ROUTING_CACHE.pop(key, None)
+        return None
+    _ROUTING_CACHE.move_to_end(key)
+    return dec
+
+
+def _routing_cache_put(key: str, dec: "AnalyzerDecision") -> None:
+    _ROUTING_CACHE[key] = (time.monotonic(), dec)
+    _ROUTING_CACHE.move_to_end(key)
+    while len(_ROUTING_CACHE) > _ROUTING_CACHE_MAX:
+        _ROUTING_CACHE.popitem(last=False)
+
+
+def clear_routing_cache() -> None:
+    """Called on registry changes / tests to drop cached routing decisions."""
+    _ROUTING_CACHE.clear()
 
 
 class AnalyzerDecisionError(RuntimeError):
@@ -228,13 +279,54 @@ async def run_analyzer(
     analyzer_model: Optional[ModelSpec] = None,
     registry_instance: Optional[ModelRegistry] = None,
 ) -> AnalyzerDecision:
-    """Executes the Base/Analyzer model, parses the output, and produces an AnalyzerDecision."""
+    """Executes the Base/Analyzer model, parses the output, and produces an AnalyzerDecision.
+
+    Optimizations:
+    - Fast-path gate: pure arithmetic queries are computed exactly (locally),
+      skipping the analyzer LLM call entirely — same result, zero latency.
+    - Routing cache: repeated queries reuse the cached decision, skipping the
+      serial analyzer round-trip (targets the double-latency penalty).
+    """
     history = history or []
     
     # 1. Resolve analyzer model and candidate models
     reg = registry_instance or registry
     active_analyzer = analyzer_model or reg.get_analyzer()
     avail_models = available if available is not None else [m for m in reg.available() if m.tier != "analyzer"]
+
+    # 2. Fast-path heuristic gate + routing cache
+    cache_key = _routing_cache_key(query, history, strategy, active_analyzer, avail_models)
+    cached = _routing_cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    arith_ans = _try_solve_simple_arithmetic(query.strip())
+    if arith_ans and not history:
+        # Exact local computation: no analyzer call, no invented tokens.
+        fastpath_result = LLMResult(
+            content="", text="",
+            input_tokens=0, output_tokens=0, tokens_in=0, tokens_out=0,
+            usage_source="fastpath", latency_ms=0.0,
+        )
+        decision = AnalyzerDecision(
+            task_type="math",
+            complexity="low",
+            complexity_score=0.10,
+            reasoning_required=False,
+            coding_required=False,
+            context_required=False,
+            target_tier="fast",
+            target_provider=active_analyzer.provider,
+            target_model=None,
+            reason="Exact arithmetic computed locally by the fast-path gate (no analyzer call needed).",
+            analyzer_model=active_analyzer,
+            analyzer_result=fastpath_result,
+            answer_mode="self",
+            answer=arith_ans,
+            switch_required=False,
+        )
+        _routing_cache_put(cache_key, decision)
+        return decision
 
     messages = _build_analyzer_messages(query, history, avail_models)
 
@@ -266,14 +358,18 @@ async def run_analyzer(
         answer_mode = "self" if decision_dict.get("answer") else "switch"
 
     direct_answer = decision_dict.get("answer")
-    if answer_mode == "self":
+    forced_switch = False
+    if answer_mode == "self" and direct_answer and str(direct_answer).strip():
+        direct_answer = str(direct_answer).strip()
         switch_required = False
-        if not direct_answer or not str(direct_answer).strip():
-            is_greet, greet_ans = _check_greeting(query)
-            direct_answer = greet_ans or "Hello! How can I help you today?"
-        else:
-            direct_answer = str(direct_answer).strip()
     else:
+        # Invariant: self-mode MUST carry a real answer produced by the
+        # analyzer LLM. Never substitute canned text — if the analyzer chose
+        # self but produced no answer, fall through to switch-mode so a real
+        # provider generates the response.
+        if answer_mode == "self":
+            forced_switch = True
+        answer_mode = "switch"
         switch_required = True
         direct_answer = None
 
@@ -311,14 +407,22 @@ async def run_analyzer(
     if target_tier not in ("fast", "coding", "reasoning", "powerful", "balanced", "custom"):
         target_tier = "coding" if coding_required else "reasoning" if reasoning_required else "fast"
 
+    if forced_switch and target_tier not in ("coding", "reasoning", "powerful"):
+        target_tier = "fast"
+
 
     target_provider = str(decision_dict.get("target_provider", "gemini" if target_tier == "fast" else "groq")).lower().strip()
     if target_provider not in ("gemini", "groq", "openrouter", "openai", "custom", "mock"):
         target_provider = "gemini" if target_tier == "fast" else "groq"
 
     reason = str(decision_dict.get("reason", f"Routed to {target_tier} tier ({target_provider})")).strip()
+    if forced_switch:
+        reason = (
+            f"Analyzer LLM produced no direct answer; routed to {target_tier} tier "
+            f"({target_provider}) so a real provider generates the response."
+        )
 
-    return AnalyzerDecision(
+    decision = AnalyzerDecision(
         task_type=task_type,
         complexity=complexity_raw,
         complexity_score=round(complexity_score, 3),
@@ -335,6 +439,8 @@ async def run_analyzer(
         answer=direct_answer,
         switch_required=switch_required,
     )
+    _routing_cache_put(cache_key, decision)
+    return decision
 
 
 # Alias for unified calling convention

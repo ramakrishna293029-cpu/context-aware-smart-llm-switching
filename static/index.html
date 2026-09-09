@@ -4,12 +4,45 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Smart LLM Switcher | Context-Aware Cost & Performance Optimization</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/vendor/katex.min.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2 4.5 13.5H11L10 22l9.5-11.5H13z"/></symbol>
+    <symbol id="i-chev-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></symbol>
+    <symbol id="i-chev-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.7c0 4.3-4 7.8-9 7.8-1 0-2-.1-2.9-.4L4 21l1.4-4C4 15.7 3 13.8 3 11.7 3 7.4 7 4 12 4s9 3.4 9 7.7z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20v-7M12 20V4M19 20v-11"/></symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5.2 8.7A2 2 0 0 0 6.5 21h11a2 2 0 0 0 1.7-3.3L14 9V3"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6.5 7l.8 13h9.4l.8-13"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1z"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 21h10M5 7h14M5 7l-2.3 5a2.7 2.7 0 0 0 4.6 0L5 7zM19 7l-2.3 5a2.7 2.7 0 0 0 4.6 0L19 7z"/></symbol>
+    <symbol id="i-dollar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M17 6.5c0-1.5-2.2-2.5-5-2.5S7 5 7 6.8 8.8 9.3 12 10s5 1.6 5 3.4-2.2 2.6-5 2.6-5-1-5-2.5"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="10" y="10" width="4" height="4"/><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.2-3.2M20 16H7l3.2 3.2"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9.5" rx="2"/><path d="M8 11V7.8A4 4 0 0 1 16 7.8V11"/></symbol>
+    <symbol id="i-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.8-3.6 3.9-5.5 7.5-5.5s6.7 1.9 7.5 5.5"/></symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.4h-4.4"/></symbol>
+    <symbol id="i-trend-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l6 6 4-4 8 8M21 12v5h-5"/></symbol>
+    <symbol id="i-hash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 9h14M5 15h14M10 3 8 21M16 3l-2 18"/></symbol>
+    <symbol id="i-bars" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 2.5 20h19z"/><path d="M12 9.5v4.5M12 17.3v.2"/></symbol>
+    <symbol id="i-hash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 9h14M5 15h14M10 3 8 21M16 3l-2 18"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="7" y="7" width="10" height="10" rx="1.5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></symbol>
+    <symbol id="i-thumb-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></symbol>
+    <symbol id="i-thumb-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9a2 2 0 0 0 2 2.3zm7 7h3a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-3"/></symbol>
+  </defs>
+</svg>
   <div class="app-layout" id="app-layout">
     
     <!-- ============================================================ -->
@@ -19,14 +52,14 @@
       <!-- Sidebar Header -->
       <div class="sidebar-header">
         <div class="brand">
-          <div class="logo-icon">⚡</div>
+          <div class="logo-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-bolt"/></svg></div>
           <div class="brand-text">
             <span class="brand-title">Smart Switcher</span>
             <span class="brand-tagline">Cost & Latency Router</span>
           </div>
         </div>
         <button class="btn-icon sidebar-collapse-btn" id="sidebar-collapse-btn" title="Collapse Sidebar" aria-label="Collapse Sidebar">
-          <span class="icon">◀</span>
+          <span class="icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chev-left"/></svg></span>
         </button>
       </div>
 
@@ -41,7 +74,7 @@
       <!-- Session Search Filter -->
       <div class="sidebar-search">
         <div class="search-input-wrap">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-search"/></svg></span>
           <input type="text" id="session-search-input" placeholder="Search conversations..." autocomplete="off" />
           <button class="btn-clear-search hidden" id="clear-search-btn" title="Clear search">✕</button>
         </div>
@@ -61,15 +94,15 @@
       <!-- Sidebar Navigation Links -->
       <div class="sidebar-nav-section">
         <button class="sidebar-nav-item active" id="nav-chat-btn" data-view="chat">
-          <span class="nav-icon">💬</span>
+          <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chat"/></svg></span>
           <span class="nav-text">Chat Studio</span>
         </button>
         <button class="sidebar-nav-item" id="nav-dashboard-btn" data-view="dashboard">
-          <span class="nav-icon">📊</span>
+          <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chart"/></svg></span>
           <span class="nav-text">Telemetry & Analytics</span>
         </button>
         <button class="sidebar-nav-item" id="nav-benchmark-btn" data-view="benchmark">
-          <span class="nav-icon">🧪</span>
+          <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-flask"/></svg></span>
           <span class="nav-text">Research Benchmark</span>
         </button>
       </div>
@@ -81,15 +114,15 @@
             <span class="status-dot-indicator" id="sidebar-provider-dot" title="Checking providers..."></span>
             <span class="footer-btn-text">Settings & Keys</span>
           </div>
-          <span class="gear-icon">⚙️</span>
+          <span class="gear-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-gear"/></svg></span>
         </button>
         <div class="sidebar-footer-row">
           <button class="btn-sidebar-tool" id="theme-toggle-btn" title="Toggle Dark/Light Theme">
-            <span class="theme-icon" id="theme-icon">🌙</span>
+            <span class="theme-icon" id="theme-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-moon"/></svg></span>
             <span class="tool-text" id="theme-text">Dark Mode</span>
           </button>
           <button class="btn-sidebar-tool danger" id="clear-all-sessions-btn" title="Clear all chat history">
-            <span class="trash-icon">🗑️</span>
+            <span class="trash-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-trash"/></svg></span>
             <span class="tool-text">Clear All</span>
           </button>
         </div>
@@ -108,25 +141,25 @@
       <header class="canvas-header">
         <div class="header-left">
           <button class="btn-icon sidebar-open-btn" id="sidebar-open-btn" title="Open Sidebar" aria-label="Open Sidebar">
-            <span class="icon">☰</span>
+            <span class="icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-bars"/></svg></span>
           </button>
           <div class="session-info">
             <h1 class="active-session-title" id="active-session-title" title="Click to rename">New Conversation</h1>
-            <button class="btn-icon-tiny" id="rename-session-btn" title="Rename Session">✏️</button>
+            <button class="btn-icon-tiny" id="rename-session-btn" title="Rename Session"><svg class="icon-sym" aria-hidden="true"><use href="#i-pencil"/></svg></button>
           </div>
         </div>
 
         <div class="header-right">
           <div class="strategy-badge-pill" id="header-strategy-badge" title="Active Routing Strategy">
-            <span class="pill-icon">⚖️</span>
+            <span class="pill-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-scale"/></svg></span>
             <span class="pill-label">Balanced</span>
           </div>
           <div class="engine-status-pill" id="engine-status-badge" title="Provider Connectivity">
             <span class="status-pulse-dot"></span>
             <span class="status-text" id="engine-status-text">Router Online</span>
           </div>
-          <button class="btn-icon header-tool-btn" id="header-settings-btn" title="Settings & API Keys">⚙️</button>
-          <button class="btn-icon header-tool-btn" id="header-theme-btn" title="Toggle Theme">🌙</button>
+          <button class="btn-icon header-tool-btn" id="header-settings-btn" title="Settings & API Keys"><svg class="icon-sym" aria-hidden="true"><use href="#i-gear"/></svg></button>
+          <button class="btn-icon header-tool-btn" id="header-theme-btn" title="Toggle Theme"><svg class="icon-sym" aria-hidden="true"><use href="#i-moon"/></svg></button>
         </div>
       </header>
 
@@ -155,17 +188,17 @@
                     <label for="strategy-select" class="strategy-label">Strategy:</label>
                     <div class="select-styled-wrap">
                       <select id="strategy-select" class="strategy-select">
-                        <option value="balanced" selected>⚖️ Balanced (Quality & Cost)</option>
-                        <option value="lowest_cost">💰 Lowest Cost (Budget First)</option>
-                        <option value="fastest">⚡ Ultra Fast (Lowest Latency)</option>
-                        <option value="highest_quality">🎯 Maximum Quality (Strongest)</option>
+                        <option value="balanced" selected>Balanced (Quality & Cost)</option>
+                        <option value="lowest_cost">Lowest Cost (Budget First)</option>
+                        <option value="fastest">Ultra Fast (Lowest Latency)</option>
+                        <option value="highest_quality">Maximum Quality (Strongest)</option>
                       </select>
                     </div>
                   </div>
 
                   <div class="composer-topbar-right">
                     <div class="context-pill" id="context-pill" title="Conversation Context Window">
-                      <span class="context-icon">🧠</span>
+                      <span class="context-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-cpu"/></svg></span>
                       <span>Memory: <strong id="context-turn-count">0</strong> turns</span>
                       <button type="button" class="btn-clear-context" id="clear-context-btn" title="Reset Conversation Memory">Clear</button>
                     </div>
@@ -184,7 +217,7 @@
 
                   <!-- Send / Stop Button Morph -->
                   <button type="submit" id="send-stop-btn" class="btn-send-stop" title="Send Message (Enter)">
-                    <span class="btn-icon-inner" id="send-btn-icon">▲</span>
+                    <span class="btn-icon-inner" id="send-btn-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-arrow-up"/></svg></span>
                   </button>
                 </div>
 
@@ -380,7 +413,7 @@
       <!-- Modal Header -->
       <div class="modal-header">
         <div class="modal-title-group">
-          <h3>⚙️ Provider Configuration & API Keys</h3>
+          <h3><svg class="icon-sym" aria-hidden="true"><use href="#i-gear"/></svg> Provider Configuration & API Keys</h3>
           <p class="modal-subtitle">Configure your API credentials, custom endpoints, and model tier overrides.</p>
         </div>
         <button class="btn-close" id="close-settings-btn" aria-label="Close Settings">✕</button>
@@ -411,7 +444,7 @@
               <label for="key-gemini">Gemini API Key</label>
               <div class="input-password-wrap">
                 <input type="password" id="key-gemini" placeholder="AIzaSy..." autocomplete="off" />
-                <button type="button" class="btn-toggle-mask" data-target="key-gemini" title="Show/Hide Key">👁️</button>
+                <button type="button" class="btn-toggle-mask" data-target="key-gemini" title="Show/Hide Key"><svg class='icon-sym' aria-hidden='true'><use href='#i-eye'/></svg></button>
               </div>
               <span class="field-hint">Leave blank to use the server-side GEMINI_API_KEY from .env</span>
             </div>
@@ -421,7 +454,7 @@
             </div>
             <div class="test-connection-row">
               <button type="button" class="btn-test-conn" id="test-btn-gemini" data-provider="gemini">
-                <span>⚡</span> Test Gemini Connection
+                <span><svg class="icon-sym" aria-hidden="true"><use href="#i-bolt"/></svg></span> Test Gemini Connection
               </button>
               <span class="status-test-badge" id="status-gemini-test">Not tested</span>
             </div>
@@ -436,7 +469,7 @@
               <label for="key-groq">Groq API Key</label>
               <div class="input-password-wrap">
                 <input type="password" id="key-groq" placeholder="gsk_..." autocomplete="off" />
-                <button type="button" class="btn-toggle-mask" data-target="key-groq" title="Show/Hide Key">👁️</button>
+                <button type="button" class="btn-toggle-mask" data-target="key-groq" title="Show/Hide Key"><svg class='icon-sym' aria-hidden='true'><use href='#i-eye'/></svg></button>
               </div>
               <span class="field-hint">Leave blank to use server-side GROQ_API_KEY from .env</span>
             </div>
@@ -452,7 +485,7 @@
             </div>
             <div class="test-connection-row">
               <button type="button" class="btn-test-conn" id="test-btn-groq" data-provider="groq">
-                <span>⚡</span> Test Groq Connection
+                <span><svg class="icon-sym" aria-hidden="true"><use href="#i-bolt"/></svg></span> Test Groq Connection
               </button>
               <span class="status-test-badge" id="status-groq-test">Not tested</span>
             </div>
@@ -467,7 +500,7 @@
               <label for="key-openrouter">OpenRouter API Key</label>
               <div class="input-password-wrap">
                 <input type="password" id="key-openrouter" placeholder="sk-or-v1-..." autocomplete="off" />
-                <button type="button" class="btn-toggle-mask" data-target="key-openrouter" title="Show/Hide Key">👁️</button>
+                <button type="button" class="btn-toggle-mask" data-target="key-openrouter" title="Show/Hide Key"><svg class='icon-sym' aria-hidden='true'><use href='#i-eye'/></svg></button>
               </div>
               <span class="field-hint">Leave blank to use server-side OPENROUTER_API_KEY from .env</span>
             </div>
@@ -483,7 +516,7 @@
             </div>
             <div class="test-connection-row">
               <button type="button" class="btn-test-conn" id="test-btn-openrouter" data-provider="openrouter">
-                <span>⚡</span> Test OpenRouter Connection
+                <span><svg class="icon-sym" aria-hidden="true"><use href="#i-bolt"/></svg></span> Test OpenRouter Connection
               </button>
               <span class="status-test-badge" id="status-openrouter-test">Not tested</span>
             </div>
@@ -498,7 +531,7 @@
               <label for="key-openai">OpenAI API Key</label>
               <div class="input-password-wrap">
                 <input type="password" id="key-openai" placeholder="sk-proj-..." autocomplete="off" />
-                <button type="button" class="btn-toggle-mask" data-target="key-openai" title="Show/Hide Key">👁️</button>
+                <button type="button" class="btn-toggle-mask" data-target="key-openai" title="Show/Hide Key"><svg class='icon-sym' aria-hidden='true'><use href='#i-eye'/></svg></button>
               </div>
               <span class="field-hint">Leave blank to use server-side OPENAI_API_KEY from .env</span>
             </div>
@@ -508,7 +541,7 @@
             </div>
             <div class="test-connection-row">
               <button type="button" class="btn-test-conn" id="test-btn-openai" data-provider="openai">
-                <span>⚡</span> Test OpenAI Connection
+                <span><svg class="icon-sym" aria-hidden="true"><use href="#i-bolt"/></svg></span> Test OpenAI Connection
               </button>
               <span class="status-test-badge" id="status-openai-test">Not tested</span>
             </div>
@@ -529,7 +562,7 @@
                 <label for="key-custom">Custom API Key (Optional)</label>
                 <div class="input-password-wrap">
                   <input type="password" id="key-custom" placeholder="sk-custom..." autocomplete="off" />
-                  <button type="button" class="btn-toggle-mask" data-target="key-custom" title="Show/Hide Key">👁️</button>
+                  <button type="button" class="btn-toggle-mask" data-target="key-custom" title="Show/Hide Key"><svg class='icon-sym' aria-hidden='true'><use href='#i-eye'/></svg></button>
                 </div>
               </div>
               <div class="form-group">
@@ -539,7 +572,7 @@
             </div>
             <div class="test-connection-row">
               <button type="button" class="btn-test-conn" id="test-btn-custom" data-provider="custom">
-                <span>⚡</span> Test Custom Endpoint
+                <span><svg class="icon-sym" aria-hidden="true"><use href="#i-bolt"/></svg></span> Test Custom Endpoint
               </button>
               <span class="status-test-badge" id="status-custom-test">Not tested</span>
             </div>
@@ -578,7 +611,7 @@
 
         <!-- Security Guarantee Notice -->
         <div class="settings-security-box">
-          <span class="lock-icon">🔒</span>
+          <span class="lock-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-lock"/></svg></span>
           <div class="security-text">
             <strong>Client-Side Storage Guarantee:</strong> Your API keys are saved exclusively in your browser's <code>localStorage</code> and transmitted via encrypted headers (<code>X-Gemini-Key</code>, <code>X-Groq-Key</code>, <code>X-OpenRouter-Key</code>, etc.) on demand. If left blank, server-side environment variables are used seamlessly.
           </div>
@@ -608,7 +641,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <div class="modal-title-group">
-          <h3 id="modal-title">🔍 Request Telemetry Inspector</h3>
+          <h3 id="modal-title"><svg class="icon-sym" aria-hidden="true"><use href="#i-search"/></svg> Request Telemetry Inspector</h3>
           <p class="modal-subtitle">Full routing scoreboard, token breakdown, and cost optimization telemetry.</p>
         </div>
         <button class="btn-close" id="close-inspector-btn" aria-label="Close Inspector">✕</button>
@@ -623,6 +656,12 @@
   <!-- 5. TOAST NOTIFICATIONS CONTAINER                             -->
   <!-- ============================================================ -->
   <div class="toast-container" id="toast-container"></div>
+
+  <!-- Vendor Libraries (Markdown, Sanitization, Math) -->
+  <script src="/static/vendor/marked.min.js"></script>
+  <script src="/static/vendor/purify.min.js"></script>
+  <script src="/static/vendor/katex.min.js"></script>
+  <script src="/static/vendor/katex-auto-render.min.js"></script>
 
   <!-- Application Script -->
   <script src="/static/app.js"></script>

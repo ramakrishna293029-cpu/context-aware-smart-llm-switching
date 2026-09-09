@@ -39,7 +39,7 @@ from app.registry import ModelRegistry, ModelSpec, registry
 from app.router import SmartRouter, router
 from app.schemas import ChatMessage, ChatRequest
 from app.security import resolve_credentials_from_headers
-from app.tracker import tracker, estimate_cost_usd
+from app.tracker import estimate_cost_usd
 
 
 # ===========================================================================
@@ -417,13 +417,15 @@ class TestContextPruningAndTelemetry:
         assert len(pruned) >= 1
         assert pruned[-1].role == "user"
 
-    def test_telemetry_stress_recording(self):
-        # Rapidly write 25 telemetry records and query stats
-        initial_stats = tracker.dashboard_stats()
+    def test_telemetry_stress_recording(self, client: TestClient):
+        # Rapidly write 25 telemetry records and query stats to isolated in-memory DB
+        import app.tracker
+        active_tracker = app.tracker.tracker
+        initial_stats = active_tracker.dashboard_stats()
         initial_total = initial_stats["total_requests"]
 
         for i in range(25):
-            tracker.record_request(
+            active_tracker.record_request(
                 query=f"Adversarial stress query {i}",
                 task_type="coding" if i % 2 == 0 else "factual",
                 complexity="high" if i % 2 == 0 else "low",
@@ -454,7 +456,7 @@ class TestContextPruningAndTelemetry:
                 answer_mode="switch" if i % 2 == 0 else "self",
             )
 
-        updated_stats = tracker.dashboard_stats()
+        updated_stats = active_tracker.dashboard_stats()
         assert updated_stats["total_requests"] == initial_total + 25
         assert updated_stats["successful_requests"] >= 25
         assert updated_stats["savings_usd"] > 0

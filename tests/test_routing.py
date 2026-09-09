@@ -36,8 +36,10 @@ class TestAnalyzerDeterministic:
 
     def test_fallback_heuristics_self_mode(self):
         res = _fallback_heuristics("Hello there")
-        assert res["answer_mode"] == "self"
-        assert res["answer"] is not None
+        # Heuristic engine never self-answers greetings (no canned text):
+        # it classifies and routes to fast tier for a real provider response.
+        assert res["answer_mode"] == "switch"
+        assert res["answer"] is None
         assert res["target_tier"] == "fast"
 
         res_math = _fallback_heuristics("calculate 15 + 25")
@@ -57,9 +59,10 @@ class TestAnalyzerDeterministic:
 
     def test_context_analyzer_signal_engine(self):
         analysis = analyzer.analyze("hi")
-        assert analysis.answer_mode == "self"
+        # No canned answers: greetings classify to switch-mode fast tier.
+        assert analysis.answer_mode == "switch"
+        assert analysis.answer is None
         assert analysis.complexity <= 0.20
-        assert analysis.answer is not None
 
         analysis_code = analyzer.analyze("Write a python quicksort function with unit tests")
         assert analysis_code.answer_mode == "switch"
@@ -68,10 +71,16 @@ class TestAnalyzerDeterministic:
         assert len(analysis_code.signals) > 0
 
 
+# Offline demo registry: unit tests must never depend on live provider APIs,
+# even when a developer's real .env is present.
+from app.registry import ModelRegistry, _build_demo_models
+DEMO_REGISTRY = ModelRegistry(_build_demo_models())
+
+
 class TestAnalyzerLLM:
     def test_run_analyzer_self_mode(self):
         async def run():
-            dec = await run_analyzer("Hi")
+            dec = await run_analyzer("Hi", registry_instance=DEMO_REGISTRY)
             assert isinstance(dec, AnalyzerDecision)
             assert dec.answer_mode == "self"
             assert dec.switch_required is False
@@ -85,7 +94,7 @@ class TestAnalyzerLLM:
 
     def test_run_analyzer_switch_mode_coding(self):
         async def run():
-            dec = await run_analyzer("Implement Dijkstra shortest path algorithm in Python with adjacency list")
+            dec = await run_analyzer("Implement Dijkstra shortest path algorithm in Python with adjacency list", registry_instance=DEMO_REGISTRY)
             assert isinstance(dec, AnalyzerDecision)
             assert dec.answer_mode == "switch"
             assert dec.switch_required is True
@@ -96,7 +105,7 @@ class TestAnalyzerLLM:
 
     def test_run_analyzer_switch_mode_reasoning(self):
         async def run():
-            dec = await run_analyzer("Design a distributed caching architecture with consistent hashing and leader election")
+            dec = await run_analyzer("Design a distributed caching architecture with consistent hashing and leader election", registry_instance=DEMO_REGISTRY)
             assert isinstance(dec, AnalyzerDecision)
             assert dec.answer_mode == "switch"
             assert dec.switch_required is True
@@ -106,7 +115,7 @@ class TestAnalyzerLLM:
 
     def test_analyze_and_route_alias(self):
         async def run():
-            dec = await analyze_and_route("Hello!")
+            dec = await analyze_and_route("Hello!", registry_instance=DEMO_REGISTRY)
             assert dec.answer_mode == "self"
         asyncio.run(run())
 

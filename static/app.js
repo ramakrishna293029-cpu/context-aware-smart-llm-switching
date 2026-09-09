@@ -15,10 +15,16 @@ const $$ = (sel) => document.querySelectorAll(sel);
 
 /**
  * SettingsManager handles persistence of API keys, custom endpoints,
- * model tier overrides, and preferences in localStorage.
+ * model tier overrides, and preferences in localStorage — encrypted at
+ * rest with AES-GCM (WebCrypto). The encryption key is generated per
+ * browser and stored separately; plaintext credentials never touch
+ * localStorage.
  */
 class SettingsManager {
   static STORAGE_KEY = "smart_llm_settings";
+  static CRYPTO_KEY_NAME = "smart_llm_settings_v1";
+  static _cryptoKey = null;
+  static _cryptoKeyPromise = null;
 
   static getDefaults() {
     return {
@@ -56,27 +62,88 @@ class SettingsManager {
     };
   }
 
-  static load() {
+  /* --- AES-GCM encryption helpers (WebCrypto) -------------------------- */
+  static async _getCryptoKey() {
+    if (this._cryptoKey) return this._cryptoKey;
+    if (this._cryptoKeyPromise) return this._cryptoKeyPromise;
+    this._cryptoKeyPromise = (async () => {
+      try {
+        let rawB64 = localStorage.getItem(this.CRYPTO_KEY_NAME);
+        let raw;
+        if (rawB64) {
+          raw = Uint8Array.from(atob(rawB64), c => c.charCodeAt(0));
+        } else {
+          raw = window.crypto.getRandomValues(new Uint8Array(32));
+          localStorage.setItem(this.CRYPTO_KEY_NAME, btoa(String.fromCharCode(...raw)));
+        }
+        this._cryptoKey = await window.crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+        return this._cryptoKey;
+      } catch (e) {
+        console.warn("WebCrypto unavailable; falling back to plaintext-safe mode:", e);
+        return null;
+      } finally {
+        this._cryptoKeyPromise = null;
+      }
+    })();
+    return this._cryptoKeyPromise;
+  }
+
+  static async _encrypt(obj) {
+    const key = await this._getCryptoKey();
+    if (!key) return null;
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const data = new TextEncoder().encode(JSON.stringify(obj));
+    const ct = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
+    const out = new Uint8Array(iv.length + ct.byteLength);
+    out.set(iv, 0);
+    out.set(new Uint8Array(ct), iv.length);
+    return btoa(String.fromCharCode(...out));
+  }
+
+  static async _decrypt(b64) {
+    const key = await this._getCryptoKey();
+    if (!key) return null;
+    const blob = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const iv = blob.slice(0, 12);
+    const data = blob.slice(12);
+    const pt = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data);
+    return JSON.parse(new TextDecoder().decode(pt));
+  }
+
+  static _merge(parsed) {
+    return {
+      apiKeys: { ...this.getDefaults().apiKeys, ...(parsed.apiKeys || {}) },
+      customEndpoints: { ...this.getDefaults().customEndpoints, ...(parsed.customEndpoints || {}) },
+      providerModels: { ...this.getDefaults().providerModels, ...(parsed.providerModels || {}) },
+      tierOverrides: { ...this.getDefaults().tierOverrides, ...(parsed.tierOverrides || {}) },
+      preferences: { ...this.getDefaults().preferences, ...(parsed.preferences || {}) },
+    };
+  }
+
+  static async load() {
     try {
       const raw = localStorage.getItem(this.STORAGE_KEY);
       if (!raw) return this.getDefaults();
-      const parsed = JSON.parse(raw);
-      return {
-        apiKeys: { ...this.getDefaults().apiKeys, ...(parsed.apiKeys || {}) },
-        customEndpoints: { ...this.getDefaults().customEndpoints, ...(parsed.customEndpoints || {}) },
-        providerModels: { ...this.getDefaults().providerModels, ...(parsed.providerModels || {}) },
-        tierOverrides: { ...this.getDefaults().tierOverrides, ...(parsed.tierOverrides || {}) },
-        preferences: { ...this.getDefaults().preferences, ...(parsed.preferences || {}) },
-      };
+      // New format: AES-GCM encrypted base64 blob.
+      if (raw.startsWith("enc:")) {
+        const parsed = await this._decrypt(raw.slice(4));
+        return parsed ? this._merge(parsed) : this.getDefaults();
+      }
+      // Legacy plaintext: import, re-encrypt, remove plaintext.
+      const legacy = JSON.parse(raw);
+      const merged = this._merge(legacy);
+      await this.save(merged);
+      return merged;
     } catch (e) {
       console.warn("Failed to load settings from localStorage:", e);
       return this.getDefaults();
     }
   }
 
-  static save(settings) {
+  static async save(settings) {
     try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings));
+      const enc = await this._encrypt(settings);
+      localStorage.setItem(this.STORAGE_KEY, enc ? "enc:" + enc : JSON.stringify(settings));
     } catch (e) {
       console.error("Failed to save settings to localStorage:", e);
     }
@@ -91,8 +158,8 @@ class SettingsManager {
     this.save(settings);
   }
 
-  static getHeaders() {
-    const settings = this.load();
+  static async getHeaders() {
+    const settings = await this.load();
     const headers = {
       "Content-Type": "application/json",
     };
@@ -144,7 +211,7 @@ class SettingsManager {
  * Injects dynamic credentials and tier overrides into every request.
  */
 async function apiFetch(url, options = {}) {
-  const defaultHeaders = SettingsManager.getHeaders();
+  const defaultHeaders = await SettingsManager.getHeaders();
   const customHeaders = options.headers || {};
   const mergedHeaders = { ...defaultHeaders, ...customHeaders };
   return fetch(url, { ...options, headers: mergedHeaders });
@@ -322,8 +389,9 @@ class ThemeManager {
     const headerIcon = $("header-theme-btn");
     const text = $("theme-text");
 
-    if (icon) icon.textContent = isLight ? "☀️" : "🌙";
-    if (headerIcon) headerIcon.textContent = isLight ? "☀️" : "🌙";
+    const themeSVG = isLight ? "<svg class='icon-sym'><use href='#i-sun'/></svg>" : "<svg class='icon-sym'><use href='#i-moon'/></svg>";
+    if (icon) icon.innerHTML = themeSVG;
+    if (headerIcon) headerIcon.innerHTML = themeSVG;
     if (text) text.textContent = isLight ? "Light Mode" : "Dark Mode";
   }
 
@@ -462,14 +530,14 @@ function renderSidebarSessions(filterQuery = "") {
   list.innerHTML = filtered.map(s => {
     const isActive = active && active.id === s.id;
     return `
-      <div class="session-item ${isActive ? 'active' : ''}" data-id="${s.id}" onclick="handleSessionClick('${s.id}')">
+      <div class="session-item ${isActive ? 'active' : ''}" data-id="${s.id}" data-action="session-click">
         <div class="session-item-left">
-          <span class="session-icon">💬</span>
+          <span class="session-icon"><svg class='icon-sym' aria-hidden='true'><use href='#i-chat'/></svg></span>
           <span class="session-title" title="${escapeHtml(s.title)}">${escapeHtml(s.title)}</span>
         </div>
-        <div class="session-actions" onclick="event.stopPropagation()">
-          <button class="btn-session-action" onclick="promptRenameSession('${s.id}')" title="Rename">✏️</button>
-          <button class="btn-session-action delete" onclick="handleDeleteSession('${s.id}')" title="Delete">🗑️</button>
+        <div class="session-actions">
+          <button class="btn-session-action" data-action="rename-session" data-id="${s.id}" title="Rename"><svg class='icon-sym' aria-hidden='true'><use href='#i-pencil'/></svg></button>
+          <button class="btn-session-action delete" data-action="delete-session" data-id="${s.id}" title="Delete"><svg class='icon-sym' aria-hidden='true'><use href='#i-trash'/></svg></button>
         </div>
       </div>
     `;
@@ -607,12 +675,12 @@ function setupComposer() {
   });
 
   // Strategy Selector change
-  strategySelect?.addEventListener("change", () => {
+  strategySelect?.addEventListener("change", async () => {
     const val = strategySelect.value;
     updateStrategyBadge(val);
-    const settings = SettingsManager.load();
+    const settings = await SettingsManager.load();
     settings.preferences.strategy = val;
-    SettingsManager.save(settings);
+    await SettingsManager.save(settings);
   });
 
   // Form Submit / Streaming Execution
@@ -737,11 +805,11 @@ function setStreamingState(isStreaming) {
   if (isStreaming) {
     btn.classList.add("stop-state");
     btn.title = "Stop Generation";
-    icon.textContent = "■";
+    icon.innerHTML = "<svg class='icon-sym' aria-hidden='true'><use href='#i-stop'/></svg>";
   } else {
     btn.classList.remove("stop-state");
     btn.title = "Send Message (Enter)";
-    icon.textContent = "▲";
+    icon.innerHTML = "<svg class='icon-sym' aria-hidden='true'><use href='#i-arrow-up'/></svg>";
   }
 }
 
@@ -758,10 +826,10 @@ function updateStrategyBadge(strategy) {
   if (!badge) return;
 
   const map = {
-    balanced: { icon: "⚖️", label: "Balanced" },
-    lowest_cost: { icon: "💰", label: "Lowest Cost" },
-    fastest: { icon: "⚡", label: "Fastest Speed" },
-    highest_quality: { icon: "🎯", label: "Max Quality" },
+    balanced: { icon: "<svg class='icon-sym' aria-hidden='true'><use href='#i-scale'/></svg>", label: "Balanced" },
+    lowest_cost: { icon: "<svg class='icon-sym' aria-hidden='true'><use href='#i-dollar'/></svg>", label: "Lowest Cost" },
+    fastest: { icon: "<svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg>", label: "Fastest Speed" },
+    highest_quality: { icon: "<svg class='icon-sym' aria-hidden='true'><use href='#i-target'/></svg>", label: "Max Quality" },
   };
 
   const s = map[strategy] || map.balanced;
@@ -811,14 +879,14 @@ function renderActiveSessionMessages() {
     container.innerHTML = `
       <div class="welcome-hero" id="welcome-hero">
         <div class="welcome-badge">
-          <span class="badge-icon">🧠</span>
+          <span class="badge-icon"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg></span>
           <span>Intelligent Context-Aware Multi-Provider Switching</span>
         </div>
         <h2 class="welcome-title">How can I help you optimize today?</h2>
         <p class="welcome-desc">
           Every prompt is evaluated by our <strong>Analyzer LLM</strong>. Simple queries execute immediately in 
-          <span class="badge-mode-mini self">⚡ Self-Mode</span> with 100% downstream savings, while complex coding and reasoning tasks switch seamlessly to specialized 
-          <span class="badge-mode-mini switch">🔄 Switch-Mode</span> models (Gemini, Groq Qwen Coder, 120B Reasoning, or Custom Endpoints).
+          <span class="badge-mode-mini self"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Self-Mode</span> with 100% downstream savings, while complex coding and reasoning tasks switch seamlessly to specialized 
+          <span class="badge-mode-mini switch"><svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Switch-Mode</span> models (Gemini, Groq Qwen Coder, 120B Reasoning, or Custom Endpoints).
         </p>
 
         <div class="architecture-flow-cards">
@@ -861,29 +929,29 @@ function renderActiveSessionMessages() {
           <div class="welcome-prompts-grid" id="welcome-quick-chips">
             <button class="quick-chip-card" data-query="What is an API and how does REST work?">
               <div class="chip-top">
-                <span class="chip-tier-tag fast">⚡ Fast Tier</span>
-                <span class="chip-arrow">➔</span>
+                <span class="chip-tier-tag fast"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Fast Tier</span>
+                <span class="chip-arrow">→</span>
               </div>
               <div class="chip-query">What is an API and how does REST work?</div>
             </button>
             <button class="quick-chip-card" data-query="Write a Python implementation of Dijkstra's algorithm with priority queue.">
               <div class="chip-top">
-                <span class="chip-tier-tag coding">💻 Coding Tier</span>
-                <span class="chip-arrow">➔</span>
+                <span class="chip-tier-tag coding"><svg class='icon-sym' aria-hidden='true'><use href='#i-hash'/></svg> Coding Tier</span>
+                <span class="chip-arrow">→</span>
               </div>
               <div class="chip-query">Write a Python implementation of Dijkstra's algorithm with priority queue.</div>
             </button>
             <button class="quick-chip-card" data-query="Design a fault-tolerant distributed cache architecture with replication and failover for 10 million concurrent users.">
               <div class="chip-top">
-                <span class="chip-tier-tag reasoning">🧠 Reasoning Tier</span>
-                <span class="chip-arrow">➔</span>
+                <span class="chip-tier-tag reasoning"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg> Reasoning Tier</span>
+                <span class="chip-arrow">→</span>
               </div>
               <div class="chip-query">Design a fault-tolerant distributed cache architecture for 10M users.</div>
             </button>
             <button class="quick-chip-card" data-query="Now optimize the space complexity of that previous implementation.">
               <div class="chip-top">
-                <span class="chip-tier-tag context">🔄 Context Follow-up</span>
-                <span class="chip-arrow">➔</span>
+                <span class="chip-tier-tag context"><svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Context Follow-up</span>
+                <span class="chip-arrow">→</span>
               </div>
               <div class="chip-query">Now optimize the space complexity of that previous implementation.</div>
             </button>
@@ -917,7 +985,7 @@ function appendUserMessageToUI(text) {
     <div class="msg-content-wrap">
       <div class="user-bubble">${escapeHtml(text)}</div>
     </div>
-    <div class="msg-avatar">👤</div>
+    <div class="msg-avatar"><svg class='icon-sym' aria-hidden='true'><use href='#i-person'/></svg></div>
   `;
   container.appendChild(msgEl);
   smoothScrollToBottom(container);
@@ -930,14 +998,14 @@ function createStreamingPlaceholder() {
   const drawerId = "drawer_stream_" + Date.now();
 
   msgEl.innerHTML = `
-    <div class="msg-avatar">⚡</div>
+    <div class="msg-avatar"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg></div>
     <div class="msg-content-wrap">
       <div class="assistant-card">
         <!-- Live Reasoning Drawer -->
         <div class="reasoning-drawer expanded" id="${drawerId}">
-          <div class="drawer-toggle" onclick="toggleReasoningDrawer('${drawerId}')">
+          <div class="drawer-toggle" data-action="toggle-reasoning" data-target="${drawerId}">
             <div class="drawer-summary">
-              <span class="drawer-icon pulse">🧠</span>
+              <span class="drawer-icon pulse"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg></span>
               <span class="drawer-title" id="${drawerId}_title">Analyzer LLM evaluating query & context...</span>
               <span class="drawer-badge tier" id="${drawerId}_badge">Routing</span>
             </div>
@@ -965,11 +1033,11 @@ function createStreamingPlaceholder() {
               </div>
             </div>
             <div class="drawer-section" id="${drawerId}_reason_wrap">
-              <div class="section-title">🧠 Analyzer Rationale</div>
+              <div class="section-title"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg> Analyzer Rationale</div>
               <div class="rationale-box" id="${drawerId}_reason">Awaiting analyzer decision...</div>
             </div>
             <div class="drawer-section reasoning-stream-container" id="${drawerId}_thinking_wrap" style="display:none;">
-              <div class="section-title">💭 Internal Thought Stream</div>
+              <div class="section-title"><svg class='icon-sym' aria-hidden='true'><use href='#i-chat'/></svg> Internal Thought Stream</div>
               <pre class="reasoning-stream-text" id="${drawerId}_thinking"></pre>
             </div>
           </div>
@@ -998,7 +1066,7 @@ function createStreamingPlaceholder() {
 
       if (badge) {
         badge.className = `drawer-badge ${isSelf ? 'self' : 'switch'}`;
-        badge.textContent = isSelf ? "⚡ Self-Mode" : "🔄 Switch-Mode";
+        badge.innerHTML = isSelf ? "<svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Self-Mode" : "<svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Switch-Mode";
       }
       if (mode) mode.textContent = isSelf ? "Direct Self-Answer" : "Specialized Switch";
       if (task) task.textContent = (info.task_type || "general").toUpperCase();
@@ -1032,13 +1100,14 @@ function createStreamingPlaceholder() {
       if (body) {
         body.style.display = "block";
         body.innerHTML = formatMarkdown(fullText);
+  _renderMathInElement(body);
       }
       smoothScrollToBottom(container);
     },
     showError: (err) => {
       const title = $(`${drawerId}_title`);
       const reason = $(`${drawerId}_reason`);
-      if (title) title.innerHTML = `<span style="color:var(--accent-red)">⚠️ Stream Error</span>`;
+      if (title) title.innerHTML = `<span style="color:var(--accent-red)"><svg class='icon-sym' aria-hidden='true'><use href='#i-warning'/></svg> Stream Error</span>`;
       if (reason) reason.innerHTML = `<span style="color:var(--accent-red)">${escapeHtml(err)}</span>`;
     },
     showStoppedState: (text) => {
@@ -1048,6 +1117,7 @@ function createStreamingPlaceholder() {
       if (body && text) {
         body.style.display = "block";
         body.innerHTML = formatMarkdown(text) + `<p style="color:var(--text-muted);font-style:italic;">[Generation stopped by user]</p>`;
+  _renderMathInElement(body);
       }
     }
   };
@@ -1087,22 +1157,22 @@ function appendAssistantResponseToUI(query, text, data = {}) {
   const analyzerLatency = data.analyzer_latency_ms != null ? `${Math.round(data.analyzer_latency_ms)} ms` : "—";
   const ttft = data.ttft_ms != null ? `${Math.round(data.ttft_ms)} ms` : "—";
 
-  const fallbackBadge = data.fallback_used ? `<span class="drawer-badge" style="background:rgba(245,158,11,0.2);color:var(--accent-amber)">⚠️ Fallback Used</span>` : "";
+  const fallbackBadge = data.fallback_used ? `<span class="drawer-badge" style="background:rgba(245,158,11,0.2);color:var(--accent-amber)"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Fallback Used</span>` : "";
 
   msgEl.innerHTML = `
-    <div class="msg-avatar">⚡</div>
+    <div class="msg-avatar"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg></div>
     <div class="msg-content-wrap">
       <div class="assistant-card">
         
         <!-- Expandable Reasoning Drawer Accordion -->
         <div class="reasoning-drawer collapsed" id="${drawerId}">
-          <div class="drawer-toggle" onclick="toggleReasoningDrawer('${drawerId}')">
+          <div class="drawer-toggle" data-action="toggle-reasoning" data-target="${drawerId}">
             <div class="drawer-summary">
-              <span class="drawer-icon">🧠</span>
+              <span class="drawer-icon"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg></span>
               <span class="drawer-title">${isSelf ? 'Direct Self-Mode' : 'Routed to ' + escapeHtml(targetModelName)}</span>
-              <span class="drawer-badge ${isSelf ? 'self' : 'switch'}">${isSelf ? '⚡ Self-Mode' : '🔄 Switch-Mode'}</span>
-              <span class="drawer-metric">⚡ ${totalLatency}</span>
-              ${savingsPct ? `<span class="drawer-metric text-green">📉 ${savingsPct} saved</span>` : ''}
+              <span class="drawer-badge ${isSelf ? 'self' : 'switch'}">${isSelf ? "<svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Self-Mode" : "<svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Switch-Mode"}</span>
+              <span class="drawer-metric"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> ${totalLatency}</span>
+              ${savingsPct ? `<span class="drawer-metric text-green"><svg class='icon-sym' aria-hidden='true'><use href='#i-trend-down'/></svg> ${savingsPct} saved</span>` : ''}
               ${fallbackBadge}
             </div>
             <div class="drawer-chevron">▾</div>
@@ -1113,7 +1183,7 @@ function appendAssistantResponseToUI(query, text, data = {}) {
             <div class="drawer-grid">
               <div class="drawer-stat-card">
                 <span class="stat-label">Execution Mode</span>
-                <span class="stat-val ${isSelf ? 'text-green' : 'text-cyan'}">${isSelf ? '⚡ Direct Self-Answer' : '🔄 Specialized Switch'}</span>
+                <span class="stat-val ${isSelf ? 'text-green' : 'text-cyan'}">${isSelf ? `<svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Direct Self-Answer` : `<svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Specialized Switch`}</span>
                 <span class="stat-sub">${isSelf ? 'Zero downstream cost' : 'Targeted model dispatched'}</span>
               </div>
               <div class="drawer-stat-card">
@@ -1137,7 +1207,7 @@ function appendAssistantResponseToUI(query, text, data = {}) {
 
             <!-- Routing Rationale -->
             <div class="drawer-section">
-              <div class="section-title">🧠 Analyzer Rationale</div>
+              <div class="section-title"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg> Analyzer Rationale</div>
               <div class="rationale-box">"${escapeHtml(routingReason)}"</div>
             </div>
 
@@ -1182,16 +1252,16 @@ function appendAssistantResponseToUI(query, text, data = {}) {
         <!-- Message Footer -->
         <div class="telemetry-footer">
           <div class="telemetry-chips">
-            <div class="t-chip"><span>⚡ Latency:</span> <strong>${totalLatency}</strong></div>
-            <div class="t-chip"><span>🔢 Tokens:</span> <strong>${totalTokens}</strong></div>
-            <div class="t-chip"><span>💰 Cost:</span> <strong>${totalCost}</strong></div>
-            ${savingsPct ? `<div class="t-chip savings"><span>📉 Saved:</span> <strong>${savingsPct} vs baseline</strong></div>` : ''}
+            <div class="t-chip"><span><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Latency:</span> <strong>${totalLatency}</strong></div>
+            <div class="t-chip"><span><svg class='icon-sym' aria-hidden='true'><use href='#i-hash'/></svg> Tokens:</span> <strong>${totalTokens}</strong></div>
+            <div class="t-chip"><span><svg class='icon-sym' aria-hidden='true'><use href='#i-dollar'/></svg> Cost:</span> <strong>${totalCost}</strong></div>
+            ${savingsPct ? `<div class="t-chip savings"><span><svg class='icon-sym' aria-hidden='true'><use href='#i-trend-down'/></svg> Saved:</span> <strong>${savingsPct} vs baseline</strong></div>` : ''}
           </div>
           <div class="telemetry-actions">
-            <button class="btn-icon-action" onclick="copyMessageText(this, ${escapeAttr(text)})" title="Copy Response">📋 Copy</button>
-            ${data.request_id ? `<button class="btn-icon-action" onclick="openInspectorModal(${data.request_id})" title="Inspect Full Telemetry">🔍 Inspect</button>` : ''}
-            ${data.request_id ? `<button class="btn-icon-action" onclick="recordMessageFeedback(${data.request_id}, 1, this)" title="Good Response">👍</button>` : ''}
-            ${data.request_id ? `<button class="btn-icon-action" onclick="recordMessageFeedback(${data.request_id}, -1, this)" title="Poor Response">👎</button>` : ''}
+            <button class="btn-icon-action" data-action="copy-message" data-text="${escapeHtml(text)}" title="Copy Response"><svg class='icon-sym' aria-hidden='true'><use href='#i-copy'/></svg> Copy</button>
+            ${data.request_id ? `<button class="btn-icon-action" data-action="open-inspector" data-id="${data.request_id}" title="Inspect Full Telemetry"><svg class='icon-sym' aria-hidden='true'><use href='#i-search'/></svg> Inspect</button>` : ''}
+            ${data.request_id ? `<button class="btn-icon-action" data-action="feedback" data-id="${data.request_id}" data-rating="1" title="Good Response"><svg class='icon-sym' aria-hidden='true'><use href='#i-thumb-up'/></svg></button>` : ''}
+            ${data.request_id ? `<button class="btn-icon-action" data-action="feedback" data-id="${data.request_id}" data-rating="-1" title="Poor Response"><svg class='icon-sym' aria-hidden='true'><use href='#i-thumb-down'/></svg></button>` : ''}
           </div>
         </div>
 
@@ -1200,6 +1270,8 @@ function appendAssistantResponseToUI(query, text, data = {}) {
   `;
 
   container.appendChild(msgEl);
+  // Render LaTeX math ($...$ / $$...$$) inside the final markdown body.
+  _renderMathInElement(msgEl.querySelector(".msg-text-body"));
   smoothScrollToBottom(container);
 }
 
@@ -1301,8 +1373,8 @@ function escapeAttr(s) {
 function highlightSyntax(code, lang = "") {
   let escaped = escapeHtml(code);
 
-  // Common keywords
-  const keywords = /\b(def|class|import|from|return|if|else|elif|for|while|try|except|with|as|async|await|function|const|let|var|switch|case|break|continue|new|this|typeof|instanceof|null|undefined|true|false|SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|JOIN|GROUP|ORDER|BY|HAVING|LIMIT)\b/g;
+  // Common keywords across languages (Python, Java, JS/TS, C++, Go, Rust, SQL)
+  const keywords = /\b(public|private|protected|static|final|void|class|interface|extends|implements|new|this|super|int|float|double|boolean|char|byte|short|long|String|System|out|println|def|from|import|return|yield|if|else|elif|for|while|do|try|except|catch|finally|throw|throws|with|as|async|await|function|const|let|var|switch|case|default|break|continue|typeof|instanceof|null|undefined|true|false|None|True|False|SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|JOIN|GROUP|ORDER|BY|HAVING|LIMIT)\b/g;
   escaped = escaped.replace(keywords, '<span class="syn-kw">$1</span>');
 
   // Strings (quoted)
@@ -1317,77 +1389,103 @@ function highlightSyntax(code, lang = "") {
   return escaped;
 }
 
+/* ------------------------------------------------------------------
+   Standard Markdown Rendering: marked + DOMPurify + KaTeX
+   - marked: full CommonMark/GFM parser (tables, ordered lists, links,
+     nested markdown — replaces the limited regex chain)
+   - DOMPurify: XSS sanitization of the parsed HTML
+   - KaTeX: LaTeX math rendering for $inline$, $$block$$, \(..\), \[..\]
+   ------------------------------------------------------------------ */
+let _katexReady = false;
+if (typeof katex !== "undefined") _katexReady = true;
+
+function _renderMathInElement(el) {
+  if (!_katexReady || typeof renderMathInElement !== "function" || !el) return;
+  try {
+    renderMathInElement(el, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "\\[", right: "\\]", display: true },
+        { left: "\\(", right: "\\)", display: false },
+        { left: "$", right: "$", display: false },
+      ],
+      throwOnError: false,
+    });
+  } catch (err) {
+    console.warn("KaTeX math rendering failed:", err);
+  }
+}
+
 function formatMarkdown(text) {
   if (!text) return "";
 
-  // 1. Code Blocks
-  let out = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang, code) => {
-    const cleanLang = lang ? lang.trim() : "code";
-    const highlighted = highlightSyntax(code.trim(), cleanLang);
-    return `
-      <div class="code-block-wrapper">
-        <div class="code-block-header">
-          <span class="code-lang-label">${escapeHtml(cleanLang)}</span>
-          <button type="button" class="btn-copy-code" onclick="copyCodeBlock(this, ${escapeAttr(code.trim())})">📋 Copy Code</button>
+  if (typeof marked !== "undefined" && typeof DOMPurify !== "undefined") {
+    const renderer = new marked.Renderer();
+    // Keep the app's syntax highlighting + CSP-safe copy button on fenced code.
+    renderer.code = function(code, lang) {
+      // In marked v12+, the first argument can be an object token { text, lang, escaped }
+      let cleanCode = typeof code === "object" ? (code.text || "") : (code || "");
+      let cleanLang = typeof code === "object" ? (code.lang || "") : (lang || "");
+      cleanLang = (cleanLang || "").trim().toLowerCase() || "code";
+      cleanCode = cleanCode.replace(/\n$/, "");
+
+      return `
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang-label">${escapeHtml(cleanLang)}</span>
+            <button type="button" class="btn-copy-code" data-action="copy-code"><svg class='icon-sym' aria-hidden='true'><use href='#i-copy'/></svg> Copy Code</button>
+          </div>
+          <pre><code class="language-${escapeHtml(cleanLang)}">${highlightSyntax(cleanCode, cleanLang)}</code></pre>
         </div>
-        <pre><code>${highlighted}</code></pre>
-      </div>
-    `;
-  });
+      `;
+    };
+    const parsed = marked.parse(text, { renderer, gfm: true, breaks: true });
+    return DOMPurify.sanitize(parsed, {
+      ADD_ATTR: ["data-action", "data-code", "data-text", "data-id", "data-rating", "data-target", "target"],
+    });
+  }
 
-  // 2. Tables
-  out = out.replace(/\n\|(.+)\|\n\|[-:| ]+\|\n((?:\|.+\|\n?)+)/g, (_m, header, body) => {
-    const ths = header.split("|").filter(c => c.trim()).map(c => `<th>${escapeHtml(c.trim())}</th>`).join("");
-    const rows = body.trim().split("\n").map(row => {
-      const tds = row.split("|").filter(c => c.trim()).map(c => `<td>${escapeHtml(c.trim())}</td>`).join("");
-      return `<tr>${tds}</tr>`;
-    }).join("");
-    return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`;
-  });
-
-  // 3. Inline Code
-  out = out.replace(/`([^`]+)`/g, (_m, code) => `<code>${escapeHtml(code)}</code>`);
-
-  // 4. Headers
-  out = out.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
-  out = out.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-  out = out.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-  out = out.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-
-  // 5. Bold & Italic
-  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-  // 6. Blockquotes
-  out = out.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
-
-  // 7. Unordered Lists
-  out = out.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>');
-  out = out.replace(/(<li>.*<\/li>)/gims, '<ul>$1</ul>');
-
-  // 8. Paragraphs
-  const blocks = out.split("\n\n").map(b => {
-    b = b.trim();
-    if (!b) return "";
-    if (b.startsWith("<div") || b.startsWith("<table") || b.startsWith("<h") || b.startsWith("<ul") || b.startsWith("<block")) {
-      return b;
-    }
-    return `<p>${b.replace(/\n/g, "<br>")}</p>`;
-  });
-
-  return blocks.join("");
+  // Fallback when vendor libs are unavailable: plain escaped text.
+  return `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`;
 }
 
 window.copyCodeBlock = function(btn, codeText) {
-  navigator.clipboard.writeText(codeText);
-  const orig = btn.innerHTML;
-  btn.innerHTML = `✓ Copied!`;
-  btn.style.color = "var(--accent-green)";
-  setTimeout(() => {
-    btn.innerHTML = orig;
-    btn.style.color = "";
-  }, 2000);
-  showToast("Code copied to clipboard", "success");
+  let text = codeText;
+  if (!text) {
+    const wrapper = btn.closest(".code-block-wrapper");
+    const codeEl = wrapper ? wrapper.querySelector("pre code") : null;
+    if (codeEl) text = codeEl.textContent;
+  }
+  if (!text) return;
+  const doFeedback = () => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = `<span style="color:var(--accent-green);font-weight:700;">✓ Copied!</span>`;
+    setTimeout(() => {
+      btn.innerHTML = orig;
+    }, 2000);
+    showToast("Code copied to clipboard", "success");
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(doFeedback).catch(() => {
+      // Fallback
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      doFeedback();
+    });
+  } else {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    doFeedback();
+  }
 };
 
 window.copyMessageText = function(btn, text) {
@@ -1397,6 +1495,34 @@ window.copyMessageText = function(btn, text) {
   setTimeout(() => { btn.innerHTML = orig; }, 2000);
   showToast("Answer copied to clipboard", "success");
 };
+
+/* ------------------------------------------------------------------
+   CSP-Safe Global Action Delegation
+   Replaces every inline onclick handler with data-action attributes so
+   the whole app runs under a strict Content-Security-Policy
+   (script-src 'self' — no unsafe-inline script execution allowed).
+   ------------------------------------------------------------------ */
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-action]");
+  if (!el) return;
+  const id = el.dataset.id;
+  switch (el.dataset.action) {
+    case "session-click":
+      // Inner action buttons (rename/delete) dispatch their own actions.
+      if (e.target.closest(".session-actions")) return;
+      handleSessionClick(id);
+      break;
+    case "rename-session": promptRenameSession(id); break;
+    case "delete-session": handleDeleteSession(id); break;
+    case "toggle-reasoning": toggleReasoningDrawer(el.dataset.target); break;
+    case "copy-message": copyMessageText(el, el.dataset.text); break;
+    case "copy-code": copyCodeBlock(el, el.dataset.code); break;
+    case "open-inspector": openInspectorModal(parseInt(id, 10)); break;
+    case "feedback":
+      recordMessageFeedback(parseInt(id, 10), parseInt(el.dataset.rating, 10), el);
+      break;
+  }
+});
 
 /* ============================================================
    9. Dynamic Settings Modal & Provider Management (R2)
@@ -1445,7 +1571,7 @@ function setupSettingsModal() {
       const input = $(targetId);
       if (input) {
         input.type = input.type === "password" ? "text" : "password";
-        btn.textContent = input.type === "password" ? "👁️" : "🔒";
+        btn.innerHTML = input.type === "password" ? "<svg class='icon-sym' aria-hidden='true'><use href='#i-eye'/></svg>" : "<svg class='icon-sym' aria-hidden='true'><use href='#i-lock'/></svg>";
       }
     });
   });
@@ -1459,8 +1585,8 @@ function setupSettingsModal() {
   });
 
   // Save Settings
-  saveBtn?.addEventListener("click", () => {
-    const current = SettingsManager.load();
+  saveBtn?.addEventListener("click", async () => {
+    const current = await SettingsManager.load();
 
     current.apiKeys.gemini = ($("key-gemini")?.value || "").trim();
     current.apiKeys.groq = ($("key-groq")?.value || "").trim();
@@ -1486,33 +1612,33 @@ function setupSettingsModal() {
     current.tierOverrides.reasoning = ($("override-reasoning")?.value || current.providerModels.groqReasoning || "").trim();
     current.tierOverrides.powerful = ($("override-powerful")?.value || current.providerModels.openrouterPowerful || "").trim();
 
-    SettingsManager.save(current);
+    await SettingsManager.save(current);
     showToast("Settings and API keys saved successfully", "success");
     closeModal();
     checkInitialHealth();
   });
 
   // Reset to Defaults
-  resetBtn?.addEventListener("click", () => {
+  resetBtn?.addEventListener("click", async () => {
     if (confirm("Reset all settings to server defaults?")) {
-      SettingsManager.save(SettingsManager.getDefaults());
-      loadSettingsIntoUI();
+      await SettingsManager.save(SettingsManager.getDefaults());
+      await loadSettingsIntoUI();
       showToast("Settings reset to defaults", "info");
     }
   });
 
   // Clear Keys
-  clearKeysBtn?.addEventListener("click", () => {
+  clearKeysBtn?.addEventListener("click", async () => {
     if (confirm("Clear all stored API keys and custom endpoints?")) {
-      SettingsManager.clearKeys();
-      loadSettingsIntoUI();
+      await SettingsManager.clearKeys();
+      await loadSettingsIntoUI();
       showToast("All stored keys cleared", "info");
     }
   });
 }
 
-function loadSettingsIntoUI() {
-  const s = SettingsManager.load();
+async function loadSettingsIntoUI() {
+  const s = await SettingsManager.load();
 
   // API Keys
   if ($("key-gemini")) $("key-gemini").value = s.apiKeys.gemini || "";
@@ -1549,7 +1675,7 @@ async function testProviderConnection(provider) {
   }
 
   // Gather active input values
-  const s = SettingsManager.load();
+  const s = await SettingsManager.load();
   const apiKey = ($(`key-${provider}`)?.value || s.apiKeys[provider] || "").trim();
   const baseUrl = ($("url-custom")?.value || s.customEndpoints.custom || "").trim();
 
@@ -1712,7 +1838,7 @@ function renderHistoryTable(requests) {
     const fb = r.fallback_used ? `<span style="color:var(--accent-amber)">Yes</span>` : `<span style="color:var(--text-muted)">No</span>`;
 
     return `
-      <tr onclick="openInspectorModal(${r.id})">
+      <tr data-action="open-inspector" data-id="${r.id}">
         <td>${escapeHtml(r.timestamp.split(" ")[1] || r.timestamp)}</td>
         <td title="${escapeHtml(r.query)}" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
           ${escapeHtml(r.query)}
@@ -1835,14 +1961,14 @@ window.openInspectorModal = async function(requestId) {
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <span class="drawer-badge tier">Task: ${escapeHtml(r.task_type)}</span>
           <span class="drawer-badge">Complexity: ${escapeHtml(r.complexity)} (${r.complexity_score})</span>
-          <span class="drawer-badge ${r.answer_mode === 'self' ? 'self' : 'switch'}">${r.answer_mode === 'self' ? '⚡ Self-Mode' : '🔄 Switch-Mode'}</span>
+          <span class="drawer-badge ${r.answer_mode === 'self' ? 'self' : 'switch'}">${r.answer_mode === 'self' ? `<svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Self-Mode` : `<svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Switch-Mode`}</span>
           <span class="drawer-badge">Strategy: ${escapeHtml(r.strategy || 'balanced')}</span>
         </div>
       </div>
 
       <div class="dashboard-panels-grid" style="margin-bottom:14px;">
         <div class="panel-card">
-          <h4 style="font-size:13px;color:var(--accent-blue);margin-bottom:8px;">🧠 Analyzer LLM Decision</h4>
+          <h4 style="font-size:13px;color:var(--accent-blue);margin-bottom:8px;"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg> Analyzer LLM Decision</h4>
           <p><strong>Analyzer Model:</strong> ${escapeHtml(r.analyzer_model)} (${escapeHtml(r.analyzer_provider)})</p>
           <p><strong>Analyzer Latency:</strong> ${Math.round(r.analyzer_latency_ms)} ms</p>
           <p><strong>Analyzer Tokens:</strong> ${r.analyzer_input_tokens || 0} in / ${r.analyzer_output_tokens || 0} out</p>
@@ -1851,7 +1977,7 @@ window.openInspectorModal = async function(requestId) {
         </div>
 
         <div class="panel-card">
-          <h4 style="font-size:13px;color:var(--accent-cyan);margin-bottom:8px;">🎯 Execution & Served Model</h4>
+          <h4 style="font-size:13px;color:var(--accent-cyan);margin-bottom:8px;"><svg class='icon-sym' aria-hidden='true'><use href='#i-target'/></svg> Execution & Served Model</h4>
           <p><strong>Served Model:</strong> <code>${escapeHtml(r.selected_model)}</code> (${escapeHtml(r.selected_provider)})</p>
           <p><strong>Generation Latency:</strong> ${Math.round(r.latency_ms)} ms ${r.ttft_ms ? `(TTFT: ${Math.round(r.ttft_ms)}ms)` : ''}</p>
           <p><strong>Model Tokens:</strong> ${r.input_tokens || 0} in / ${r.output_tokens || 0} out</p>
@@ -1861,7 +1987,7 @@ window.openInspectorModal = async function(requestId) {
       </div>
 
       <div class="panel-card" style="margin-bottom:14px;">
-        <h4 style="font-size:13px;color:var(--accent-green);margin-bottom:8px;">💰 Optimization Summary</h4>
+        <h4 style="font-size:13px;color:var(--accent-green);margin-bottom:8px;"><svg class='icon-sym' aria-hidden='true'><use href='#i-dollar'/></svg> Optimization Summary</h4>
         <div class="drawer-telemetry-grid">
           <div class="t-box">
             <span class="t-label">Total Latency</span>

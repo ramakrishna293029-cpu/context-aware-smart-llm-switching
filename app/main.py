@@ -34,6 +34,7 @@ STORE TELEMETRY (Tokens, Latencies, Real Cost vs Baseline, Savings)
 RETURN TRANSPARENT RESPONSE & SSE STREAMING
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -423,7 +424,13 @@ async def analyze(req: AnalyzeRequest, request: Request):
     analyzer_lat = (time.perf_counter() - t0) * 1000.0
     analyzer_cost = _compute_cost(decision.analyzer_model, decision.analyzer_result)
 
-    routing_res = default_router.resolve(decision, strategy=strategy, registry=reg)
+    routing_res = default_router.resolve(
+        decision,
+        strategy=strategy,
+        registry=reg,
+        latency_profile=tracker.get_latency_profile(),
+        feedback_modifiers=tracker.get_feedback_modifiers(),
+    )
 
     return AnalyzeResponse(
         analyzer=decision.to_analyzer_info(cost_usd=analyzer_cost),
@@ -455,7 +462,13 @@ async def chat(req: ChatRequest, request: Request):
     analyzer_cost = _compute_cost(decision.analyzer_model, decision.analyzer_result) or 0.0
 
     # Step 2: Route & Resolve
-    routing_res = default_router.resolve(decision, strategy=strategy, registry=reg)
+    routing_res = default_router.resolve(
+        decision,
+        strategy=strategy,
+        registry=reg,
+        latency_profile=tracker.get_latency_profile(),
+        feedback_modifiers=tracker.get_feedback_modifiers(),
+    )
     primary_model = routing_res.primary_model
     fallback_chain = routing_res.fallback_chain
 
@@ -469,9 +482,12 @@ async def chat(req: ChatRequest, request: Request):
         primary_model = filtered_chain[0]
 
     # Step 3: Self-Mode vs Switch-Mode Execution
-    if decision.answer_mode == "self":
+    # Guard: self-mode requires a real analyzer-produced answer. If absent
+    # (canned text is prohibited), fall through to switch-mode so a real
+    # provider generates the response.
+    if decision.answer_mode == "self" and decision.answer:
         # SELF-MODE: Direct base answer without extra downstream call!
-        response_text = decision.answer or "Hello! How can I help you today?"
+        response_text = decision.answer
         served_model = decision.analyzer_model
         fallback_used = False
         fallback_reason = None
@@ -485,9 +501,12 @@ async def chat(req: ChatRequest, request: Request):
         tot_tok = (in_tok or 0) + (out_tok or 0)
         model_cost = analyzer_cost
         total_cost = analyzer_cost
-        baseline_cost = _compute_baseline_cost(reg, (in_tok, out_tok)) or (analyzer_cost * 12.0)
-        savings_usd = max(0.0, baseline_cost - total_cost)
-        savings_pct = (savings_usd / baseline_cost * 100.0) if baseline_cost > 0 else 0.0
+        # Honest baseline: genuine strongest-model pricing at the request's
+        # actual token usage — or None when no real provider is configured.
+        # Never fabricate savings with invented multipliers.
+        baseline_cost = _compute_baseline_cost(reg, (in_tok, out_tok))
+        savings_usd = max(0.0, baseline_cost - total_cost) if baseline_cost else 0.0
+        savings_pct = (savings_usd / baseline_cost * 100.0) if baseline_cost else 0.0
         candidates_list = routing_res.to_candidate_infos()
 
         req_id = tracker.record_request(
@@ -550,7 +569,7 @@ async def chat(req: ChatRequest, request: Request):
             estimated_cost_usd=round(analyzer_cost, 6),
             analyzer_cost_usd=round(analyzer_cost, 6),
             total_cost_usd=round(total_cost, 6),
-            baseline_cost_usd=round(baseline_cost, 6),
+            baseline_cost_usd=round(baseline_cost, 6) if baseline_cost is not None else None,
             savings_usd=round(savings_usd, 6),
             savings_percent=round(savings_pct, 1),
             latency_ms=round(gen_lat, 1),
@@ -710,8 +729,9 @@ async def chat_stream(req: ChatRequest, request: Request):
         }) + "\n\n"
 
         # Step 2: Self-Mode vs Switch-Mode
-        if decision.answer_mode == "self":
-            ans_text = decision.answer or "Hello! How can I help you today?"
+        # Guard: self-mode must carry a real analyzer answer (no canned text).
+        if decision.answer_mode == "self" and decision.answer:
+            ans_text = decision.answer
             words = ans_text.split(" ")
             for i in range(0, len(words), 3):
                 chunk = " ".join(words[i:i + 3])
@@ -725,9 +745,9 @@ async def chat_stream(req: ChatRequest, request: Request):
             in_tok = decision.analyzer_result.input_tokens
             out_tok = decision.analyzer_result.output_tokens
             tot_tok = (in_tok or 0) + (out_tok or 0)
-            baseline_cost = _compute_baseline_cost(reg, (in_tok, out_tok)) or (analyzer_cost * 12.0)
-            savings_usd = max(0.0, baseline_cost - analyzer_cost)
-            savings_pct = (savings_usd / baseline_cost * 100.0) if baseline_cost > 0 else 0.0
+            baseline_cost = _compute_baseline_cost(reg, (in_tok, out_tok))
+            savings_usd = max(0.0, baseline_cost - analyzer_cost) if baseline_cost else 0.0
+            savings_pct = (savings_usd / baseline_cost * 100.0) if baseline_cost else 0.0
 
             req_id = tracker.record_request(
                 query=req.query,
@@ -787,7 +807,7 @@ async def chat_stream(req: ChatRequest, request: Request):
                 "estimated_cost_usd": round(analyzer_cost, 6),
                 "analyzer_cost_usd": round(analyzer_cost, 6),
                 "total_cost_usd": round(analyzer_cost, 6),
-                "baseline_cost_usd": round(baseline_cost, 6),
+                "baseline_cost_usd": round(baseline_cost, 6) if baseline_cost is not None else None,
                 "savings_usd": round(savings_usd, 6),
                 "savings_percent": round(savings_pct, 1),
                 "latency_ms": round(gen_lat, 1),
@@ -800,7 +820,13 @@ async def chat_stream(req: ChatRequest, request: Request):
             return
 
         # SWITCH-MODE: Routing Event + Target Streaming
-        routing_res = default_router.resolve(decision, strategy=strategy, registry=reg)
+        routing_res = default_router.resolve(
+            decision,
+            strategy=strategy,
+            registry=reg,
+            latency_profile=tracker.get_latency_profile(),
+            feedback_modifiers=tracker.get_feedback_modifiers(),
+        )
         target_model = routing_res.primary_model
         fallback_chain = routing_res.fallback_chain
 
@@ -881,9 +907,9 @@ async def chat_stream(req: ChatRequest, request: Request):
 
         model_cost = _compute_cost(served_model, result) if result else 0.0
         total_cost = ((model_cost or 0.0) + analyzer_cost)
-        baseline_cost = _compute_baseline_cost(reg, (in_tok, out_tok)) or (total_cost * 8.0)
-        savings_usd = max(0.0, baseline_cost - total_cost)
-        savings_pct = (savings_usd / baseline_cost * 100.0) if baseline_cost > 0 else 0.0
+        baseline_cost = _compute_baseline_cost(reg, (in_tok, out_tok))
+        savings_usd = max(0.0, baseline_cost - total_cost) if baseline_cost else 0.0
+        savings_pct = (savings_usd / baseline_cost * 100.0) if baseline_cost else 0.0
 
         req_id = tracker.record_request(
             query=req.query,
@@ -944,7 +970,7 @@ async def chat_stream(req: ChatRequest, request: Request):
             "estimated_cost_usd": round(model_cost, 6) if model_cost else None,
             "analyzer_cost_usd": round(analyzer_cost, 6),
             "total_cost_usd": round(total_cost, 6),
-            "baseline_cost_usd": round(baseline_cost, 6),
+            "baseline_cost_usd": round(baseline_cost, 6) if baseline_cost is not None else None,
             "savings_usd": round(savings_usd, 6),
             "savings_percent": round(savings_pct, 1),
             "latency_ms": round(gen_lat, 1),
@@ -1013,106 +1039,164 @@ async def benchmark_matrix(request: Request):
     }
 
 
+BENCHMARK_DEFAULT_QUERIES = [
+    "What is an HTTP request header?",
+    "Write a Python function to implement binary search with recursion.",
+    "Design a high-throughput, fault-tolerant distributed message broker like Apache Kafka.",
+    "Explain the time complexity differences between QuickSort and MergeSort in 2 sentences.",
+    "Write a SQL query with window functions to calculate 7-day rolling revenue per customer.",
+]
+BENCHMARK_MAX_QUERIES = 8  # guard: each query triggers real billable provider calls
+
+
 @app.post("/api/benchmark/run", response_model=BenchmarkResult)
 async def run_benchmark(req: BenchmarkRunRequest, request: Request):
-    """Research Experiment (Section 27): Compares Baseline 1, Baseline 2, and Smart Router across benchmark queries."""
-    creds, reg = _get_request_context(request)
-    sample_queries = req.queries or [
-        "What is an HTTP request header?",
-        "Write a Python function to implement binary search with recursion.",
-        "Design a high-throughput, fault-tolerant distributed message broker like Apache Kafka.",
-        "Explain the time complexity differences between QuickSort and MergeSort in 2 sentences.",
-        "Write a SQL query with window functions to calculate 7-day rolling revenue per customer.",
-    ]
+    """Real 3-Way Comparative Experiment (Section 27).
 
-    items = []
+    Baseline 1 (always the strongest model), Baseline 2 (static tier heuristic),
+    and the Smart Router (analyzer + multi-factor routing) are each executed as
+    REAL provider calls — concurrently via asyncio.gather — with
+    provider-reported token usage and measured wall-clock latency. Costs come
+    from actual usage, never simulated formulas. In demo mode (no credentials)
+    the run executes against the labeled mock adapter and is reported with
+    execution_mode="demo".
+    """
+    creds, reg = _get_request_context(request)
+    _check_rate_limit(request)
+    sample_queries = (req.queries or BENCHMARK_DEFAULT_QUERIES)[:BENCHMARK_MAX_QUERIES]
+    if not sample_queries:
+        raise HTTPException(status_code=422, detail="At least one benchmark query is required.")
+
+    available = reg.available()
     powerful_model = reg.strongest() or reg.get_by_tier("reasoning")
     fast_model = reg.get_by_tier("fast")
-    available = reg.available()
+    coding_model = reg.get_by_tier("coding")
+    if not powerful_model or not (fast_model or coding_model):
+        raise HTTPException(
+            status_code=503,
+            detail="Benchmark requires a powerful baseline and a fast/coding model in the registry.",
+        )
 
-    baseline1_total_cost = 0.0
-    baseline1_lat_sum = 0.0
-    baseline2_total_cost = 0.0
-    baseline2_lat_sum = 0.0
-    smart_total_cost = 0.0
-    smart_lat_sum = 0.0
+    execution_mode = "real" if reg.has_real() else "demo"
+
+    async def _run_baseline(model, query: str):
+        """Real single-model completion. Returns (model_name, cost, latency)."""
+        adapter = adapter_factory.get_for_model(model)
+        messages = build_messages(history=[], query=query, max_tokens=2048, tier=model.tier)
+        res = await adapter.generate(model, messages)
+        return model.name, _compute_cost(model, res), res.latency_ms
+
+    async def _run_smart(query: str):
+        """Real Smart-Router path: analyzer (real call) + routed generation."""
+        decision = await run_analyzer(query, [], available, registry_instance=reg)
+        if decision.answer_mode == "self" and decision.answer:
+            # Self-mode: the analyzer call IS the final answer (1 call).
+            return (
+                decision.analyzer_model.name,
+                _compute_cost(decision.analyzer_model, decision.analyzer_result) or 0.0,
+                decision.analyzer_result.latency_ms,
+                decision,
+            )
+        routing_res = default_router.resolve(
+            decision,
+            registry=reg,
+            latency_profile=tracker.get_latency_profile(),
+            feedback_modifiers=tracker.get_feedback_modifiers(),
+        )
+        smart_model = routing_res.primary_model
+        adapter = adapter_factory.get_for_model(smart_model)
+        messages = build_messages(history=[], query=query, max_tokens=2048, tier=smart_model.tier)
+        gen = await adapter.generate(smart_model, messages)
+        total_cost = (_compute_cost(decision.analyzer_model, decision.analyzer_result) or 0.0) + (_compute_cost(smart_model, gen) or 0.0)
+        total_lat = decision.analyzer_result.latency_ms + gen.latency_ms
+        return smart_model.name, total_cost, total_lat, decision
+
+    items = []
+    b1_total = b1_lat_sum = b2_total = b2_lat_sum = smart_total = smart_lat_sum = 0.0
 
     for query in sample_queries:
-        decision = await run_analyzer(query, [], available, registry_instance=reg)
-        routing_res = default_router.resolve(decision, registry=reg)
-        smart_model = routing_res.primary_model
-
-        q_len = max(1, len(query) // 4)
-        ans_len = 200 if decision.complexity == "low" else 600
-
-        # Baseline 1: Always Powerful Model
-        b1_in_cost = (q_len * powerful_model.input_price_per_mtok) / 1_000_000
-        b1_out_cost = (ans_len * powerful_model.output_price_per_mtok) / 1_000_000
-        b1_cost = max(0.0001, b1_in_cost + b1_out_cost)
-        b1_lat = powerful_model.expected_latency_ms
-
-        # Baseline 2: Static Routing (Fast unless coding keyword)
+        # Baseline 2 static heuristic: coding keywords -> coding tier. This
+        # simple keyword router IS Baseline 2 by definition — now measured
+        # with real calls, not simulated.
         is_code = any(k in query.lower() for k in ("python", "function", "sql", "code", "algorithm"))
-        b2_model = reg.get_by_tier("coding") if is_code else fast_model
-        b2_cost = max(0.00005, (q_len * b2_model.input_price_per_mtok + ans_len * b2_model.output_price_per_mtok) / 1_000_000)
-        b2_lat = b2_model.expected_latency_ms
+        b2_model = (coding_model if is_code else fast_model) or powerful_model
 
-        # Smart Router: Self-Mode vs Switch-Mode
-        if decision.answer_mode == "self":
-            smart_cost = (q_len * decision.analyzer_model.input_price_per_mtok + 50 * decision.analyzer_model.output_price_per_mtok) / 1_000_000
-            smart_lat = decision.analyzer_model.expected_latency_ms
-            smart_m_name = decision.analyzer_model.name
+        # Real concurrent execution of all three paths (asyncio.gather).
+        b1_r, b2_r, smart_r = await asyncio.gather(
+            _run_baseline(powerful_model, query),
+            _run_baseline(b2_model, query),
+            _run_smart(query),
+            return_exceptions=True,
+        )
+
+        errors = []
+        if isinstance(b1_r, Exception):
+            errors.append(f"baseline1: {b1_r}")
+            b1_m, b1_cost, b1_lat = powerful_model.name, 0.0, 0.0
         else:
-            analyzer_c = (decision.analyzer_result.input_tokens * decision.analyzer_model.input_price_per_mtok + decision.analyzer_result.output_tokens * decision.analyzer_model.output_price_per_mtok) / 1_000_000
-            smart_m_cost = (q_len * smart_model.input_price_per_mtok + ans_len * smart_model.output_price_per_mtok) / 1_000_000
-            smart_cost = analyzer_c + smart_m_cost
-            smart_lat = decision.analyzer_model.expected_latency_ms + smart_model.expected_latency_ms
-            smart_m_name = smart_model.name
+            b1_m, b1_cost, b1_lat = b1_r
+
+        if isinstance(b2_r, Exception):
+            errors.append(f"baseline2: {b2_r}")
+            b2_m, b2_cost, b2_lat = b2_model.name, 0.0, 0.0
+        else:
+            b2_m, b2_cost, b2_lat = b2_r
+
+        if isinstance(smart_r, Exception):
+            errors.append(f"smart: {smart_r}")
+            smart_name, smart_cost, smart_lat, decision = "unavailable", 0.0, 0.0, None
+        else:
+            smart_name, smart_cost, smart_lat, decision = smart_r
+
+        task_type = decision.task_type if decision else "unknown"
+        complexity = decision.complexity if decision else "unknown"
 
         savings_pct = max(0.0, ((b1_cost - smart_cost) / b1_cost * 100.0)) if b1_cost > 0 else 0.0
         speedup_pct = max(0.0, ((b1_lat - smart_lat) / b1_lat * 100.0)) if b1_lat > smart_lat else 0.0
 
-        baseline1_total_cost += b1_cost
-        baseline1_lat_sum += b1_lat
-        baseline2_total_cost += b2_cost
-        baseline2_lat_sum += b2_lat
-        smart_total_cost += smart_cost
+        b1_total += b1_cost
+        b1_lat_sum += b1_lat
+        b2_total += b2_cost
+        b2_lat_sum += b2_lat
+        smart_total += smart_cost
         smart_lat_sum += smart_lat
 
         items.append(BenchmarkComparisonItem(
             query=query,
-            task_type=decision.task_type,
-            complexity=decision.complexity,
-            baseline1_model=powerful_model.name,
+            task_type=task_type,
+            complexity=complexity,
+            baseline1_model=b1_m,
             baseline1_cost_usd=round(b1_cost, 6),
-            baseline1_latency_ms=b1_lat,
-            baseline2_model=b2_model.name,
+            baseline1_latency_ms=round(b1_lat, 1),
+            baseline2_model=b2_m,
             baseline2_cost_usd=round(b2_cost, 6),
-            baseline2_latency_ms=b2_lat,
-            smart_model=smart_m_name,
+            baseline2_latency_ms=round(b2_lat, 1),
+            smart_model=smart_name,
             smart_cost_usd=round(smart_cost, 6),
-            smart_latency_ms=smart_lat,
+            smart_latency_ms=round(smart_lat, 1),
             smart_savings_percent=round(savings_pct, 1),
             smart_speedup_percent=round(speedup_pct, 1),
+            error="; ".join(errors) if errors else None,
         ))
 
-    n = len(sample_queries) or 1
-    saved_cost = max(0.0, baseline1_total_cost - smart_total_cost)
-    overall_savings_pct = (saved_cost / baseline1_total_cost * 100.0) if baseline1_total_cost > 0 else 0.0
-    overall_speedup_pct = ((baseline1_lat_sum - smart_lat_sum) / baseline1_lat_sum * 100.0) if baseline1_lat_sum > smart_lat_sum else 0.0
+    n = len(items) or 1
+    saved_cost = max(0.0, b1_total - smart_total)
+    overall_savings_pct = (saved_cost / b1_total * 100.0) if b1_total > 0 else 0.0
+    overall_speedup_pct = ((b1_lat_sum - smart_lat_sum) / b1_lat_sum * 100.0) if b1_lat_sum > smart_lat_sum else 0.0
 
     res = BenchmarkResult(
         total_queries=n,
-        baseline1_total_cost_usd=round(baseline1_total_cost, 6),
-        baseline1_avg_latency_ms=round(baseline1_lat_sum / n, 1),
-        baseline2_total_cost_usd=round(baseline2_total_cost, 6),
-        baseline2_avg_latency_ms=round(baseline2_lat_sum / n, 1),
-        smart_total_cost_usd=round(smart_total_cost, 6),
+        baseline1_total_cost_usd=round(b1_total, 6),
+        baseline1_avg_latency_ms=round(b1_lat_sum / n, 1),
+        baseline2_total_cost_usd=round(b2_total, 6),
+        baseline2_avg_latency_ms=round(b2_lat_sum / n, 1),
+        smart_total_cost_usd=round(smart_total, 6),
         smart_avg_latency_ms=round(smart_lat_sum / n, 1),
         total_cost_saved_usd=round(saved_cost, 6),
         overall_cost_savings_percent=round(overall_savings_pct, 1),
         overall_speedup_percent=round(overall_speedup_pct, 1),
         items=items,
+        execution_mode=execution_mode,
     )
 
     tracker.record_benchmark(res.model_dump())

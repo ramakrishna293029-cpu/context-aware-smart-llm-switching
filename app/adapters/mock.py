@@ -78,41 +78,42 @@ TASK_ANSWERS = {
 }
 
 ANALYZER_DECISIONS = {
-    # Simple queries -> self
+    # Simple queries -> self (demo answers are transparently labeled
+    # echoes of the user's query — never presented as genuine output)
     "hi": {
         "answer_mode": "self", "task_type": "factual", "complexity": "low", "complexity_score": 0.1,
         "reasoning_required": False, "coding_required": False, "context_required": False,
         "target_tier": "fast", "target_provider": "gemini", "target_model": None,
-        "reason": "Simple greeting answered directly by base model in self-mode.",
-        "answer": "Hello! How can I help you today?"
+        "reason": "Simple greeting answered directly by demo analyzer in self-mode.",
+        "answer": "[demo-mode] echo: hi"
     },
     "hello": {
         "answer_mode": "self", "task_type": "factual", "complexity": "low", "complexity_score": 0.1,
         "reasoning_required": False, "coding_required": False, "context_required": False,
         "target_tier": "fast", "target_provider": "gemini", "target_model": None,
-        "reason": "Simple greeting answered directly by base model in self-mode.",
-        "answer": "Hello! How can I help you today?"
+        "reason": "Simple greeting answered directly by demo analyzer in self-mode.",
+        "answer": "[demo-mode] echo: hello"
     },
     "hey": {
         "answer_mode": "self", "task_type": "factual", "complexity": "low", "complexity_score": 0.1,
         "reasoning_required": False, "coding_required": False, "context_required": False,
         "target_tier": "fast", "target_provider": "gemini", "target_model": None,
-        "reason": "Simple greeting answered directly by base model.",
-        "answer": "Hey there! What can I help you with today?"
+        "reason": "Simple greeting answered directly by demo analyzer in self-mode.",
+        "answer": "[demo-mode] echo: hey"
     },
     "what is 5+5": {
         "answer_mode": "self", "task_type": "factual", "complexity": "low", "complexity_score": 0.1,
         "reasoning_required": False, "coding_required": False, "context_required": False,
         "target_tier": "fast", "target_provider": "gemini", "target_model": None,
-        "reason": "Simple arithmetic question answered directly by base model.",
-        "answer": "5 + 5 = 10"
+        "reason": "Simple arithmetic question answered directly by demo analyzer.",
+        "answer": "[demo-mode] echo: what is 5+5"
     },
     "what is html": {
         "answer_mode": "self", "task_type": "factual", "complexity": "low", "complexity_score": 0.2,
         "reasoning_required": False, "coding_required": False, "context_required": False,
         "target_tier": "fast", "target_provider": "gemini", "target_model": None,
-        "reason": "Simple factual question answered directly by base model.",
-        "answer": "HTML (HyperText Markup Language) is the standard markup language used to structure web pages and their content."
+        "reason": "Simple factual question answered directly by demo analyzer.",
+        "answer": "[demo-mode] echo: what is html"
     },
     # Complex queries -> switch
     "debug": {
@@ -223,7 +224,9 @@ class MockAdapter(LLMAdapter):
                 "answer": None,
             }
 
-        # Short query (< 50 chars) without complex keywords -> self mode
+        # Short query (< 50 chars) without complex keywords -> self mode.
+        # Demo-mode answer transparently echoes the query — clearly labeled,
+        # never passed off as genuine model output.
         if len(query) < 50:
             return {
                 "answer_mode": "self",
@@ -236,8 +239,8 @@ class MockAdapter(LLMAdapter):
                 "target_tier": "fast",
                 "target_provider": "gemini",
                 "target_model": None,
-                "reason": "Simple query answered directly by base model in self-mode.",
-                "answer": "This is a direct answer from the Base Analyzer model.",
+                "reason": "Simple query answered directly by demo analyzer in self-mode.",
+                "answer": f"[demo-mode] echo: {query.strip()[:40]}",
             }
 
         return {

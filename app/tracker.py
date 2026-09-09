@@ -67,6 +67,21 @@ CREATE TABLE IF NOT EXISTS benchmarks (
     speedup_percent REAL NOT NULL,
     benchmark_json TEXT NOT NULL
 );
+
+-- Incremental daily rollup: avoids full-table SUM scans on every budget check.
+CREATE TABLE IF NOT EXISTS daily_spend (
+    day TEXT PRIMARY KEY,
+    requests INTEGER NOT NULL DEFAULT 0,
+    spend_usd REAL NOT NULL DEFAULT 0.0
+);
+
+-- Persisted EWMA latency profile across restarts.
+CREATE TABLE IF NOT EXISTS model_latency_profiles (
+    model_id TEXT PRIMARY KEY,
+    ewma_latency_ms REAL NOT NULL,
+    sample_count INTEGER NOT NULL,
+    last_updated REAL NOT NULL
+);
 """
 
 
@@ -82,10 +97,26 @@ class Tracker:
     def __init__(self, db_path: Path):
         self._db_path = db_path
         self._lock = threading.Lock()
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._memory_conn: Optional[sqlite3.Connection] = None
+        # In-memory dashboard cache (5s TTL) so frontend polling never table-scans.
+        self._stats_cache: Optional[dict] = None
+        self._stats_cache_at: float = 0.0
+        self._stats_cache_ttl: float = 5.0
+        # EWMA latency profile: model_id -> (ewma_latency_ms, sample_count).
+        # Feeds measured reality back into the router's latency priors.
+        self._ewma: Dict[str, tuple] = {}
+        self._ewma_alpha: float = 0.3
+        if str(db_path) != ":memory:":
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
+        if str(self._db_path) == ":memory:":
+            # Single shared connection: :memory: DBs vanish between connections.
+            if self._memory_conn is None:
+                self._memory_conn = sqlite3.connect(":memory:", check_same_thread=False)
+                self._memory_conn.row_factory = sqlite3.Row
+            return self._memory_conn
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
@@ -141,6 +172,46 @@ class Tracker:
                     benchmark_json TEXT NOT NULL
                 )
                 """)
+
+            # Daily rollup table: seed today's row from existing records so the
+            # incremental counter stays consistent with historical data.
+            ds_check = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='daily_spend'").fetchone()
+            if not ds_check:
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS daily_spend (
+                    day TEXT PRIMARY KEY,
+                    requests INTEGER NOT NULL DEFAULT 0,
+                    spend_usd REAL NOT NULL DEFAULT 0.0
+                )
+                """)
+                today = time.strftime("%Y-%m-%d", time.localtime(time.time()))
+                day_start = time.time() - (time.time() % 86400)
+                seeded = conn.execute(
+                    "SELECT COUNT(*) AS n, COALESCE(SUM(COALESCE(estimated_cost,0) + COALESCE(analyzer_cost,0)), 0) AS s "
+                    "FROM requests WHERE timestamp >= ? AND success=1",
+                    (day_start,),
+                ).fetchone()
+                if seeded["n"]:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO daily_spend (day, requests, spend_usd) VALUES (?, ?, ?)",
+                        (today, seeded["n"], seeded["s"]),
+                    )
+
+            # Model latency profiles table
+            mlp_check = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='model_latency_profiles'").fetchone()
+            if not mlp_check:
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS model_latency_profiles (
+                    model_id TEXT PRIMARY KEY,
+                    ewma_latency_ms REAL NOT NULL,
+                    sample_count INTEGER NOT NULL,
+                    last_updated REAL NOT NULL
+                )
+                """)
+            else:
+                rows = conn.execute("SELECT model_id, ewma_latency_ms, sample_count FROM model_latency_profiles").fetchall()
+                for r in rows:
+                    self._ewma[r["model_id"]] = (r["ewma_latency_ms"], r["sample_count"])
             conn.commit()
 
     def record_request(
@@ -196,6 +267,16 @@ class Tracker:
             if savings_percent is None:
                 savings_percent = (savings_usd / baseline_cost * 100.0)
 
+        # EWMA latency feedback: blend measured total latency into the per-model
+        # rolling average that the router uses instead of static priors.
+        measured_ms = total_latency_ms if total_latency_ms else latency_ms
+        if success and selected_model and measured_ms:
+            prev = self._ewma.get(selected_model)
+            if prev and prev[1] > 0:
+                self._ewma[selected_model] = (prev[0] + self._ewma_alpha * (measured_ms - prev[0]), prev[1] + 1)
+            else:
+                self._ewma[selected_model] = (measured_ms, 1)
+
         with self._lock, self._connect() as conn:
             cur = conn.execute(
                 """
@@ -224,6 +305,34 @@ class Tracker:
                 ),
             )
             conn.commit()
+            # Incremental daily rollup: one small row update instead of a
+            # full-table SUM on every budget check.
+            day_key = time.strftime("%Y-%m-%d", time.localtime(time.time()))
+            conn.execute(
+                """
+                INSERT INTO daily_spend (day, requests, spend_usd)
+                VALUES (?, 1, ?)
+                ON CONFLICT(day) DO UPDATE SET
+                    requests = requests + 1,
+                    spend_usd = spend_usd + excluded.spend_usd
+                """,
+                (day_key, (eff_estimated_cost or 0.0) + (eff_analyzer_cost or 0.0)),
+            )
+            # Persist updated EWMA profile to SQLite
+            if selected_model in self._ewma:
+                conn.execute(
+                    """
+                    INSERT INTO model_latency_profiles (model_id, ewma_latency_ms, sample_count, last_updated)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(model_id) DO UPDATE SET
+                        ewma_latency_ms = excluded.ewma_latency_ms,
+                        sample_count = excluded.sample_count,
+                        last_updated = excluded.last_updated
+                    """,
+                    (selected_model, self._ewma[selected_model][0], self._ewma[selected_model][1], time.time()),
+                )
+            conn.commit()
+            self._invalidate_stats_cache()
             return cur.lastrowid
 
     def record_feedback(self, request_id: int, rating: int) -> bool:
@@ -233,7 +342,48 @@ class Tracker:
                 (rating, request_id),
             )
             conn.commit()
-            return cur.rowcount > 0
+        self._invalidate_stats_cache()
+        return cur.rowcount > 0
+
+    def get_feedback_modifiers(self) -> Dict[str, float]:
+        """Calculates dynamic reliability multipliers per model from user thumbs up/down ratings.
+        Returns dict of model_id -> multiplier (e.g. 0.85 to 1.15).
+        """
+        try:
+            with self._lock, self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT selected_model,
+                           SUM(CASE WHEN feedback = 1 THEN 1 ELSE 0 END) as positive,
+                           SUM(CASE WHEN feedback = -1 THEN 1 ELSE 0 END) as negative
+                    FROM requests
+                    WHERE feedback IS NOT NULL AND feedback != 0
+                    GROUP BY selected_model
+                    """
+                ).fetchall()
+            modifiers = {}
+            for r in rows:
+                m_id = r["selected_model"]
+                pos = r["positive"] or 0
+                neg = r["negative"] or 0
+                total = pos + neg
+                if total >= 2:
+                    ratio = (pos - neg) / total
+                    modifiers[m_id] = round(1.0 + 0.15 * ratio, 3)
+            return modifiers
+        except Exception:
+            return {}
+
+    def get_latency_profile(self) -> Dict[str, float]:
+        """EWMA of measured total latency (ms) per model, from real requests.
+
+        Used by the router to replace static KNOWN_MODELS latency priors once
+        real traffic has been observed."""
+        return {model_id: round(v[0], 1) for model_id, v in self._ewma.items() if v[1] > 0}
+
+    def _invalidate_stats_cache(self) -> None:
+        self._stats_cache = None
+        self._stats_cache_at = 0.0
 
     def recent_requests(self, limit: int = 20) -> List[HistoryRow]:
         with self._lock, self._connect() as conn:
@@ -271,17 +421,34 @@ class Tracker:
 
     def budget_status(self) -> dict:
         now = time.time()
-        day_start = now - (now % 86400)
-        month_start = now - (now % (86400 * 30))
+        month_ago = time.strftime("%Y-%m-%d", time.localtime(now - (86400 * 30)))
+        today = time.strftime("%Y-%m-%d", time.localtime(now))
         with self._lock, self._connect() as conn:
-            day_spend = conn.execute(
-                "SELECT COALESCE(SUM(COALESCE(estimated_cost,0) + COALESCE(analyzer_cost,0)), 0) AS s FROM requests WHERE timestamp >= ? AND success=1",
-                (day_start,),
-            ).fetchone()["s"]
-            month_spend = conn.execute(
-                "SELECT COALESCE(SUM(COALESCE(estimated_cost,0) + COALESCE(analyzer_cost,0)), 0) AS s FROM requests WHERE timestamp >= ? AND success=1",
-                (month_start,),
-            ).fetchone()["s"]
+            # Fast path: read the small incremental rollup rows instead of
+            # table-scanning `requests` on every poll/request.
+            day_row = conn.execute(
+                "SELECT requests, spend_usd FROM daily_spend WHERE day = ?", (today,)
+            ).fetchone()
+            month_row = conn.execute(
+                "SELECT COALESCE(SUM(requests), 0) AS n, COALESCE(SUM(spend_usd), 0) AS s FROM daily_spend WHERE day >= ?",
+                (month_ago,),
+            ).fetchone()
+            rollup_has_data = month_row["n"] > 0
+            if rollup_has_data:
+                day_spend = day_row["spend_usd"] if day_row else 0.0
+                month_spend = month_row["s"]
+            else:
+                # Legacy / empty-rollup fallback: full scan (also seeds rollup).
+                day_start = now - (now % 86400)
+                month_start = now - (now % (86400 * 30))
+                day_spend = conn.execute(
+                    "SELECT COALESCE(SUM(COALESCE(estimated_cost,0) + COALESCE(analyzer_cost,0)), 0) AS s FROM requests WHERE timestamp >= ? AND success=1",
+                    (day_start,),
+                ).fetchone()["s"]
+                month_spend = conn.execute(
+                    "SELECT COALESCE(SUM(COALESCE(estimated_cost,0) + COALESCE(analyzer_cost,0)), 0) AS s FROM requests WHERE timestamp >= ? AND success=1",
+                    (month_start,),
+                ).fetchone()["s"]
         return {
             "day_spend": day_spend,
             "month_spend": month_spend,
@@ -325,7 +492,7 @@ class Tracker:
             out.append(d)
         return out
 
-    def dashboard_stats(self) -> dict:
+    def _dashboard_stats_uncached(self) -> dict:
         with self._lock, self._connect() as conn:
             totals = conn.execute(
                 """
@@ -453,6 +620,17 @@ class Tracker:
             "recent_requests": [_row_to_history(r) for r in recent],
             "budget": self.budget_status(),
         }
+
+    def dashboard_stats(self) -> dict:
+        """Cached dashboard stats: 5s TTL. Frontend polls /api/stats every 6s,
+        so without this cache every poll re-ran ~10 table-scanning GROUP BYs."""
+        now = time.monotonic()
+        if self._stats_cache is not None and (now - self._stats_cache_at) < self._stats_cache_ttl:
+            return self._stats_cache
+        result = self._dashboard_stats_uncached()
+        self._stats_cache = result
+        self._stats_cache_at = now
+        return result
 
     def get_stats(self) -> dict:
         """Alias for dashboard_stats."""

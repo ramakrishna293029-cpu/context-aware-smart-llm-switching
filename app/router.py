@@ -89,8 +89,13 @@ class RoutingResult:
     def candidates(self) -> List[dict]:
         """Returns candidate list formatted as raw dictionary rows."""
         rows = []
+        # Stated token assumption for candidate cost previews: 1K in / 0.5K out.
+        PREVIEW_IN_TOKENS, PREVIEW_OUT_TOKENS = 1000, 500
         for s in sorted(self.scores.values(), key=lambda s: -s.total):
-            expected_cost = s.model.price_per_1k * 1.5  # ~1.5K tokens
+            expected_cost = (
+                PREVIEW_IN_TOKENS * s.model.input_price_per_mtok
+                + PREVIEW_OUT_TOKENS * s.model.output_price_per_mtok
+            ) / 1_000_000
             rows.append({
                 "model_id": s.model.model_id,
                 "name": s.model.name,
@@ -149,8 +154,13 @@ class SmartRouter:
         strategy: str = "balanced",
         registry: Optional[ModelRegistry] = None,
         available: Optional[List[ModelSpec]] = None,
+        latency_profile: Optional[Dict[str, float]] = None,
+        feedback_modifiers: Optional[Dict[str, float]] = None,
     ) -> RoutingResult:
-        """Evaluates all candidate execution models against analyzer decision and strategy."""
+        """Evaluates all candidate execution models against analyzer decision and strategy.
+
+        `latency_profile` maps endpoint_model -> EWMA of measured latency (ms).
+        `feedback_modifiers` maps model_id -> user approval multiplier (0.85-1.15)."""
         reg = registry or default_registry
         if available is not None:
             candidate_pool = [m for m in available if m.tier != "analyzer" and m.available]
@@ -161,8 +171,14 @@ class SmartRouter:
             raise RuntimeError("No execution models available in registry for routing.")
 
         weights = self.effective_weights(strategy)
+        profile = latency_profile or {}
+
+        def effective_latency(m: ModelSpec) -> float:
+            measured = profile.get(m.endpoint_model)
+            return measured if (measured and measured > 0) else m.expected_latency_ms
+
         min_price = min(m.price_per_1k for m in candidate_pool)
-        min_latency = min(m.expected_latency_ms for m in candidate_pool)
+        min_latency = min(effective_latency(m) for m in candidate_pool)
 
         scores: Dict[str, ModelScore] = {}
         for m in candidate_pool:
@@ -183,12 +199,17 @@ class SmartRouter:
             # 5. Cost efficiency
             cost_fit = (min_price / m.price_per_1k) if m.price_per_1k > 0 else 1.0
 
-            # 6. Latency efficiency
-            lat_fit = (min_latency / m.expected_latency_ms) if m.expected_latency_ms > 0 else 1.0
+            # 6. Latency efficiency (measured EWMA when available, static prior otherwise)
+            eff_lat = effective_latency(m)
+            lat_fit = (min_latency / eff_lat) if eff_lat > 0 else 1.0
 
             # Bonus for matching target provider and tier
             provider_bonus = 0.20 if m.provider.lower() == decision.target_provider.lower() else 0.0
             tier_bonus = 0.25 if decision.target_tier.lower() in m.tier.lower() else 0.0
+
+            # Dynamic feedback modifier (user rating reward/penalty)
+            fb_mod = (feedback_modifiers or {}).get(m.endpoint_model) or (feedback_modifiers or {}).get(m.model_id) or 1.0
+            feedback_bonus = round((fb_mod - 1.0) * 0.3, 3)
 
             total = (
                 weights["quality_suitability"] * q_fit
@@ -199,6 +220,7 @@ class SmartRouter:
                 + weights["latency_efficiency"] * lat_fit
                 + provider_bonus
                 + tier_bonus
+                + feedback_bonus
             )
 
             scores[m.model_id] = ModelScore(
@@ -255,6 +277,15 @@ def route_decision(
     strategy: str = "balanced",
     registry: Optional[ModelRegistry] = None,
     available: Optional[List[ModelSpec]] = None,
+    latency_profile: Optional[Dict[str, float]] = None,
+    feedback_modifiers: Optional[Dict[str, float]] = None,
 ) -> RoutingResult:
     """Convenience helper to route a decision using default router."""
-    return router.resolve(decision, strategy=strategy, registry=registry, available=available)
+    return router.resolve(
+        decision,
+        strategy=strategy,
+        registry=registry,
+        available=available,
+        latency_profile=latency_profile,
+        feedback_modifiers=feedback_modifiers,
+    )
