@@ -343,11 +343,11 @@ async def run_analyzer(
         result = LLMResult(
             content=json.dumps(decision_dict),
             text=json.dumps(decision_dict),
-            input_tokens=max(1, len(query) // 4 + 10),
-            output_tokens=max(1, len(json.dumps(decision_dict)) // 4),
-            tokens_in=max(1, len(query) // 4 + 10),
-            tokens_out=max(1, len(json.dumps(decision_dict)) // 4),
-            usage_source="fallback",
+            input_tokens=0,
+            output_tokens=0,
+            tokens_in=0,
+            tokens_out=0,
+            usage_source="unavailable",
             latency_ms=lat_ms,
             ttft_ms=lat_ms,
         )
@@ -392,16 +392,40 @@ async def run_analyzer(
     coding_required = bool(decision_dict.get("coding_required", task_type in ("coding", "debugging")))
     context_required = bool(decision_dict.get("context_required", len(history) > 0))
 
-    # Safety Guardrail: Coding, debugging, and complex system architecture queries MUST use switch mode
+    # Narrow safety net only: obvious coding/architecture intent cannot self-answer.
     q_lower = query.lower()
-    has_code_intent = coding_required or task_type in ("coding", "debugging", "system_architecture") or any(k in q_lower for k in ("algorithm", "dijkstra", "quicksort", "binary search", "function", "debug", "refactor", "unit test", "distributed"))
-    if has_code_intent:
+    has_code_intent = (
+        coding_required
+        or task_type in ("coding", "debugging", "system_architecture")
+        or "```" in query
+        or any(
+            k in q_lower
+            for k in (
+                "write a function",
+                "implement ",
+                "algorithm",
+                "dijkstra",
+                "quicksort",
+                "binary search",
+                "unit test",
+                "distributed",
+            )
+        )
+    )
+    if has_code_intent and answer_mode == "self":
         answer_mode = "switch"
         switch_required = True
         direct_answer = None
         if task_type not in ("coding", "debugging", "system_architecture", "reasoning"):
             task_type = "coding"
         coding_required = True
+        reason_forced = "Forced switch: coding or architecture intent."
+    else:
+        reason_forced = None
+    if has_code_intent:
+        if task_type not in ("coding", "debugging", "system_architecture", "reasoning"):
+            task_type = "coding"
+        coding_required = coding_required or task_type in ("coding", "debugging")
 
     target_tier = str(decision_dict.get("target_tier", "fast")).lower().strip()
     if target_tier not in ("fast", "coding", "reasoning", "powerful", "balanced", "custom"):
@@ -411,15 +435,18 @@ async def run_analyzer(
         target_tier = "fast"
 
 
-    target_provider = str(decision_dict.get("target_provider", "gemini" if target_tier == "fast" else "groq")).lower().strip()
-    if target_provider not in ("gemini", "groq", "openrouter", "openai", "custom", "mock"):
-        target_provider = "gemini" if target_tier == "fast" else "groq"
+    raw_provider = str(decision_dict.get("target_provider") or "").lower().strip()
+    target_provider = raw_provider if raw_provider in (
+        "gemini", "groq", "openrouter", "openai", "custom", "mock"
+    ) else ""
 
-    reason = str(decision_dict.get("reason", f"Routed to {target_tier} tier ({target_provider})")).strip()
-    if forced_switch:
+    reason = str(decision_dict.get("reason") or f"Routed to {target_tier} tier").strip()
+    if reason_forced:
+        reason = reason_forced
+    elif forced_switch:
         reason = (
             f"Analyzer LLM produced no direct answer; routed to {target_tier} tier "
-            f"({target_provider}) so a real provider generates the response."
+            "so a real provider generates the response."
         )
 
     decision = AnalyzerDecision(

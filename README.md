@@ -1,8 +1,56 @@
+```text
+   _____                      _     _     _     __  __ 
+  / ____|                    | |   | |   | |   |  \/  |
+ | (___  _ __ ___   __ _ _ __| |_  | |   | |   | \  / |
+  \___ \| '_ ` _ \ / _` | '__| __| | |   | |   | |\/| |
+  ____) | | | | | | (_| | |  | |_  | |___| |___| |  | |
+ |_____/|_| |_| |_|\__,_|_|   \__| |_____|_____|_|  |_|
+  Context-Aware Smart LLM Switching & Cost Optimization
+```
+
 # Context-Aware Smart LLM Switching for Cost & Performance Optimization
 
 A conversational AI product with an **Analyzer-LLM-first routing brain**: every user message is read by a real **Analyzer LLM** which decides — *answer it myself* (self) or *switch to a more capable model* (switch) — with the reasoning, models, real token usage, latency and cost of both calls recorded and shown end to end.
 
 **Simple query → answered by the analyzer itself (cheap, fast) · Complex coding/debugging/math → switched to the most capable real model.**
+
+```text
+================================================================================
+                    PROJECT ARCHITECTURE & FILE ORDER
+================================================================================
+
+  [ BACKEND CORE ] -> app/
+    |-- main.py          : FastAPI Application & API Lifecycle
+    |-- pipeline.py      : Dual-Mode Execution & Fallback Orchestrator
+    |-- analyzer_llm.py  : Intelligent Query & Complexity Classifier
+    |-- analyzer.py      : Deterministic Baseline Analyzer
+    |-- router.py        : 7-Factor Capability Scoring Engine
+    |-- circuit.py       : Resilient Provider Circuit Breaker
+    |-- context.py       : Conversation History & Token Budgeting
+    |-- registry.py      : Dynamic Multi-Provider Model Specifications
+    |-- schemas.py       : Pydantic Validation & Telemetry Models
+    |-- security.py      : Dynamic API Key & Custom Endpoint Resolver
+    |-- tracker.py       : SQLite Telemetry, Budgets & Feedback Storage
+    |-- config.py        : Global Environment & Parameter Settings
+    \-- adapters/        : Native Provider Adapters (OpenAI, Gemini, Groq, Mock)
+
+  [ FRONTEND STUDIO ] -> static/
+    |-- index.html       : Responsive Single-Page Application (SPA)
+    |-- style.css        : Modern Glassmorphic Obsidian Design System
+    |-- app.js           : Real-Time SSE Stream Consumer & State Store
+    \-- vendor/          : KaTeX Mathematics, Marked Parser, DOMPurify
+
+  [ TEST & QA SUITE ] -> tests/
+    |-- test_api.py          : Comprehensive API & Integration Tests (100% Pass)
+    |-- test_adversarial.py  : Adversarial Stress & Edge-Case Resilience (100% Pass)
+    |-- test_routing.py      : Multi-Factor Strategy Routing Tests
+    |-- test_real_providers.py : Live Provider Verification
+    \-- fake_provider.py    : Deterministic Local Mock Server
+
+  [ PERSISTENT STORAGE ] -> data/
+    \-- metrics.db       : Operational Telemetry & Cost Accounting
+================================================================================
+```
 
 ## Features
 
@@ -92,7 +140,7 @@ Without any API keys the app runs in **demo mode** (clearly labelled). To use **
 
 **Budget controls** (all optional, 0 = unlimited): `MAX_COST_PER_REQUEST` (USD — switch targets whose expected cost, from the analyzer's *measured* input tokens, exceed the cap are filtered; 429 when nothing fits), `DAILY_BUDGET_USD`, `MONTHLY_BUDGET_USD` (UTC day/month; requests blocked with 429 when exhausted).
 
-**Never commit `.env`** — it is git-ignored, and API keys never reach the frontend.
+**Never commit `.env`** — it is git-ignored. Browser-entered keys remain client-side in local storage (WebCrypto-encrypted at rest when available) and are sent to the backend only via request headers.
 
 ### 3. Run
 

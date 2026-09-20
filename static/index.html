@@ -172,6 +172,33 @@
         <section class="view-panel active" id="view-chat">
           <div class="chat-canvas-inner">
             
+            <!-- Live Interactive Routing Pipeline Visualizer -->
+            <div class="pipeline-visualizer hidden" id="pipeline-visualizer">
+              <div class="pipeline-track"></div>
+              <div class="pipeline-nodes">
+                <div class="pipeline-node" id="node-query">
+                  <div class="node-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-person"/></svg></div>
+                  <div class="node-label">User Query</div>
+                </div>
+                <div class="pipeline-node" id="node-analyzer">
+                  <div class="node-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-cpu"/></svg></div>
+                  <div class="node-label">Analyzer LLM</div>
+                </div>
+                <div class="pipeline-node" id="node-scoreboard">
+                  <div class="node-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-scale"/></svg></div>
+                  <div class="node-label">Scoreboard Multi-Factor Matrix</div>
+                </div>
+                <div class="pipeline-node" id="node-model">
+                  <div class="node-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-target"/></svg></div>
+                  <div class="node-label">Selected Model</div>
+                </div>
+                <div class="pipeline-node" id="node-output">
+                  <div class="node-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chat"/></svg></div>
+                  <div class="node-label">Stream Output</div>
+                </div>
+              </div>
+            </div>
+
             <!-- Chat Messages Container -->
             <div class="chat-messages" id="chat-messages">
               <!-- Dynamically rendered by app.js (Welcome Hero or Conversation History) -->
@@ -613,7 +640,7 @@
         <div class="settings-security-box">
           <span class="lock-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-lock"/></svg></span>
           <div class="security-text">
-            <strong>Client-Side Storage Guarantee:</strong> Your API keys are saved exclusively in your browser's <code>localStorage</code> and transmitted via encrypted headers (<code>X-Gemini-Key</code>, <code>X-Groq-Key</code>, <code>X-OpenRouter-Key</code>, etc.) on demand. If left blank, server-side environment variables are used seamlessly.
+            <strong>Client-Side Storage Notice:</strong> API keys are stored only in your browser's <code>localStorage</code>. When WebCrypto is available, the app encrypts stored settings at rest before saving. Keys are sent only on request headers (for example, <code>X-Gemini-Key</code>, <code>X-Groq-Key</code>, <code>X-OpenRouter-Key</code>) and are protected in transit by your deployment's HTTPS/TLS transport. If a field is left blank, server-side environment variables are used.
           </div>
         </div>
 

@@ -74,7 +74,7 @@ class Settings:
         default_factory=lambda: os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").strip().rstrip("/")
     )
     groq_coding_model: str = field(
-        default_factory=lambda: os.getenv("GROQ_CODING_MODEL", "qwen/qwen3.6-27b").strip()
+        default_factory=lambda: os.getenv("GROQ_CODING_MODEL", "qwen/qwen3.8-27b").strip()
     )
     groq_reasoning_model: str = field(
         default_factory=lambda: os.getenv("GROQ_REASONING_MODEL", "openai/gpt-oss-120b").strip()

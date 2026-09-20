@@ -88,6 +88,9 @@ class StreamChunk:
     tokens_out: Optional[int] = None
     latency_ms: Optional[float] = None
     raw_chunk: Optional[Dict[str, Any]] = None
+    usage_source: Optional[str] = None
+    reasoning_tokens: Optional[int] = None
+    ttft_ms: Optional[float] = None
 
 
 # ---------------------------------------------------------------------------

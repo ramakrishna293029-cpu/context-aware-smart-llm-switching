@@ -29,6 +29,8 @@ KNOWN_MODELS: Dict[str, tuple] = {
     "gemini:gemini-1.5-pro":            (0.92, 0.90, 0.88, 1.250, 5.00, 1200, 2000000),
 
     # Groq models
+    "groq:groq/compound-mini":         (0.84, 0.82, 0.84, 0.08, 0.15, 200, 128000),
+    "groq:qwen/qwen3.8-27b":            (0.90, 0.86, 0.96, 0.20, 0.60, 350, 32768),
     "groq:qwen/qwen3.6-27b":            (0.90, 0.86, 0.96, 0.20, 0.60, 350, 32768),
     "groq:openai/gpt-oss-120b":         (0.95, 0.97, 0.92, 0.59, 0.79, 500, 8192),
     "groq:openai/gpt-oss-20b":          (0.82, 0.78, 0.84, 0.10, 0.20, 250, 8192),
@@ -347,7 +349,7 @@ def build_models_from_credentials(
         if groq_reasoning: specs.append(groq_reasoning)
 
         groq_fast = _build_model(
-            "fast-backup", "llama-3.1-8b-instant",
+            "fast-backup", "groq/compound-mini",
             creds.groq_api_key or "", cfg.groq_base_url,
             FAST_DEFAULTS, "Fast Backup", "groq"
         )

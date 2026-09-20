@@ -20,9 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-os.environ["DATABASE_PATH"] = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "test-metrics.db"
-)  # isolate tests from the live DB
+os.environ["DATABASE_PATH"] = ":memory:"  # isolate this script from live data/metrics.db
 
 PORT = 8999
 FALLBACK_MODE = len(sys.argv) > 1 and sys.argv[1] == "fallback"

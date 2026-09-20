@@ -281,6 +281,8 @@ class OpenAICompatibleAdapter(LLMAdapter):
                             usage = chunk["usage"]
 
         except (httpx.HTTPError, ProviderUnavailableError, ProviderTimeoutError):
+            if not full_content_parts and not full_reasoning_parts:
+                raise
             # Fallback to non-streaming generate if stream connection fails midway
             res = await self.generate(model, messages, **kwargs)
             if res.reasoning_content:
@@ -299,22 +301,24 @@ class OpenAICompatibleAdapter(LLMAdapter):
         final_text = "".join(full_content_parts)
         final_reasoning = "".join(full_reasoning_parts) if full_reasoning_parts else None
 
-        input_tokens = usage.get("prompt_tokens") or max(1, sum(len(m.content) for m in messages) // 4)
-        output_tokens = usage.get("completion_tokens") or max(1, (len(final_text) + (len(final_reasoning or ""))) // 4)
+        has_usage = bool(usage.get("prompt_tokens") or usage.get("completion_tokens"))
+        input_tokens = usage.get("prompt_tokens") if has_usage else None
+        output_tokens = usage.get("completion_tokens") if has_usage else None
         reasoning_tokens = usage.get("completion_tokens_details", {}).get("reasoning_tokens")
+        usage_source = "provider" if has_usage else "unavailable"
 
         result = LLMResult(
             content=final_text,
             text=final_text,
             reasoning_content=final_reasoning,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            tokens_in=input_tokens,
-            tokens_out=output_tokens,
+            input_tokens=input_tokens or 0,
+            output_tokens=output_tokens or 0,
+            tokens_in=input_tokens or 0,
+            tokens_out=output_tokens or 0,
             reasoning_tokens=reasoning_tokens,
             latency_ms=total_latency_ms,
             model_id=model.model_id,
-            usage_source="provider" if usage.get("prompt_tokens") else "estimated",
+            usage_source=usage_source,
             ttft_ms=ttft_ms or total_latency_ms,
         )
         self._last_result = result
@@ -325,6 +329,9 @@ class OpenAICompatibleAdapter(LLMAdapter):
             tokens_in=input_tokens,
             tokens_out=output_tokens,
             latency_ms=total_latency_ms,
+            usage_source=usage_source,
+            reasoning_tokens=reasoning_tokens,
+            ttft_ms=ttft_ms or total_latency_ms,
         )
 
     async def stream(

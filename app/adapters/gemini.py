@@ -119,8 +119,6 @@ class GeminiAdapter(LLMAdapter):
         payload, _ = _to_gemini_payload(messages, max_tokens=max_tokens)
         base = (model.base_url or "").rstrip("/") or "https://generativelanguage.googleapis.com/v1beta"
         url = f"{base}/models/{endpoint_model}:generateContent"
-        if model.api_key:
-            url += f"?key={model.api_key}"
         headers = _build_headers(model)
 
         t0 = time.perf_counter()
@@ -201,8 +199,6 @@ class GeminiAdapter(LLMAdapter):
         endpoint = model.endpoint_model
         base = (model.base_url or "").rstrip("/") or "https://generativelanguage.googleapis.com/v1beta"
         url = f"{base}/models/{endpoint}:streamGenerateContent?alt=sse"
-        if model.api_key:
-            url += f"&key={model.api_key}"
         headers = _build_headers(model)
 
         t0 = time.perf_counter()
@@ -247,6 +243,8 @@ class GeminiAdapter(LLMAdapter):
                             usage = chunk["usageMetadata"]
 
         except (httpx.HTTPError, ProviderUnavailableError, ProviderTimeoutError):
+            if not full_text_parts:
+                raise
             # Fallback to non-streaming generate if stream fails midway
             res = await self.generate(model, messages, **kwargs)
             if res.content:
@@ -261,19 +259,21 @@ class GeminiAdapter(LLMAdapter):
 
         total_latency_ms = (time.perf_counter() - t0) * 1000.0
         final_text = "".join(full_text_parts)
-        input_tokens = usage.get("promptTokenCount", 0) or max(1, sum(len(m.content) for m in messages) // 4)
-        output_tokens = usage.get("candidatesTokenCount", 0) or max(1, len(final_text) // 4)
+        has_usage = bool(usage.get("promptTokenCount") or usage.get("candidatesTokenCount"))
+        input_tokens = usage.get("promptTokenCount") if has_usage else None
+        output_tokens = usage.get("candidatesTokenCount") if has_usage else None
+        usage_source = "provider" if has_usage else "unavailable"
 
         result = LLMResult(
             content=final_text,
             text=final_text,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            tokens_in=input_tokens,
-            tokens_out=output_tokens,
+            input_tokens=input_tokens or 0,
+            output_tokens=output_tokens or 0,
+            tokens_in=input_tokens or 0,
+            tokens_out=output_tokens or 0,
             latency_ms=total_latency_ms,
             model_id=model.model_id,
-            usage_source="provider" if usage.get("promptTokenCount") else "estimated",
+            usage_source=usage_source,
             ttft_ms=ttft_ms or total_latency_ms,
         )
         self._last_result = result
@@ -284,6 +284,8 @@ class GeminiAdapter(LLMAdapter):
             tokens_in=input_tokens,
             tokens_out=output_tokens,
             latency_ms=total_latency_ms,
+            usage_source=usage_source,
+            ttft_ms=ttft_ms or total_latency_ms,
         )
 
     async def stream(

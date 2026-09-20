@@ -170,6 +170,10 @@ class SmartRouter:
         if not candidate_pool:
             raise RuntimeError("No execution models available in registry for routing.")
 
+        candidate_pool = self._apply_strategy_pool(candidate_pool, decision, strategy)
+        if not candidate_pool:
+            raise RuntimeError("No execution models left after strategy filter.")
+
         weights = self.effective_weights(strategy)
         profile = latency_profile or {}
 
@@ -185,10 +189,13 @@ class SmartRouter:
             # 1. Quality suitability
             q_fit = 1.0 - abs(m.quality - decision.complexity_score)
             if m.quality < decision.complexity_score:
-                q_fit *= 0.6  # penalize underpowered models
+                q_fit *= 0.5  # penalize underpowered models for complex queries
 
             # 2. Complexity compatibility
-            c_fit = 1.0 if m.quality >= decision.complexity_score else (m.quality / max(0.01, decision.complexity_score))
+            if m.quality >= decision.complexity_score:
+                c_fit = 1.0
+            else:
+                c_fit = (m.quality / max(0.01, decision.complexity_score)) * 0.8
 
             # 3. Reasoning compatibility
             r_fit = m.reasoning if decision.reasoning_required else (1.0 - 0.2 * m.reasoning)
@@ -203,9 +210,10 @@ class SmartRouter:
             eff_lat = effective_latency(m)
             lat_fit = (min_latency / eff_lat) if eff_lat > 0 else 1.0
 
-            # Bonus for matching target provider and tier
-            provider_bonus = 0.20 if m.provider.lower() == decision.target_provider.lower() else 0.0
-            tier_bonus = 0.25 if decision.target_tier.lower() in m.tier.lower() else 0.0
+            # Small affinity only — capability + strategy scores pick the primary.
+            wanted_provider = (decision.target_provider or "").lower()
+            provider_bonus = 0.05 if wanted_provider and m.provider.lower() == wanted_provider else 0.0
+            tier_bonus = 0.12 if decision.target_tier.lower() in m.tier.lower() else 0.0
 
             # Dynamic feedback modifier (user rating reward/penalty)
             fb_mod = (feedback_modifiers or {}).get(m.endpoint_model) or (feedback_modifiers or {}).get(m.model_id) or 1.0
@@ -234,30 +242,21 @@ class SmartRouter:
                 total=round(total, 3),
             )
 
-        # Primary selection:
-        # Priority 1: Match target provider + tier
-        target_model = None
-        for m in candidate_pool:
-            if m.provider.lower() == decision.target_provider.lower() and decision.target_tier.lower() in m.tier.lower():
-                target_model = m
-                break
+        # Primary = highest score among the strategy-filtered, capability-aware pool.
+        target_model = max(scores.values(), key=lambda s: s.total).model
 
-        # Priority 2: Match target tier on any provider
-        if not target_model:
-            for m in candidate_pool:
-                if decision.target_tier.lower() in m.tier.lower():
-                    target_model = m
-                    break
-
-        # Priority 3: Highest total score candidate
-        if not target_model:
-            target_model = max(scores.values(), key=lambda s: s.total).model
-
-        # Build fallback chain: primary model first, then remaining sorted by total score
-        fallback_chain = [target_model]
+        # Fallback: same capability / next provider first, then remaining scores. Cap length.
+        same_cap: List[ModelSpec] = []
+        rest: List[ModelSpec] = []
         for s in sorted(scores.values(), key=lambda s: -s.total):
-            if s.model.model_id != target_model.model_id:
-                fallback_chain.append(s.model)
+            if s.model.model_id == target_model.model_id:
+                continue
+            if self._same_capability(s.model, decision):
+                same_cap.append(s.model)
+            else:
+                rest.append(s.model)
+        fallback_chain = [target_model] + same_cap + rest
+        fallback_chain = fallback_chain[:4]
 
         return RoutingResult(
             primary_model=target_model,
@@ -266,6 +265,48 @@ class SmartRouter:
             reason=decision.reason,
             strategy=strategy,
         )
+
+    @staticmethod
+    def _same_capability(model: ModelSpec, decision: AnalyzerDecision) -> bool:
+        if decision.coding_required:
+            return model.coding >= 0.55 or "coding" in model.tier.lower()
+        if decision.reasoning_required:
+            return model.reasoning >= 0.55 or any(
+                t in model.tier.lower() for t in ("reasoning", "powerful")
+            )
+        return "fast" in model.tier.lower() or model.tier.lower() in ("custom", "balanced")
+
+    @staticmethod
+    def _apply_strategy_pool(
+        pool: List[ModelSpec],
+        decision: AnalyzerDecision,
+        strategy: str,
+    ) -> List[ModelSpec]:
+        """Strategy must change the candidate *set*, not only score weights."""
+        key = (strategy or "balanced").lower()
+        if key == "lowest_cost":
+            if decision.reasoning_required and decision.complexity_score >= 0.85:
+                return pool
+            filtered = [m for m in pool if m.tier not in ("powerful",)]
+            if decision.coding_required:
+                codingish = [
+                    m for m in filtered
+                    if m.tier in ("coding", "fast", "fast-backup", "custom") or m.coding >= 0.6
+                ]
+                filtered = codingish or filtered
+            return filtered or pool
+        if key == "fastest":
+            if decision.reasoning_required:
+                return pool
+            filtered = [m for m in pool if m.tier not in ("reasoning", "powerful")]
+            return filtered or pool
+        if key == "highest_quality":
+            strong = [
+                m for m in pool
+                if m.quality >= 0.7 or m.tier in ("reasoning", "powerful", "coding")
+            ]
+            return strong or pool
+        return pool
 
 
 # Module-level default singleton

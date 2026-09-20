@@ -37,6 +37,7 @@ RETURN TRANSPARENT RESPONSE & SSE STREAMING
 import asyncio
 import json
 import logging
+import threading
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -59,6 +60,14 @@ from .adapters.openai import OpenAICompatibleAdapter
 from .analyzer_llm import AnalyzerDecision, run_analyzer
 from .config import settings
 from .context import build_messages
+from .pipeline import (
+    check_spend_budgets,
+    compute_cost as _compute_cost,
+    compute_baseline_cost as _compute_baseline_cost,
+    execute_with_fallback as _execute_with_fallback,
+    iter_chat_sse,
+    run_unary_chat,
+)
 from .registry import ModelRegistry, ModelSpec, registry as default_registry
 from .router import STRATEGIES, RoutingResult, router as default_router
 from .schemas import (
@@ -105,6 +114,29 @@ if settings.cors_origins:
         allow_credentials=True,
     )
 
+
+# Security headers for browser hardening
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'"
+    )
+    return response
+
 # Register Adapters in Factory
 gemini_adapter = GeminiAdapter()
 openai_adapter = OpenAICompatibleAdapter("openai")
@@ -123,6 +155,7 @@ adapter_factory.set_default(openai_adapter)
 
 # Rate Limiting State
 _rate_hits: Dict[str, List[float]] = defaultdict(list)
+_rate_hits_lock = threading.Lock()
 _RATE_MAX = 60  # max requests per minute per IP
 _RATE_WINDOW = 60.0
 
@@ -144,19 +177,17 @@ def _check_rate_limit(request: Request):
     """Enforces client IP rate limit."""
     client_ip = (request.client.host if request.client else "testclient") or "testclient"
     now = time.monotonic()
-    hits = _rate_hits[client_ip]
-    _rate_hits[client_ip] = [t for t in hits if now - t < _RATE_WINDOW]
-    if len(_rate_hits[client_ip]) >= _RATE_MAX:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please slow down.")
-    _rate_hits[client_ip].append(now)
+    with _rate_hits_lock:
+        hits = _rate_hits[client_ip]
+        _rate_hits[client_ip] = [t for t in hits if now - t < _RATE_WINDOW]
+        if len(_rate_hits[client_ip]) >= _RATE_MAX:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded. Please slow down.")
+        _rate_hits[client_ip].append(now)
 
 
 def _check_daily_budget():
-    """Enforces daily spending cap if configured."""
-    if getattr(settings, "daily_budget_usd", 0.0) > 0:
-        status = tracker.budget_status()
-        if status["day_spend"] >= settings.daily_budget_usd:
-            raise HTTPException(status_code=429, detail="Daily budget exceeded. Request rejected.")
+    """Enforces daily and monthly spending caps if configured."""
+    check_spend_budgets()
 
 
 def _get_request_context(request: Request) -> tuple[ResolvedCredentials, ModelRegistry]:
@@ -166,53 +197,8 @@ def _get_request_context(request: Request) -> tuple[ResolvedCredentials, ModelRe
     return creds, reg
 
 
-def _compute_cost(model: ModelSpec, result: Optional[LLMResult]) -> Optional[float]:
-    if not result or result.input_tokens is None or result.output_tokens is None:
-        return None
-    return estimate_cost_usd(
-        (model.input_price_per_mtok, model.output_price_per_mtok),
-        result.input_tokens,
-        result.output_tokens,
-    )
-
-
-def _compute_baseline_cost(reg: ModelRegistry, tokens: Optional[tuple[Optional[int], Optional[int]]]) -> Optional[float]:
-    """Calculates what the request would have cost on the strongest available baseline model."""
-    if not tokens or tokens[0] is None or tokens[1] is None:
-        return None
-    strongest = reg.strongest()
-    if not strongest:
-        return None
-    return estimate_cost_usd(
-        (strongest.input_price_per_mtok, strongest.output_price_per_mtok),
-        tokens[0],
-        tokens[1],
-    )
-
-
-async def _execute_with_fallback(
-    messages: List[ChatMessage],
-    chain: List[ModelSpec],
-) -> tuple[ModelSpec, LLMResult, bool, Optional[str]]:
-    """Tries primary model, falling back through candidate chain on error."""
-    if not chain:
-        raise LLMAdapterError("No candidate models available in fallback chain.")
-
-    primary = chain[0]
-    errors = []
-
-    for model in chain:
-        try:
-            adapter = adapter_factory.get(model.provider)
-            result = await adapter.generate(model, messages)
-            fallback_used = (model.model_id != primary.model_id)
-            err_msg = (" | ".join(errors)) if errors else None
-            return model, result, fallback_used, err_msg
-        except LLMAdapterError as exc:
-            logger.warning("Model %s failed: %s", model.model_id, exc)
-            errors.append(f"{model.model_id}: {exc}")
-
-    raise LLMAdapterError("All candidate models failed in fallback chain: " + " | ".join(errors))
+_HEALTH_CACHE: dict = {"ts": 0.0, "payload": None}
+_HEALTH_CACHE_TTL = 60.0
 
 
 # ---------------------------------------------------------------------------
@@ -441,551 +427,34 @@ async def analyze(req: AnalyzeRequest, request: Request):
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, request: Request):
+    """Unary chat endpoint: executes query with context management, routing, and fallback."""
     _check_rate_limit(request)
-    _check_daily_budget()
-
-    if "FAIL-ANALYZER" in req.query:
-        raise HTTPException(status_code=502, detail="Analyzer execution failed: simulated outage")
-
     creds, reg = _get_request_context(request)
-    strategy = req.strategy if req.strategy in STRATEGIES else "balanced"
-    available = reg.available()
-
-    # Step 1: Run Analyzer LLM
-    t_start = time.perf_counter()
-    try:
-        decision = await run_analyzer(req.query, req.history, available, strategy=strategy, registry_instance=reg)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Analyzer execution failed: {exc}")
-
-    analyzer_lat = (time.perf_counter() - t_start) * 1000.0
-    analyzer_cost = _compute_cost(decision.analyzer_model, decision.analyzer_result) or 0.0
-
-    # Step 2: Route & Resolve
-    routing_res = default_router.resolve(
-        decision,
-        strategy=strategy,
-        registry=reg,
-        latency_profile=tracker.get_latency_profile(),
-        feedback_modifiers=tracker.get_feedback_modifiers(),
-    )
-    primary_model = routing_res.primary_model
-    fallback_chain = routing_res.fallback_chain
-
-    # Filter candidate models by max_cost_per_request if configured
-    max_cost_cap = getattr(settings, "max_cost_per_request", 0.0)
-    if max_cost_cap > 0:
-        filtered_chain = [m for m in fallback_chain if (m.price_per_1k * 1.5) <= max_cost_cap]
-        if not filtered_chain:
-            raise HTTPException(status_code=429, detail="Cost per request budget exceeded. No candidate fits cap.")
-        fallback_chain = filtered_chain
-        primary_model = filtered_chain[0]
-
-    # Step 3: Self-Mode vs Switch-Mode Execution
-    # Guard: self-mode requires a real analyzer-produced answer. If absent
-    # (canned text is prohibited), fall through to switch-mode so a real
-    # provider generates the response.
-    if decision.answer_mode == "self" and decision.answer:
-        # SELF-MODE: Direct base answer without extra downstream call!
-        response_text = decision.answer
-        served_model = decision.analyzer_model
-        fallback_used = False
-        fallback_reason = None
-        success = True
-        error_text = None
-        gen_lat = 0.0
-        total_lat = (time.perf_counter() - t_start) * 1000.0
-
-        in_tok = decision.analyzer_result.input_tokens
-        out_tok = decision.analyzer_result.output_tokens
-        tot_tok = (in_tok or 0) + (out_tok or 0)
-        model_cost = analyzer_cost
-        total_cost = analyzer_cost
-        # Honest baseline: genuine strongest-model pricing at the request's
-        # actual token usage — or None when no real provider is configured.
-        # Never fabricate savings with invented multipliers.
-        baseline_cost = _compute_baseline_cost(reg, (in_tok, out_tok))
-        savings_usd = max(0.0, baseline_cost - total_cost) if baseline_cost else 0.0
-        savings_pct = (savings_usd / baseline_cost * 100.0) if baseline_cost else 0.0
-        candidates_list = routing_res.to_candidate_infos()
-
-        req_id = tracker.record_request(
-            query=req.query,
-            task_type=decision.task_type,
-            complexity=decision.complexity,
-            complexity_score=decision.complexity_score,
-            answer_mode="self",
-            analyzer_provider=decision.analyzer_model.provider,
-            analyzer_model=decision.analyzer_model.endpoint_model,
-            analyzer_latency_ms=analyzer_lat,
-            analyzer_input_tokens=in_tok,
-            analyzer_output_tokens=out_tok,
-            analyzer_cost=analyzer_cost,
-            target_tier="fast",
-            target_provider=decision.analyzer_model.provider,
-            selected_model=served_model.endpoint_model,
-            selected_provider=served_model.provider,
-            routing_reason=decision.reason,
-            context_relevant=decision.context_required,
-            input_tokens=None,
-            output_tokens=None,
-            reasoning_tokens=0,
-            total_tokens=tot_tok,
-            latency_ms=gen_lat,
-            total_latency_ms=total_lat,
-            ttft_ms=analyzer_lat,
-            estimated_cost=analyzer_cost,
-            analyzer_cost_usd=analyzer_cost,
-            total_cost_usd=total_cost,
-            baseline_cost=baseline_cost,
-            savings_usd=savings_usd,
-            savings_percent=savings_pct,
-            success=success,
-            error=error_text,
-            fallback_used=fallback_used,
-            fallback_reason=fallback_reason,
-            strategy=strategy,
-            candidates_json=json.dumps(routing_res.candidates()),
-        )
-
-        return ChatResponse(
-            response=response_text,
-            answer_mode="self",
-            model=ModelInfo(
-                model_id=served_model.model_id,
-                model_name=served_model.name,
-                provider=served_model.provider,
-                tier=served_model.tier,
-                mode=served_model.mode,
-                strategy=strategy,
-                reason=decision.reason,
-            ),
-            analyzer=decision.to_analyzer_info(cost_usd=analyzer_cost),
-            context_relevant=decision.context_required,
-            input_tokens=None,
-            output_tokens=None,
-            reasoning_tokens=0,
-            total_tokens=tot_tok,
-            estimated_cost_usd=round(analyzer_cost, 6),
-            analyzer_cost_usd=round(analyzer_cost, 6),
-            total_cost_usd=round(total_cost, 6),
-            baseline_cost_usd=round(baseline_cost, 6) if baseline_cost is not None else None,
-            savings_usd=round(savings_usd, 6),
-            savings_percent=round(savings_pct, 1),
-            latency_ms=round(gen_lat, 1),
-            analyzer_latency_ms=round(analyzer_lat, 1),
-            total_latency_ms=round(total_lat, 1),
-            ttft_ms=round(analyzer_lat, 1),
-            success=success,
-            request_id=req_id,
-            fallback_used=fallback_used,
-            fallback_reason=fallback_reason,
-            candidates=candidates_list,
-        )
-
-    # SWITCH-MODE: Prune context with ContextManager & execute specialized model with fallback
-    messages = build_messages(
-        history=req.history,
-        query=req.query,
-        max_tokens=primary_model.context_window,
-        tier=primary_model.tier,
-    )
-
-    t_gen = time.perf_counter()
-    fallback_used = False
-    fallback_reason = None
-    served_model = primary_model
-    result = None
-    success = True
-    error_text = None
-
-    try:
-        served_model, result, fallback_used, fallback_reason = await _execute_with_fallback(messages, fallback_chain)
-    except LLMAdapterError as exc:
-        success = False
-        error_text = str(exc)
-        logger.error("Chat execution error: %s", exc)
-
-    gen_lat = (time.perf_counter() - t_gen) * 1000.0
-    total_lat = (time.perf_counter() - t_start) * 1000.0
-
-    in_tok = result.input_tokens if result else None
-    out_tok = result.output_tokens if result else None
-    reasoning_toks = result.reasoning_tokens if result else 0
-    tot_tok = ((in_tok or 0) + (out_tok or 0) + (decision.analyzer_result.input_tokens or 0) + (decision.analyzer_result.output_tokens or 0)) if result else None
-
-    model_cost = _compute_cost(served_model, result) if result else 0.0
-    total_cost = ((model_cost or 0.0) + analyzer_cost) if result else 0.0
-    baseline_cost = _compute_baseline_cost(reg, (in_tok, out_tok)) if result else 0.0
-    savings_usd = max(0.0, (baseline_cost or 0.0) - total_cost) if (baseline_cost and baseline_cost > 0) else 0.0
-    savings_pct = (savings_usd / baseline_cost * 100.0) if (baseline_cost and baseline_cost > 0) else 0.0
-
-    req_id = tracker.record_request(
-        query=req.query,
-        task_type=decision.task_type,
-        complexity=decision.complexity,
-        complexity_score=decision.complexity_score,
-        answer_mode="switch",
-        analyzer_provider=decision.analyzer_model.provider,
-        analyzer_model=decision.analyzer_model.endpoint_model,
-        analyzer_latency_ms=analyzer_lat,
-        analyzer_input_tokens=decision.analyzer_result.input_tokens,
-        analyzer_output_tokens=decision.analyzer_result.output_tokens,
-        analyzer_cost=analyzer_cost,
-        target_tier=decision.target_tier,
-        target_provider=decision.target_provider,
-        selected_model=served_model.endpoint_model,
-        selected_provider=served_model.provider,
-        routing_reason=decision.reason,
-        context_relevant=decision.context_required,
-        input_tokens=in_tok,
-        output_tokens=out_tok,
-        reasoning_tokens=reasoning_toks,
-        total_tokens=tot_tok,
-        latency_ms=gen_lat,
-        total_latency_ms=total_lat,
-        ttft_ms=result.ttft_ms if result else None,
-        estimated_cost=model_cost,
-        analyzer_cost_usd=analyzer_cost,
-        total_cost_usd=total_cost,
-        baseline_cost=baseline_cost,
-        savings_usd=savings_usd,
-        savings_percent=savings_pct,
-        success=success,
-        error=error_text,
-        fallback_used=fallback_used,
-        fallback_reason=fallback_reason,
-        strategy=strategy,
-        candidates_json=json.dumps(routing_res.candidates()),
-    )
-
-    response_text = result.text if result else f"Error: {error_text or 'Generation failed'}"
-
-    return ChatResponse(
-        response=response_text,
-        answer_mode="switch",
-        model=ModelInfo(
-            model_id=served_model.model_id,
-            model_name=served_model.name,
-            provider=served_model.provider,
-            tier=served_model.tier,
-            mode=served_model.mode,
-            strategy=strategy,
-            reason=decision.reason,
-        ),
-        analyzer=decision.to_analyzer_info(cost_usd=analyzer_cost),
-        context_relevant=decision.context_required,
-        input_tokens=in_tok,
-        output_tokens=out_tok,
-        reasoning_tokens=reasoning_toks,
-        total_tokens=tot_tok,
-        estimated_cost_usd=round(model_cost, 6) if model_cost is not None else None,
-        analyzer_cost_usd=round(analyzer_cost, 6),
-        total_cost_usd=round(total_cost, 6),
-        baseline_cost_usd=round(baseline_cost, 6) if baseline_cost is not None else None,
-        savings_usd=round(savings_usd, 6) if savings_usd is not None else None,
-        savings_percent=round(savings_pct, 1) if savings_pct is not None else None,
-        latency_ms=round(gen_lat, 1),
-        analyzer_latency_ms=round(analyzer_lat, 1),
-        total_latency_ms=round(total_lat, 1),
-        ttft_ms=round(result.ttft_ms, 1) if (result and result.ttft_ms) else None,
-        success=success,
-        request_id=req_id,
-        fallback_used=fallback_used,
-        fallback_reason=fallback_reason,
-        candidates=routing_res.to_candidate_infos(),
-    )
+    return await run_unary_chat(req.query, req.history, req.strategy, reg)
 
 
 @app.post("/api/chat/stream")
 async def chat_stream(req: ChatRequest, request: Request):
-    """SSE Streaming endpoint emitting typed events: analyzer -> routing -> reasoning_delta -> content_delta -> done."""
+    """SSE Streaming endpoint emitting typed events: analyzer -> routing -> reasoning_delta -> delta -> done."""
     _check_rate_limit(request)
     creds, reg = _get_request_context(request)
-    strategy = req.strategy if req.strategy in STRATEGIES else "balanced"
-    available = reg.available()
 
     async def event_generator():
-        t_start = time.perf_counter()
-
-        if "FAIL-ANALYZER" in req.query:
-            yield "data: " + json.dumps({"event": "error", "detail": "Analyzer error: simulated outage"}) + "\n\n"
-            return
-
-        # Step 1: Run Analyzer LLM
-        try:
-            decision = await run_analyzer(req.query, req.history, available, strategy=strategy, registry_instance=reg)
-        except Exception as exc:
-            yield "data: " + json.dumps({"event": "error", "detail": f"Analyzer error: {exc}"}) + "\n\n"
-            return
-
-        analyzer_lat = (time.perf_counter() - t_start) * 1000.0
-        analyzer_cost = _compute_cost(decision.analyzer_model, decision.analyzer_result) or 0.0
-
-        # Emit typed Analyzer Event
-        yield "data: " + json.dumps({
-            "event": "analyzer",
-            "info": decision.to_analyzer_info(cost_usd=analyzer_cost).model_dump(),
-        }) + "\n\n"
-
-        # Step 2: Self-Mode vs Switch-Mode
-        # Guard: self-mode must carry a real analyzer answer (no canned text).
-        if decision.answer_mode == "self" and decision.answer:
-            ans_text = decision.answer
-            words = ans_text.split(" ")
-            for i in range(0, len(words), 3):
-                chunk = " ".join(words[i:i + 3])
-                if i + 3 < len(words):
-                    chunk += " "
-                yield "data: " + json.dumps({"event": "content_delta", "text": chunk}) + "\n\n"
-                yield "data: " + json.dumps({"event": "delta", "text": chunk}) + "\n\n"
-
-            gen_lat = 0.0
-            total_lat = (time.perf_counter() - t_start) * 1000.0
-            in_tok = decision.analyzer_result.input_tokens
-            out_tok = decision.analyzer_result.output_tokens
-            tot_tok = (in_tok or 0) + (out_tok or 0)
-            baseline_cost = _compute_baseline_cost(reg, (in_tok, out_tok))
-            savings_usd = max(0.0, baseline_cost - analyzer_cost) if baseline_cost else 0.0
-            savings_pct = (savings_usd / baseline_cost * 100.0) if baseline_cost else 0.0
-
-            req_id = tracker.record_request(
-                query=req.query,
-                task_type=decision.task_type,
-                complexity=decision.complexity,
-                complexity_score=decision.complexity_score,
-                answer_mode="self",
-                analyzer_provider=decision.analyzer_model.provider,
-                analyzer_model=decision.analyzer_model.endpoint_model,
-                analyzer_latency_ms=analyzer_lat,
-                analyzer_input_tokens=in_tok,
-                analyzer_output_tokens=out_tok,
-                analyzer_cost=analyzer_cost,
-                target_tier="fast",
-                target_provider=decision.analyzer_model.provider,
-                selected_model=decision.analyzer_model.endpoint_model,
-                selected_provider=decision.analyzer_model.provider,
-                routing_reason=decision.reason,
-                context_relevant=decision.context_required,
-                input_tokens=None,
-                output_tokens=None,
-                reasoning_tokens=0,
-                total_tokens=tot_tok,
-                latency_ms=gen_lat,
-                total_latency_ms=total_lat,
-                ttft_ms=analyzer_lat,
-                estimated_cost=analyzer_cost,
-                analyzer_cost_usd=analyzer_cost,
-                total_cost_usd=analyzer_cost,
-                baseline_cost=baseline_cost,
-                savings_usd=savings_usd,
-                savings_percent=savings_pct,
-                success=True,
-                fallback_used=False,
-                strategy=strategy,
-            )
-
-            yield "data: " + json.dumps({
-                "event": "done",
-                "success": True,
-                "request_id": req_id,
-                "response": ans_text,
-                "answer_mode": "self",
-                "model": {
-                    "model_id": decision.analyzer_model.model_id,
-                    "model_name": decision.analyzer_model.name,
-                    "provider": decision.analyzer_model.provider,
-                    "tier": decision.analyzer_model.tier,
-                    "reason": decision.reason,
-                },
-                "analyzer": decision.to_analyzer_info(cost_usd=analyzer_cost).model_dump(),
-                "context_relevant": decision.context_required,
-                "input_tokens": None,
-                "output_tokens": None,
-                "reasoning_tokens": 0,
-                "total_tokens": tot_tok,
-                "estimated_cost_usd": round(analyzer_cost, 6),
-                "analyzer_cost_usd": round(analyzer_cost, 6),
-                "total_cost_usd": round(analyzer_cost, 6),
-                "baseline_cost_usd": round(baseline_cost, 6) if baseline_cost is not None else None,
-                "savings_usd": round(savings_usd, 6),
-                "savings_percent": round(savings_pct, 1),
-                "latency_ms": round(gen_lat, 1),
-                "analyzer_latency_ms": round(analyzer_lat, 1),
-                "total_latency_ms": round(total_lat, 1),
-                "ttft_ms": round(analyzer_lat, 1),
-                "fallback_used": False,
-                "candidates": [],
-            }) + "\n\n"
-            return
-
-        # SWITCH-MODE: Routing Event + Target Streaming
-        routing_res = default_router.resolve(
-            decision,
-            strategy=strategy,
-            registry=reg,
-            latency_profile=tracker.get_latency_profile(),
-            feedback_modifiers=tracker.get_feedback_modifiers(),
-        )
-        target_model = routing_res.primary_model
-        fallback_chain = routing_res.fallback_chain
-
-        yield "data: " + json.dumps({
-            "event": "routing",
-            "target_model": target_model.endpoint_model,
-            "target_name": target_model.name,
-            "target_provider": target_model.provider,
-            "target_tier": target_model.tier,
-            "reason": decision.reason,
-            "answer_mode": "switch",
-            "context_relevant": decision.context_required,
-            "candidates": routing_res.candidates(),
-        }) + "\n\n"
-
-        messages = build_messages(
-            history=req.history,
-            query=req.query,
-            max_tokens=target_model.context_window,
-            tier=target_model.tier,
-        )
-
-        served_model = target_model
-        full_text = []
-        full_reasoning = []
-        fallback_used = False
-        t_gen = time.perf_counter()
-        ttft_ms = None
-        result = None
-
-        for cand in fallback_chain:
-            served_model = cand
-            fallback_used = (cand.model_id != target_model.model_id)
-            adapter = adapter_factory.get(cand.provider)
-            try:
-                if adapter.supports_streaming():
-                    async for chunk in adapter.stream_chunks(cand, messages):
-                        if chunk.is_final:
-                            continue
-                        if ttft_ms is None:
-                            ttft_ms = (time.perf_counter() - t_gen) * 1000.0
-
-                        if chunk.reasoning_text:
-                            full_reasoning.append(chunk.reasoning_text)
-                            yield "data: " + json.dumps({"event": "reasoning_delta", "text": chunk.reasoning_text}) + "\n\n"
-
-                        if chunk.text:
-                            full_text.append(chunk.text)
-                            yield "data: " + json.dumps({"event": "content_delta", "text": chunk.text}) + "\n\n"
-                            yield "data: " + json.dumps({"event": "delta", "text": chunk.text}) + "\n\n"
-
-                    result = getattr(adapter, "last_result", lambda: None)()
-                else:
-                    result = await adapter.generate(cand, messages)
-                    if result.reasoning_content:
-                        full_reasoning.append(result.reasoning_content)
-                        yield "data: " + json.dumps({"event": "reasoning_delta", "text": result.reasoning_content}) + "\n\n"
-                    if result.content:
-                        full_text.append(result.content)
-                        yield "data: " + json.dumps({"event": "content_delta", "text": result.content}) + "\n\n"
-                        yield "data: " + json.dumps({"event": "delta", "text": result.content}) + "\n\n"
-                break
-            except Exception as exc:
-                logger.warning("Streaming failed for %s: %s", cand.model_id, exc)
-                continue
-        else:
-            yield "data: " + json.dumps({"event": "error", "detail": "All candidate models in fallback chain failed."}) + "\n\n"
-            return
-
-        gen_lat = (time.perf_counter() - t_gen) * 1000.0
-        total_lat = (time.perf_counter() - t_start) * 1000.0
-        resp_text = "".join(full_text)
-
-        in_tok = result.input_tokens if result else max(1, len(req.query) // 4)
-        out_tok = result.output_tokens if result else max(1, len(resp_text) // 4)
-        reasoning_toks = result.reasoning_tokens if result else len("".join(full_reasoning)) // 4
-        tot_tok = (in_tok + out_tok + (decision.analyzer_result.input_tokens or 0) + (decision.analyzer_result.output_tokens or 0))
-
-        model_cost = _compute_cost(served_model, result) if result else 0.0
-        total_cost = ((model_cost or 0.0) + analyzer_cost)
-        baseline_cost = _compute_baseline_cost(reg, (in_tok, out_tok))
-        savings_usd = max(0.0, baseline_cost - total_cost) if baseline_cost else 0.0
-        savings_pct = (savings_usd / baseline_cost * 100.0) if baseline_cost else 0.0
-
-        req_id = tracker.record_request(
-            query=req.query,
-            task_type=decision.task_type,
-            complexity=decision.complexity,
-            complexity_score=decision.complexity_score,
-            answer_mode="switch",
-            analyzer_provider=decision.analyzer_model.provider,
-            analyzer_model=decision.analyzer_model.endpoint_model,
-            analyzer_latency_ms=analyzer_lat,
-            analyzer_input_tokens=decision.analyzer_result.input_tokens,
-            analyzer_output_tokens=decision.analyzer_result.output_tokens,
-            analyzer_cost=analyzer_cost,
-            target_tier=decision.target_tier,
-            target_provider=decision.target_provider,
-            selected_model=served_model.endpoint_model,
-            selected_provider=served_model.provider,
-            routing_reason=decision.reason,
-            context_relevant=decision.context_required,
-            input_tokens=in_tok,
-            output_tokens=out_tok,
-            reasoning_tokens=reasoning_toks,
-            total_tokens=tot_tok,
-            latency_ms=gen_lat,
-            total_latency_ms=total_lat,
-            ttft_ms=ttft_ms,
-            estimated_cost=model_cost,
-            analyzer_cost_usd=analyzer_cost,
-            total_cost_usd=total_cost,
-            baseline_cost=baseline_cost,
-            savings_usd=savings_usd,
-            savings_percent=savings_pct,
-            success=True,
-            fallback_used=fallback_used,
-            strategy=strategy,
-            candidates_json=json.dumps(routing_res.candidates()),
-        )
-
-        yield "data: " + json.dumps({
-            "event": "done",
-            "success": True,
-            "request_id": req_id,
-            "response": resp_text,
-            "answer_mode": "switch",
-            "model": {
-                "model_id": served_model.model_id,
-                "model_name": served_model.name,
-                "provider": served_model.provider,
-                "tier": served_model.tier,
-                "reason": decision.reason,
-            },
-            "analyzer": decision.to_analyzer_info(cost_usd=analyzer_cost).model_dump(),
-            "context_relevant": decision.context_required,
-            "input_tokens": in_tok,
-            "output_tokens": out_tok,
-            "reasoning_tokens": reasoning_toks,
-            "total_tokens": tot_tok,
-            "estimated_cost_usd": round(model_cost, 6) if model_cost else None,
-            "analyzer_cost_usd": round(analyzer_cost, 6),
-            "total_cost_usd": round(total_cost, 6),
-            "baseline_cost_usd": round(baseline_cost, 6) if baseline_cost is not None else None,
-            "savings_usd": round(savings_usd, 6),
-            "savings_percent": round(savings_pct, 1),
-            "latency_ms": round(gen_lat, 1),
-            "analyzer_latency_ms": round(analyzer_lat, 1),
-            "total_latency_ms": round(total_lat, 1),
-            "ttft_ms": round(ttft_ms, 1) if ttft_ms else None,
-            "fallback_used": fallback_used,
-            "candidates": routing_res.candidates(),
-        }) + "\n\n"
+        async for evt in iter_chat_sse(
+            req.query,
+            req.history,
+            req.strategy,
+            reg,
+            disconnected=request.is_disconnected,
+        ):
+            yield f"data: {json.dumps(evt)}\n\n"
 
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
+
 
 
 @app.post("/api/feedback", response_model=FeedbackResponse)

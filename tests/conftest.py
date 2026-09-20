@@ -31,6 +31,8 @@ def isolate_database():
     object.__setattr__(settings, "database_path", TEST_DB)
     app.tracker.tracker = app.tracker.Tracker(TEST_DB)
     app.main.tracker = app.tracker.tracker
+    import app.pipeline
+    app.pipeline.tracker = app.tracker.tracker
     app.analyzer_llm.clear_routing_cache()
     yield
     # Post-session check: ensure data/metrics.db has no test leakage
@@ -65,6 +67,8 @@ def client(fake_server):
     object.__setattr__(settings, "database_path", TEST_DB)
     app.tracker.tracker = app.tracker.Tracker(TEST_DB)
     app.main.tracker = app.tracker.tracker
+    import app.pipeline
+    app.pipeline.tracker = app.tracker.tracker
     app.analyzer_llm.clear_routing_cache()
 
     # Configure offline provider endpoints pointing to fake server
@@ -96,14 +100,23 @@ def client(fake_server):
 
 @pytest.fixture(autouse=True)
 def reset_guards():
-    """Reset rate limiting and budgets between individual test runs."""
+    """Reset rate limiting, budgets, circuits, and caches between individual test runs."""
     from app.config import settings
     import app.main
+    import app.circuit
+    import app.analyzer_llm
+    import app.pipeline
 
     object.__setattr__(settings, "daily_budget_usd", 0.0)
     object.__setattr__(settings, "max_cost_per_request", 0.0)
     app.main._rate_hits.clear()
+    app.circuit.circuits.reset()
+    app.analyzer_llm.clear_routing_cache()
+    app.pipeline.clear_completion_cache()
     yield
     object.__setattr__(settings, "daily_budget_usd", 0.0)
     object.__setattr__(settings, "max_cost_per_request", 0.0)
     app.main._rate_hits.clear()
+    app.circuit.circuits.reset()
+    app.analyzer_llm.clear_routing_cache()
+    app.pipeline.clear_completion_cache()

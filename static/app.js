@@ -149,13 +149,13 @@ class SettingsManager {
     }
   }
 
-  static clearKeys() {
-    const settings = this.load();
+  static async clearKeys() {
+    const settings = await this.load();
     settings.apiKeys = this.getDefaults().apiKeys;
     settings.customEndpoints = this.getDefaults().customEndpoints;
     settings.providerModels = this.getDefaults().providerModels;
     settings.tierOverrides = this.getDefaults().tierOverrides;
-    this.save(settings);
+    await this.save(settings);
   }
 
   static async getHeaders() {
@@ -806,10 +806,20 @@ function setStreamingState(isStreaming) {
     btn.classList.add("stop-state");
     btn.title = "Stop Generation";
     icon.innerHTML = "<svg class='icon-sym' aria-hidden='true'><use href='#i-stop'/></svg>";
+    const pv = $("pipeline-visualizer");
+    if (pv) {
+      pv.classList.remove("hidden");
+      $$("#pipeline-visualizer .pipeline-node").forEach(n => n.classList.remove("active", "analyzer", "routing", "output"));
+      $("node-query")?.classList.add("active");
+    }
   } else {
     btn.classList.remove("stop-state");
     btn.title = "Send Message (Enter)";
     icon.innerHTML = "<svg class='icon-sym' aria-hidden='true'><use href='#i-arrow-up'/></svg>";
+    const pv = $("pipeline-visualizer");
+    if (pv) {
+      setTimeout(() => pv.classList.add("hidden"), 1000); // fade out
+    }
   }
 }
 
@@ -1074,6 +1084,12 @@ function createStreamingPlaceholder() {
       if (compBar) compBar.style.width = `${Math.round((info.complexity_score || 0.5) * 100)}%`;
       if (reason) reason.textContent = `"${info.reason || 'Optimal execution tier selected.'}"`;
       if (title) title.textContent = isSelf ? "Resolved in Direct Self-Mode (0ms downstream)" : `Routing to ${info.target_provider || 'Specialized Model'}`;
+      
+      const pv = $("pipeline-visualizer");
+      if (pv) {
+         $$("#pipeline-visualizer .pipeline-node").forEach(n => n.classList.remove("active", "analyzer", "routing", "output"));
+         $("node-analyzer")?.classList.add("active", "analyzer");
+      }
     },
     updateRouting: (route) => {
       const target = $(`${drawerId}_target`);
@@ -1083,6 +1099,16 @@ function createStreamingPlaceholder() {
       if (target) target.textContent = route.target_name || route.target_model;
       if (provider) provider.textContent = `${(route.target_provider || '').toUpperCase()} (${route.target_tier || ''})`;
       if (title) title.textContent = `Routed to ${route.target_name || route.target_model}`;
+
+      const pv = $("pipeline-visualizer");
+      if (pv) {
+         $$("#pipeline-visualizer .pipeline-node").forEach(n => n.classList.remove("active", "analyzer", "routing", "output"));
+         $("node-scoreboard")?.classList.add("active", "routing");
+         setTimeout(() => {
+           $$("#pipeline-visualizer .pipeline-node").forEach(n => n.classList.remove("active", "analyzer", "routing", "output"));
+           $("node-model")?.classList.add("active", "routing");
+         }, 400);
+      }
     },
     appendReasoningDelta: (fullReasoning) => {
       const wrap = $(`${drawerId}_thinking_wrap`);
@@ -1094,6 +1120,11 @@ function createStreamingPlaceholder() {
     startResponse: () => {
       const body = $(`${drawerId}_body`);
       if (body) body.style.display = "block";
+      const pv = $("pipeline-visualizer");
+      if (pv) {
+         $$("#pipeline-visualizer .pipeline-node").forEach(n => n.classList.remove("active", "analyzer", "routing", "output"));
+         $("node-output")?.classList.add("active", "output");
+      }
     },
     appendDelta: (fullText) => {
       const body = $(`${drawerId}_body`);
@@ -1333,8 +1364,16 @@ async function executeStreamingChat(payload, signal, onAnalyzer, onRouting, onRe
           if (onReasoningDelta) onReasoningDelta(evt.text || "");
           break;
         case "delta":
+          if (onDelta && !evt._handled) {
+            onDelta(evt.text || "");
+            evt._handled = true;
+          }
+          break;
         case "content_delta":
-          if (onDelta) onDelta(evt.text || "");
+          if (onDelta && !evt._handled) {
+            onDelta(evt.text || "");
+            evt._handled = true;
+          }
           break;
         case "done":
           if (onDone) onDone(evt);
