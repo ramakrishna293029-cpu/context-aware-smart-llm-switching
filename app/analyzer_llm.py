@@ -1,12 +1,12 @@
-"""Analyzer LLM: Evaluates query + context to produce a structured routing decision.
+"""Analyzer LLM: Gemini 3.1 Flash-Lite Structured Decision Engine.
 
-Dual-Role First-Line Responder:
-1. SELF-MODE (answer_mode = "self"):
-   Answers simple queries (greetings, simple facts, basic math, short definitions) directly
-   in 1 cheap call, emitting the complete answer in the `answer` field and bypassing downstream models.
-2. SWITCH-MODE (answer_mode = "switch"):
-   Classifies complex queries (coding, debugging, math proofs, system architecture, deep reasoning)
-   and determines the optimal target tier, provider, and candidate sequence.
+Analyzes query + context to produce structured JSON matching Box 3:
+{
+  "task_type": "coding" | "general" | "reasoning" | "factual" | "math",
+  "complexity": "low" | "medium" | "high",
+  "required_capability": "tier_1" | "tier_2" | "tier_3" | "tier_4" | "tier_5" | "tier_6",
+  "reason": "..."
+}
 """
 
 import hashlib
@@ -25,9 +25,7 @@ from .schemas import AnalyzerInfo, ChatMessage
 JSON_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
 # ---------------------------------------------------------------------------
-# Semantic routing cache: repeat queries skip the analyzer LLM round-trip
-# entirely (removes the serial analyzer latency for repeated/similar asks).
-# Keyed by normalized query + history + analyzer + candidate set; TTL-bounded.
+# Semantic routing cache
 # ---------------------------------------------------------------------------
 _ROUTING_CACHE: "OrderedDict[str, tuple[float, AnalyzerDecision]]" = OrderedDict()
 _ROUTING_CACHE_MAX = 256
@@ -80,27 +78,29 @@ class AnalyzerDecisionError(RuntimeError):
 
 @dataclass
 class AnalyzerDecision:
-    task_type: str                  # "factual" | "general" | "coding" | "debugging" | "math" | "reasoning" | "system_architecture"
+    task_type: str                  # "coding" | "general" | "reasoning" | "factual" | "math"
     complexity: str                 # "low" | "medium" | "high"
-    complexity_score: float         # 0.0 - 1.0
-    reasoning_required: bool
-    coding_required: bool
-    context_required: bool
-    target_tier: str                # "fast" | "coding" | "reasoning" | "powerful" | "balanced"
-    target_provider: str            # "gemini" | "groq" | "openrouter" | "openai" | "custom" | "mock"
-    target_model: Optional[str]     # model_id or endpoint_model
-    reason: str                     # short explanation
-    analyzer_model: ModelSpec       # model used for analysis
+    required_capability: str        # "tier_1" | "tier_2" | "tier_3" | "tier_4" | "tier_5" | "tier_6"
+    reason: str                     # structured reasoning explanation
+    analyzer_model: ModelSpec       # model used for analysis (Gemini 3.1 Flash-Lite)
     analyzer_result: LLMResult      # usage and latency of analyzer call
-    answer_mode: str = "switch"     # "self" | "switch"
+    complexity_score: float = 0.5   # 0.0 - 1.0 numeric score
+    reasoning_required: bool = False
+    coding_required: bool = False
+    context_required: bool = False
+    target_tier: str = "tier_1"
+    target_provider: str = "gemini"
+    target_model: Optional[str] = None
+    answer_mode: str = "switch"     # "switch" | "self"
     answer: Optional[str] = None    # direct answer if self-mode
-    switch_required: bool = True    # False if self, True if switch
+    switch_required: bool = True
 
     def to_dict(self) -> dict:
         return {
-            "answer_mode": self.answer_mode,
             "task_type": self.task_type,
             "complexity": self.complexity,
+            "required_capability": self.required_capability,
+            "reason": self.reason,
             "complexity_score": self.complexity_score,
             "reasoning_required": self.reasoning_required,
             "coding_required": self.coding_required,
@@ -108,7 +108,7 @@ class AnalyzerDecision:
             "target_tier": self.target_tier,
             "target_provider": self.target_provider,
             "target_model": self.target_model,
-            "reason": self.reason,
+            "answer_mode": self.answer_mode,
             "answer": self.answer,
             "switch_required": self.switch_required,
             "analyzer_model_id": self.analyzer_model.model_id,
@@ -116,10 +116,9 @@ class AnalyzerDecision:
         }
 
     def to_analyzer_info(self, cost_usd: Optional[float] = None) -> AnalyzerInfo:
-        """Converts decision to standard telemetry AnalyzerInfo schema."""
+        """Converts decision to standard telemetry AnalyzerInfo schema (Box 3)."""
         computed_cost = cost_usd
         if computed_cost is None:
-            # Estimate cost based on analyzer model pricing
             tokens_in = self.analyzer_result.input_tokens or 0
             tokens_out = self.analyzer_result.output_tokens or 0
             in_cost = (tokens_in / 1_000_000.0) * self.analyzer_model.input_price_per_mtok
@@ -130,26 +129,27 @@ class AnalyzerDecision:
             model_id=self.analyzer_model.model_id,
             model_name=self.analyzer_model.name,
             provider=self.analyzer_model.provider,
-            answer_mode="self" if self.answer_mode == "self" else "switch",
             task_type=self.task_type,
             complexity=self.complexity if self.complexity in ("low", "medium", "high") else "medium",  # type: ignore
-            complexity_score=round(self.complexity_score, 3),
-            reasoning_required=self.reasoning_required,
-            coding_required=self.coding_required,
-            context_required=self.context_required,
-            target_tier=self.target_tier,
-            target_provider=self.target_provider,
-            target_model=self.target_model,
+            required_capability=self.required_capability,
             reason=self.reason,
             input_tokens=self.analyzer_result.input_tokens,
             output_tokens=self.analyzer_result.output_tokens,
             latency_ms=round(self.analyzer_result.latency_ms, 2),
             cost_usd=computed_cost,
+            complexity_score=round(self.complexity_score, 3),
+            answer_mode="self" if self.answer_mode == "self" else "switch",
+            target_tier=self.target_tier,
+            target_provider=self.target_provider,
+            target_model=self.target_model,
+            reasoning_required=self.reasoning_required,
+            coding_required=self.coding_required,
+            context_required=self.context_required,
         )
 
 
 def _extract_json(text: str) -> dict:
-    """Safely extracts JSON object from LLM output handling fences, commentary, and balanced braces."""
+    """Safely extracts JSON object from LLM output handling fences and commentary."""
     def try_parse(s: str) -> Optional[dict]:
         s = s.strip()
         if not s:
@@ -176,7 +176,6 @@ def _extract_json(text: str) -> dict:
     # 3. Balanced outermost {...} extraction
     start = text.find("{")
     if start != -1:
-        # Scan for balanced closing brace
         depth = 0
         in_string = False
         escape = False
@@ -214,50 +213,32 @@ def _extract_json(text: str) -> dict:
 
 
 def _build_analyzer_messages(query: str, history: List[ChatMessage], available: List[ModelSpec]) -> List[ChatMessage]:
-    """Builds prompt instructing the Analyzer LLM to classify, self-answer or route."""
-    models_summary = "\n".join([
-        f"- {m.provider.upper()}: {m.name} [Tier: {m.tier}, Quality: {m.quality:.2f}, Reasoning: {m.reasoning:.2f}, Coding: {m.coding:.2f}]"
-        for m in available if m.tier != "analyzer"
-    ])
-
-    system_prompt = f"""You are the INTELLIGENT QUERY ANALYZER & FIRST-LINE RESPONDER for an AI Routing System.
-Your job is to analyze the incoming user query and conversation context, decide whether you can answer it accurately yourself (SELF-MODE) or if it requires switching to a specialized heavy model (SWITCH-MODE), and output a strictly valid JSON object.
-
-DECISION CRITERIA:
-1. SELF-MODE (answer_mode = "self"):
-   - Use ONLY for: Simple greetings ("hi", "hello", "good morning"), casual dialogue, simple factual questions, short definitions, straightforward translations, simple arithmetic ("5 + 7").
-   - Action: Set answer_mode to "self", provide the direct complete answer in the "answer" field, and set target_tier to "fast".
-   - Response Style: Direct, accurate, crisp, structured with bullet-bunched key points when explaining concepts, medium-to-short length, zero filler.
-   - Example queries: "Hi", "Hello", "What is HTML?", "Capital of France", "Who wrote Hamlet?", "5 + 7".
-
-2. SWITCH-MODE (answer_mode = "switch"):
-   - MANDATORY for: ANY programming, coding, algorithms (e.g. Dijkstra, sorting, search), debugging, math proofs, system architecture, distributed systems, deep reasoning, large code refactoring.
-   - Action: Set answer_mode to "switch", set "answer" to null, and select the optimal target tier and provider.
-   - NEVER use self-mode for coding or algorithms.
-   - Target tiers:
-     * "coding": Programming, debugging, SQL, syntax, Docker, scripts, algorithms, code implementation.
-     * "reasoning": System architecture, mathematical proofs, logic puzzles, trade-off analysis.
-     * "powerful": Deep comprehensive synthesis, massive context reasoning.
-     * "fast": General heavy factual lookups.
-
-AVAILABLE PROVIDERS & TIERS:
-{models_summary}
-
-REQUIRED JSON OUTPUT FORMAT (Strictly valid JSON with no conversational prefix/suffix):
-{{
-  "answer_mode": "self" | "switch",
-  "task_type": "factual" | "general" | "coding" | "debugging" | "math" | "reasoning" | "system_architecture",
+    """Builds prompt instructing Gemini 3.1 Flash-Lite Analyzer to return structured Box 3 JSON."""
+    system_prompt = """You are the Analyzer LLM for Context-Aware Smart LLM Switching.
+Your job is to analyze the incoming user query and conversation context, determine the task type, complexity, and required capability tier, and output a strictly valid JSON object matching Box 3:
+{
+  "task_type": "coding" | "general" | "reasoning" | "factual" | "math",
   "complexity": "low" | "medium" | "high",
-  "complexity_score": 0.15,
-  "reasoning_required": false,
-  "coding_required": false,
-  "context_required": false,
-  "target_tier": "fast" | "coding" | "reasoning" | "powerful",
-  "target_provider": "gemini" | "groq" | "openrouter" | "openai" | "custom",
-  "target_model": null,
-  "reason": "Concise sentence explaining why this mode and tier were selected.",
-  "answer": "Direct answer text if answer_mode is self, otherwise null"
-}}"""
+  "required_capability": "tier_1" | "tier_2" | "tier_3" | "tier_4" | "tier_5" | "tier_6",
+  "reason": "Concise justification for the capability and tier selection."
+}
+
+MODEL TIER ARCHITECTURE & CAPABILITIES:
+- tier_1: Gemini 3.5 Flash-Lite (Lightweight / Fast) - Simple factual queries, short definitions, greetings, basic translations, low complexity.
+- tier_2: Groq GPT-OSS 20B (Fast General Purpose) - Fast conversational text generation, general drafting, medium-low complexity.
+- tier_3: Gemini 3.6 Flash (Balanced) - Balanced general queries, structured explanations, moderate complexity factual & analytical questions.
+- tier_4: Groq Qwen3.8 27B (Coding Specialist) - Programming, debugging, SQL queries, algorithms (quicksort, binary search, dijkstra), syntax, code refactoring.
+- tier_5: Groq GPT-OSS 120B (Advanced Reasoning) - Complex multi-step reasoning, mathematical proofs, logic puzzles, deep architecture trade-offs.
+- tier_6: Gemini 3.8 Flash (High-Capability Gemini) - Frontier multi-domain problems, comprehensive synthesis, critical complex systems analysis.
+
+RULES:
+1. Programming/coding/debugging/algorithms MUST select "tier_4" (or "tier_5"/"tier_6" for massive system architectures).
+2. Advanced reasoning/math proofs/logic puzzles MUST select "tier_5" (or "tier_6" for high complexity).
+3. Simple greetings, basic facts, short definitions MUST select "tier_1" or "tier_2".
+4. Moderate complexity general/factual tasks MUST select "tier_3".
+5. Highly complex synthesis and critical architecture design MUST select "tier_6".
+
+Return ONLY the strictly valid JSON object."""
 
     messages = [ChatMessage(role="system", content=system_prompt)]
 
@@ -270,6 +251,31 @@ REQUIRED JSON OUTPUT FORMAT (Strictly valid JSON with no conversational prefix/s
     return messages
 
 
+def _normalize_required_capability(raw_tier: Optional[str], task_type: str, complexity: str) -> str:
+    """Normalizes any tier string to standard tier_1 .. tier_6."""
+    raw = str(raw_tier or "").lower().strip()
+    tier_map = {
+        "tier_1": "tier_1", "tier1": "tier_1", "fast": "tier_1", "fast-backup": "tier_1",
+        "tier_2": "tier_2", "tier2": "tier_2",
+        "tier_3": "tier_3", "tier3": "tier_3", "balanced": "tier_3",
+        "tier_4": "tier_4", "tier4": "tier_4", "coding": "tier_4", "coding-backup": "tier_4",
+        "tier_5": "tier_5", "tier5": "tier_5", "reasoning": "tier_5", "reasoning-backup": "tier_5",
+        "tier_6": "tier_6", "tier6": "tier_6", "powerful": "tier_6",
+    }
+    if raw in tier_map:
+        return tier_map[raw]
+
+    # Deduce from task_type and complexity if unrecognized
+    if task_type == "coding":
+        return "tier_4"
+    if task_type in ("reasoning", "math"):
+        return "tier_6" if complexity == "high" else "tier_5"
+    if complexity == "high":
+        return "tier_6"
+    if complexity == "medium":
+        return "tier_3"
+    return "tier_1"
+
 
 async def run_analyzer(
     query: str,
@@ -279,16 +285,9 @@ async def run_analyzer(
     analyzer_model: Optional[ModelSpec] = None,
     registry_instance: Optional[ModelRegistry] = None,
 ) -> AnalyzerDecision:
-    """Executes the Base/Analyzer model, parses the output, and produces an AnalyzerDecision.
-
-    Optimizations:
-    - Fast-path gate: pure arithmetic queries are computed exactly (locally),
-      skipping the analyzer LLM call entirely — same result, zero latency.
-    - Routing cache: repeated queries reuse the cached decision, skipping the
-      serial analyzer round-trip (targets the double-latency penalty).
-    """
+    """Executes Gemini 3.1 Flash-Lite Analyzer LLM, returning structured Box 3 decision."""
     history = history or []
-    
+
     # 1. Resolve analyzer model and candidate models
     reg = registry_instance or registry
     active_analyzer = analyzer_model or reg.get_analyzer()
@@ -300,9 +299,9 @@ async def run_analyzer(
     if cached is not None:
         return cached
 
+    # Fast-path for exact arithmetic
     arith_ans = _try_solve_simple_arithmetic(query.strip())
     if arith_ans and not history:
-        # Exact local computation: no analyzer call, no invented tokens.
         fastpath_result = LLMResult(
             content="", text="",
             input_tokens=0, output_tokens=0, tokens_in=0, tokens_out=0,
@@ -311,16 +310,17 @@ async def run_analyzer(
         decision = AnalyzerDecision(
             task_type="math",
             complexity="low",
+            required_capability="tier_1",
+            reason="Exact arithmetic computed locally by the fast-path gate.",
+            analyzer_model=active_analyzer,
+            analyzer_result=fastpath_result,
             complexity_score=0.10,
             reasoning_required=False,
             coding_required=False,
             context_required=False,
-            target_tier="fast",
-            target_provider=active_analyzer.provider,
+            target_tier="tier_1",
+            target_provider="gemini",
             target_model=None,
-            reason="Exact arithmetic computed locally by the fast-path gate (no analyzer call needed).",
-            analyzer_model=active_analyzer,
-            analyzer_result=fastpath_result,
             answer_mode="self",
             answer=arith_ans,
             switch_required=False,
@@ -330,14 +330,14 @@ async def run_analyzer(
 
     messages = _build_analyzer_messages(query, history, avail_models)
 
-    # 2. Invoke analyzer model via adapter
+    # 3. Invoke Analyzer model (Gemini 3.1 Flash-Lite)
     t0 = time.perf_counter()
     try:
         adapter = adapter_factory.get(active_analyzer.provider)
         result = await adapter.generate(active_analyzer, messages, json_mode=True)
         decision_dict = _extract_json(result.text)
     except Exception:
-        # Fallback to deterministic heuristic engine
+        # Fallback to deterministic heuristics
         decision_dict = _fallback_heuristics(query, history)
         lat_ms = (time.perf_counter() - t0) * 1000.0
         result = LLMResult(
@@ -352,116 +352,98 @@ async def run_analyzer(
             ttft_ms=lat_ms,
         )
 
-    # 3. Parse and normalize answer_mode & direct answer
-    answer_mode = str(decision_dict.get("answer_mode", "switch")).lower().strip()
-    if answer_mode not in ("self", "switch"):
-        answer_mode = "self" if decision_dict.get("answer") else "switch"
+    # 4. Parse & Normalize Box 3 fields
+    raw_task = str(decision_dict.get("task_type", "general")).lower().strip()
+    if raw_task in ("coding", "general", "reasoning", "factual", "math"):
+        task_type = raw_task
+    elif "code" in raw_task or "debug" in raw_task:
+        task_type = "coding"
+    elif "math" in raw_task or "calc" in raw_task:
+        task_type = "math"
+    elif "reason" in raw_task:
+        task_type = "reasoning"
+    elif "fact" in raw_task:
+        task_type = "factual"
+    else:
+        task_type = "general"
 
+    raw_comp = str(decision_dict.get("complexity", "medium")).lower().strip()
+    if raw_comp in ("low", "medium", "high"):
+        complexity = raw_comp
+    else:
+        complexity = "medium"
+
+    raw_req_cap = decision_dict.get("required_capability") or decision_dict.get("target_tier")
+    required_capability = _normalize_required_capability(raw_req_cap, task_type, complexity)
+
+    reason = str(decision_dict.get("reason") or f"Routed to {required_capability} based on task analysis.").strip()
+
+    # Safety overrides for explicit code/reasoning prompts
+    q_lower = query.lower()
+    has_code_intent = (
+        task_type == "coding"
+        or "```" in query
+        or any(k in q_lower for k in ("write a function", "implement ", "algorithm", "quicksort", "binary search", "dijkstra", "unit test", "def ", "class "))
+    )
+    if has_code_intent:
+        task_type = "coding"
+        if required_capability in ("tier_1", "tier_2", "tier_3"):
+            required_capability = "tier_4"
+
+    # Numeric complexity score
+    if complexity == "low":
+        complexity_score = 0.20
+    elif complexity == "high":
+        complexity_score = 0.90
+    else:
+        complexity_score = 0.55
+
+    if "complexity_score" in decision_dict:
+        try:
+            complexity_score = float(decision_dict["complexity_score"])
+        except (ValueError, TypeError):
+            pass
+
+    coding_required = task_type == "coding" or required_capability == "tier_4"
+    reasoning_required = task_type in ("reasoning", "math") or required_capability in ("tier_5", "tier_6")
+    context_required = bool(decision_dict.get("context_required", len(history) > 0))
+
+    # Provider map for the 6 tiers
+    provider_map = {
+        "tier_1": "gemini",
+        "tier_2": "groq",
+        "tier_3": "gemini",
+        "tier_4": "groq",
+        "tier_5": "groq",
+        "tier_6": "gemini",
+    }
+    target_provider = provider_map.get(required_capability, "gemini")
+
+    # In demo simulation mode, check if answer was provided
+    answer_mode = str(decision_dict.get("answer_mode", "switch")).lower().strip()
     direct_answer = decision_dict.get("answer")
-    forced_switch = False
     if answer_mode == "self" and direct_answer and str(direct_answer).strip():
         direct_answer = str(direct_answer).strip()
         switch_required = False
     else:
-        # Invariant: self-mode MUST carry a real answer produced by the
-        # analyzer LLM. Never substitute canned text — if the analyzer chose
-        # self but produced no answer, fall through to switch-mode so a real
-        # provider generates the response.
-        if answer_mode == "self":
-            forced_switch = True
         answer_mode = "switch"
-        switch_required = True
         direct_answer = None
-
-    # 4. Parse and normalize task classification & routing metrics
-    task_type = str(decision_dict.get("task_type", "general")).lower().strip()
-    complexity_raw = str(decision_dict.get("complexity", "medium")).lower().strip()
-    if complexity_raw not in ("low", "medium", "high"):
-        complexity_raw = "low" if answer_mode == "self" else "medium"
-
-    complexity_score_raw = decision_dict.get("complexity_score")
-    if complexity_score_raw is None:
-        complexity_score = 0.1 if complexity_raw == "low" else 0.6 if complexity_raw == "medium" else 0.9
-    else:
-        try:
-            complexity_score = max(0.0, min(1.0, float(complexity_score_raw)))
-        except (ValueError, TypeError):
-            complexity_score = 0.5
-
-    reasoning_required = bool(decision_dict.get("reasoning_required", complexity_raw == "high"))
-    coding_required = bool(decision_dict.get("coding_required", task_type in ("coding", "debugging")))
-    context_required = bool(decision_dict.get("context_required", len(history) > 0))
-
-    # Narrow safety net only: obvious coding/architecture intent cannot self-answer.
-    q_lower = query.lower()
-    has_code_intent = (
-        coding_required
-        or task_type in ("coding", "debugging", "system_architecture")
-        or "```" in query
-        or any(
-            k in q_lower
-            for k in (
-                "write a function",
-                "implement ",
-                "algorithm",
-                "dijkstra",
-                "quicksort",
-                "binary search",
-                "unit test",
-                "distributed",
-            )
-        )
-    )
-    if has_code_intent and answer_mode == "self":
-        answer_mode = "switch"
         switch_required = True
-        direct_answer = None
-        if task_type not in ("coding", "debugging", "system_architecture", "reasoning"):
-            task_type = "coding"
-        coding_required = True
-        reason_forced = "Forced switch: coding or architecture intent."
-    else:
-        reason_forced = None
-    if has_code_intent:
-        if task_type not in ("coding", "debugging", "system_architecture", "reasoning"):
-            task_type = "coding"
-        coding_required = coding_required or task_type in ("coding", "debugging")
-
-    target_tier = str(decision_dict.get("target_tier", "fast")).lower().strip()
-    if target_tier not in ("fast", "coding", "reasoning", "powerful", "balanced", "custom"):
-        target_tier = "coding" if coding_required else "reasoning" if reasoning_required else "fast"
-
-    if forced_switch and target_tier not in ("coding", "reasoning", "powerful"):
-        target_tier = "fast"
-
-
-    raw_provider = str(decision_dict.get("target_provider") or "").lower().strip()
-    target_provider = raw_provider if raw_provider in (
-        "gemini", "groq", "openrouter", "openai", "custom", "mock"
-    ) else ""
-
-    reason = str(decision_dict.get("reason") or f"Routed to {target_tier} tier").strip()
-    if reason_forced:
-        reason = reason_forced
-    elif forced_switch:
-        reason = (
-            f"Analyzer LLM produced no direct answer; routed to {target_tier} tier "
-            "so a real provider generates the response."
-        )
 
     decision = AnalyzerDecision(
         task_type=task_type,
-        complexity=complexity_raw,
+        complexity=complexity,
+        required_capability=required_capability,
+        reason=reason,
+        analyzer_model=active_analyzer,
+        analyzer_result=result,
         complexity_score=round(complexity_score, 3),
         reasoning_required=reasoning_required,
         coding_required=coding_required,
         context_required=context_required,
-        target_tier=target_tier,
+        target_tier=required_capability,
         target_provider=target_provider,
         target_model=decision_dict.get("target_model"),
-        reason=reason,
-        analyzer_model=active_analyzer,
-        analyzer_result=result,
         answer_mode=answer_mode,
         answer=direct_answer,
         switch_required=switch_required,

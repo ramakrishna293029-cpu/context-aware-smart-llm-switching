@@ -31,27 +31,29 @@ class CandidateInfo(BaseModel):
     factors: Dict[str, float] = Field(default_factory=dict)
 
 
-# --- Analyzer Decision Contract ---
+# --- Analyzer Decision Contract (Box 3) ---
 class AnalyzerInfo(BaseModel):
-    """Telemetry for the Analyzer LLM call + decision."""
+    """Structured decision output from Gemini 3.1 Flash-Lite Analyzer (Box 3)."""
     model_id: str
     model_name: str
     provider: str
-    answer_mode: Literal["self", "switch"] = "switch"
-    task_type: str
-    complexity: Literal["low", "medium", "high"] = "medium"
-    complexity_score: float
-    reasoning_required: bool = False
-    coding_required: bool = False
-    context_required: bool = False
-    target_tier: str = "fast"
-    target_provider: str = "gemini"
-    target_model: Optional[str] = None
+    task_type: Literal["coding", "general", "reasoning", "factual", "math"] | str
+    complexity: Literal["low", "medium", "high"] | str = "medium"
+    required_capability: Literal["tier_1", "tier_2", "tier_3", "tier_4", "tier_5", "tier_6"] | str = "tier_1"
     reason: str
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     latency_ms: float = 0.0
     cost_usd: Optional[float] = None
+    # Compatibility attributes
+    complexity_score: Optional[float] = 0.5
+    answer_mode: Optional[Literal["self", "switch"]] = "switch"
+    target_tier: Optional[str] = "tier_1"
+    target_provider: Optional[str] = "gemini"
+    target_model: Optional[str] = None
+    reasoning_required: Optional[bool] = False
+    coding_required: Optional[bool] = False
+    context_required: Optional[bool] = False
 
 
 # --- Model Execution Info ---
@@ -68,6 +70,10 @@ class ModelInfo(BaseModel):
 # --- Full Response Schema ---
 class ChatResponse(BaseModel):
     response: str
+    answer: Optional[str] = None          # Box 8 direct field (alias for response)
+    selected_model: Optional[str] = None  # Box 8 direct field
+    tier: Optional[str] = None            # Box 8 model tier
+    usage: Optional[Dict[str, Any]] = None # Box 8 usage object
     answer_mode: Literal["self", "switch"] = "switch"
     model: ModelInfo
     analyzer: AnalyzerInfo
@@ -91,6 +97,9 @@ class ChatResponse(BaseModel):
     fallback_used: bool = False
     fallback_reason: Optional[str] = None
     escalation_used: bool = False
+    escalated: bool = False
+    original_tier: Optional[str] = None
+    escalated_tier: Optional[str] = None
     escalation_reason: Optional[str] = None
     candidates: List[CandidateInfo] = Field(default_factory=list)
 
@@ -131,11 +140,17 @@ class HistoryRow(BaseModel):
     answer_mode: Optional[str] = "switch"
     fallback_used: bool = False
     escalation_used: bool = False
+    escalated: bool = False
+    original_tier: Optional[str] = None
+    escalated_tier: Optional[str] = None
+    escalation_reason: Optional[str] = None
+    required_capability: Optional[str] = None
     input_tokens: Optional[int] = None
     output_tokens: Optional[int] = None
     reasoning_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
     estimated_cost_usd: Optional[float] = None
+    estimated_cost: Optional[float] = None  # alias for backward-compatibility
     total_cost_usd: Optional[float] = None
     latency_ms: float = 0.0
     total_latency_ms: float = 0.0
@@ -158,7 +173,7 @@ class BenchmarkComparisonItem(BaseModel):
     task_type: str
     complexity: str
 
-    # Baseline 1: Always Powerful Model
+    # Baseline 1: Always Powerful Model (Tier 6)
     baseline1_model: str
     baseline1_cost_usd: float
     baseline1_latency_ms: float
@@ -175,7 +190,6 @@ class BenchmarkComparisonItem(BaseModel):
     smart_savings_percent: float
     smart_speedup_percent: float
 
-    # Honesty metadata: non-empty when a branch's real provider call failed.
     error: Optional[str] = None
 
 
@@ -191,7 +205,6 @@ class BenchmarkResult(BaseModel):
     overall_cost_savings_percent: float
     overall_speedup_percent: float
     items: List[BenchmarkComparisonItem] = Field(default_factory=list)
-    # "real" = live provider calls; "demo" = mock adapter (no credentials).
     execution_mode: str = "real"
 
 
@@ -206,8 +219,8 @@ class ProviderStatusItem(BaseModel):
 class ProviderHealthResponse(BaseModel):
     gemini: ProviderStatusItem
     groq: ProviderStatusItem
-    openrouter: ProviderStatusItem
-    openai: ProviderStatusItem
+    openrouter: Optional[ProviderStatusItem] = None
+    openai: Optional[ProviderStatusItem] = None
     custom: Optional[ProviderStatusItem] = None
     overall_status: str
 
@@ -236,3 +249,4 @@ class ModelPublicItem(BaseModel):
     output_price_per_mtok: float
     expected_latency_ms: float
     tier: str
+    fallback_model: Optional[str] = None

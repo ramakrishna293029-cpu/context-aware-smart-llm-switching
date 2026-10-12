@@ -1,7 +1,10 @@
-"""Shared chat pipeline: analyze → route → execute → persist.
+"""Shared chat pipeline: analyze → route → execute → evaluate quality & escalate → persist.
 
-Unary `/api/chat` and SSE `/api/chat/stream` both call these helpers so
-token honesty, budgets, fallback, and telemetry stay in one place.
+Architecture:
+1. Analyzer LLM: Gemini 3.1 Flash-Lite (Box 3)
+2. 6 Response Model Tiers (Tier 1..6)
+3. Quality Check & Adaptive Escalation (Box 6)
+4. Transaction Metering & Logging (Box 7)
 """
 
 from __future__ import annotations
@@ -108,6 +111,89 @@ def route_decision(
         latency_profile=tracker.get_latency_profile(),
         feedback_modifiers=tracker.get_feedback_modifiers(),
     )
+
+
+# ---------------------------------------------------------------------------
+# Box 6: Response Quality Check & Adaptive Escalation Engine
+# ---------------------------------------------------------------------------
+def evaluate_response_quality(
+    query: str,
+    response_text: str,
+    decision: AnalyzerDecision,
+    result: Optional[LLMResult],
+) -> Tuple[bool, Optional[str]]:
+    """Evaluates response sufficiency, completeness, truncation, and error status (Box 6)."""
+    if not response_text or not response_text.strip():
+        return False, "Response was empty or whitespace only"
+
+    text = response_text.strip()
+    if text.startswith("Error:") or text.startswith("Provider error:"):
+        return False, f"Model returned error response: {text[:60]}"
+
+    # Truncation check 1: unclosed code block fences
+    fences = text.count("```")
+    if fences % 2 != 0:
+        return False, "Response truncated: unclosed code block detected"
+
+    # Truncation check 2: explicit provider finish reason
+    if result and result.raw_response and isinstance(result.raw_response, dict):
+        choices = result.raw_response.get("choices", [])
+        if choices and choices[0].get("finish_reason") == "length":
+            return False, "Response truncated: finish_reason='length'"
+        candidates = result.raw_response.get("candidates", [])
+        if candidates and candidates[0].get("finishReason") in ("MAX_TOKENS", "LENGTH"):
+            return False, "Response truncated: finishReason='MAX_TOKENS'"
+
+    # Completeness check for specialized coding tasks
+    if decision.task_type == "coding" and decision.coding_required:
+        if len(text.split()) < 5:
+            return False, "Insufficient response for coding task (under 5 words)"
+        if any(k in text.lower() for k in ("i cannot assist", "i am unable to provide")):
+            return False, "Model refused to provide coding implementation"
+
+    # Completeness check for high-complexity queries
+    if decision.complexity == "high" and len(text.split()) < 10:
+        return False, "Insufficient response for high-complexity query (under 10 words)"
+
+    return True, None
+
+
+def get_escalation_tier(
+    current_model: ModelSpec,
+    decision: AnalyzerDecision,
+    reg: ModelRegistry,
+) -> Optional[ModelSpec]:
+    """Determines the escalated model tier when quality check fails (Box 6)."""
+    cur_tier = current_model.tier.lower()
+
+    # Step-wise escalation hierarchy:
+    # Tier 1 -> Tier 2 (or Tier 3/4 if coding/reasoning)
+    # Tier 2 -> Tier 3 or Tier 4
+    # Tier 3 -> Tier 4 or Tier 5
+    # Tier 4 -> Tier 5 or Tier 6
+    # Tier 5 -> Tier 6
+    if "tier_1" in cur_tier or "fast" in cur_tier:
+        target = "tier_4" if decision.coding_required else ("tier_5" if decision.reasoning_required else "tier_2")
+    elif "tier_2" in cur_tier:
+        target = "tier_4" if decision.coding_required else "tier_3"
+    elif "tier_3" in cur_tier or "balanced" in cur_tier:
+        target = "tier_4" if decision.coding_required else "tier_5"
+    elif "tier_4" in cur_tier or "coding" in cur_tier:
+        target = "tier_5"
+    elif "tier_5" in cur_tier or "reasoning" in cur_tier:
+        target = "tier_6"
+    else:
+        # Tier 6 is top tier; fallback handled via gemini-3.5-flash
+        return None
+
+    esc_candidate = reg.get_by_tier(target)
+    if esc_candidate and esc_candidate.available and esc_candidate.model_id != current_model.model_id:
+        return esc_candidate
+
+    strongest = reg.strongest()
+    if strongest and strongest.model_id != current_model.model_id:
+        return strongest
+    return None
 
 
 async def execute_with_fallback(
@@ -261,6 +347,10 @@ class ChatOutcome:
     ttft_ms: Optional[float]
     fallback_used: bool
     fallback_reason: Optional[str]
+    escalation_used: bool
+    escalation_reason: Optional[str]
+    original_tier: Optional[str]
+    escalated_tier: Optional[str]
     success: bool
     error_text: Optional[str]
     analyzer_cost: float
@@ -336,7 +426,7 @@ def persist_outcome(query: str, outcome: ChatOutcome) -> int:
         analyzer_input_tokens=d.analyzer_result.input_tokens,
         analyzer_output_tokens=d.analyzer_result.output_tokens,
         analyzer_cost=outcome.analyzer_cost,
-        target_tier=d.target_tier if outcome.answer_mode == "switch" else "fast",
+        target_tier=d.target_tier,
         target_provider=d.target_provider or served.provider,
         selected_model=served.endpoint_model,
         selected_provider=served.provider,
@@ -359,6 +449,11 @@ def persist_outcome(query: str, outcome: ChatOutcome) -> int:
         error=outcome.error_text,
         fallback_used=outcome.fallback_used,
         fallback_reason=outcome.fallback_reason,
+        escalation_used=outcome.escalation_used,
+        escalation_reason=outcome.escalation_reason,
+        original_tier=outcome.original_tier,
+        escalated_tier=outcome.escalated_tier,
+        required_capability=d.required_capability,
         strategy=outcome.strategy,
         candidates_json=json.dumps(routing.candidates()) if routing else None,
     )
@@ -370,8 +465,19 @@ def to_chat_response(outcome: ChatOutcome) -> ChatResponse:
     served = outcome.served_model
     d = outcome.decision
     routing = outcome.routing
+    in_tok = outcome.in_tok or 0
+    out_tok = outcome.out_tok or 0
+    tot_tok = outcome.tot_tok or (in_tok + out_tok)
     return ChatResponse(
         response=outcome.response_text,
+        answer=outcome.response_text,
+        selected_model=served.endpoint_model,
+        tier=served.tier,
+        usage={
+            "prompt_tokens": in_tok,
+            "completion_tokens": out_tok,
+            "total_tokens": tot_tok,
+        },
         answer_mode=outcome.answer_mode,  # type: ignore[arg-type]
         model=ModelInfo(
             model_id=served.model_id,
@@ -404,6 +510,11 @@ def to_chat_response(outcome: ChatOutcome) -> ChatResponse:
         request_id=outcome.request_id or 0,
         fallback_used=outcome.fallback_used,
         fallback_reason=outcome.fallback_reason,
+        escalation_used=outcome.escalation_used,
+        escalated=outcome.escalation_used,
+        original_tier=outcome.original_tier,
+        escalated_tier=outcome.escalated_tier,
+        escalation_reason=outcome.escalation_reason,
         candidates=routing.to_candidate_infos() if routing else [],
     )
 
@@ -412,28 +523,38 @@ def done_event_payload(outcome: ChatOutcome) -> dict:
     served = outcome.served_model
     d = outcome.decision
     routing = outcome.routing
+    in_tok = outcome.in_tok or 0
+    out_tok = outcome.out_tok or 0
+    tot_tok = outcome.tot_tok or (in_tok + out_tok)
     return {
         "event": "done",
         "success": outcome.success,
         "request_id": outcome.request_id,
         "response": outcome.response_text,
+        "answer": outcome.response_text,
+        "selected_model": served.endpoint_model,
+        "tier": served.tier,
         "answer_mode": outcome.answer_mode,
         "model": {
             "model_id": served.model_id,
             "model_name": served.name,
             "provider": served.provider,
             "tier": served.tier,
+            "mode": served.mode,
+            "strategy": outcome.strategy,
             "reason": d.reason,
         },
-        "analyzer": d.to_analyzer_info(cost_usd=outcome.analyzer_cost).model_dump(),
-        "context_relevant": d.context_required,
+        "analyzer": d.to_dict(),
         "input_tokens": outcome.in_tok,
         "output_tokens": outcome.out_tok,
         "reasoning_tokens": outcome.reasoning_toks or 0,
         "total_tokens": outcome.tot_tok,
-        "estimated_cost_usd": round(outcome.model_cost, 6) if outcome.model_cost is not None else (
-            round(outcome.analyzer_cost, 6) if outcome.answer_mode == "self" else None
-        ),
+        "usage": {
+            "prompt_tokens": in_tok,
+            "completion_tokens": out_tok,
+            "total_tokens": tot_tok,
+        },
+        "estimated_cost_usd": round(outcome.model_cost, 6) if outcome.model_cost is not None else None,
         "analyzer_cost_usd": round(outcome.analyzer_cost, 6),
         "total_cost_usd": round(outcome.total_cost, 6),
         "baseline_cost_usd": round(outcome.baseline_cost, 6) if outcome.baseline_cost is not None else None,
@@ -444,6 +565,12 @@ def done_event_payload(outcome: ChatOutcome) -> dict:
         "total_latency_ms": round(outcome.total_lat, 1),
         "ttft_ms": round(outcome.ttft_ms, 1) if outcome.ttft_ms else None,
         "fallback_used": outcome.fallback_used,
+        "fallback_reason": outcome.fallback_reason,
+        "escalation_used": outcome.escalation_used,
+        "escalated": outcome.escalation_used,
+        "original_tier": outcome.original_tier,
+        "escalated_tier": outcome.escalated_tier,
+        "escalation_reason": outcome.escalation_reason,
         "candidates": routing.candidates() if routing else [],
     }
 
@@ -480,6 +607,10 @@ def build_self_outcome(
         ttft_ms=analyzer_lat,
         fallback_used=False,
         fallback_reason=None,
+        escalation_used=False,
+        escalation_reason=None,
+        original_tier=None,
+        escalated_tier=None,
         success=True,
         error_text=None,
         analyzer_cost=analyzer_cost,
@@ -509,6 +640,10 @@ def build_switch_outcome(
     analyzer_cost: float,
     fallback_used: bool,
     fallback_reason: Optional[str],
+    escalation_used: bool,
+    escalation_reason: Optional[str],
+    original_tier: Optional[str],
+    escalated_tier: Optional[str],
     success: bool,
     error_text: Optional[str],
     reg: ModelRegistry,
@@ -537,6 +672,10 @@ def build_switch_outcome(
         ttft_ms=ttft_ms,
         fallback_used=fallback_used,
         fallback_reason=fallback_reason,
+        escalation_used=escalation_used,
+        escalation_reason=escalation_reason,
+        original_tier=original_tier,
+        escalated_tier=escalated_tier,
         success=success,
         error_text=error_text,
         analyzer_cost=analyzer_cost,
@@ -568,7 +707,6 @@ async def run_unary_chat(
 
     cache_key = _completion_key(query, history, strategy, ",".join(m.model_id for m in available))
     cached = completion_cache_get(cache_key)
-    # Replay only switch completions; self answers are already a single cheap call.
 
     try:
         decision = await run_analyzer(
@@ -600,7 +738,6 @@ async def run_unary_chat(
     primary = chain[0]
 
     if cached and cached.get("answer_mode") == "switch" and cached.get("response"):
-        # Exact repeat of a switch query: skip the second provider call.
         served = primary
         fake = LLMResult(
             content=cached["response"],
@@ -622,6 +759,10 @@ async def run_unary_chat(
             analyzer_cost=analyzer_cost,
             fallback_used=False,
             fallback_reason="exact_cache",
+            escalation_used=False,
+            escalation_reason=None,
+            original_tier=None,
+            escalated_tier=None,
             success=True,
             error_text=None,
             reg=reg,
@@ -631,6 +772,7 @@ async def run_unary_chat(
         outcome.response_text = cached["response"]
         persist_outcome(query, outcome)
         return to_chat_response(outcome)
+
     messages = build_messages(
         history=history,
         query=query,
@@ -641,15 +783,46 @@ async def run_unary_chat(
     t_gen = time.perf_counter()
     fallback_used = False
     fallback_reason = None
+    escalation_used = False
+    escalation_reason = None
+    original_tier = None
+    escalated_tier = None
     served = primary
     result = None
     success = True
     error_text = None
+
     try:
         served, result, fallback_used, fallback_reason = await execute_with_fallback(messages, chain)
     except LLMAdapterError as exc:
         success = False
         error_text = str(exc)
+
+    # Box 6: Response Quality Check & Adaptive Escalation
+    if settings.enable_escalation:
+        res_text = result.text if result else ""
+        is_sufficient, fail_reason = evaluate_response_quality(query, res_text, decision, result)
+        if not is_sufficient:
+            esc_model = get_escalation_tier(served, decision, reg)
+            if esc_model and esc_model.model_id != served.model_id:
+                escalation_used = True
+                original_tier = served.tier
+                escalated_tier = esc_model.tier
+                escalation_reason = fail_reason
+                esc_messages = build_messages(
+                    history=history,
+                    query=query,
+                    max_tokens=esc_model.context_window,
+                    tier=esc_model.tier,
+                )
+                try:
+                    esc_chain = [esc_model] + [m for m in chain if m.model_id != esc_model.model_id]
+                    served, result, fallback_used, fallback_reason = await execute_with_fallback(esc_messages, esc_chain)
+                    success = True
+                    error_text = None
+                except LLMAdapterError as exc:
+                    success = False
+                    error_text = f"Escalation to {esc_model.tier} failed: {exc}"
 
     gen_lat = (time.perf_counter() - t_gen) * 1000.0
     outcome = build_switch_outcome(
@@ -664,7 +837,11 @@ async def run_unary_chat(
         analyzer_cost=analyzer_cost,
         fallback_used=fallback_used,
         fallback_reason=fallback_reason,
-        success=success,
+        escalation_used=escalation_used,
+        escalation_reason=escalation_reason,
+        original_tier=original_tier,
+        escalated_tier=escalated_tier,
+        success=success and bool(result),
         error_text=error_text,
         reg=reg,
         strategy=strategy,
@@ -680,10 +857,6 @@ async def run_unary_chat(
     return to_chat_response(outcome)
 
 
-def _sse(event: dict) -> dict:
-    return event
-
-
 async def iter_chat_sse(
     query: str,
     history: List[ChatMessage],
@@ -691,7 +864,7 @@ async def iter_chat_sse(
     reg: ModelRegistry,
     disconnected: Optional[Callable[[], Any]] = None,
 ) -> AsyncIterator[dict]:
-    """Yield typed SSE event dicts for `/api/chat/stream`."""
+    """Yield typed SSE event dicts for `/api/chat/stream` with Box 6 Quality & Escalation checks."""
     check_spend_budgets()
     if "FAIL-ANALYZER" in query:
         yield {"event": "error", "detail": "Analyzer error: simulated outage"}
@@ -729,7 +902,6 @@ async def iter_chat_sse(
             strategy=strategy,
         )
         persist_outcome(query, outcome)
-        # One honest delta (the analyzer already produced the full answer).
         yield {"event": "content_delta", "text": outcome.response_text}
         yield {"event": "delta", "text": outcome.response_text}
         yield done_event_payload(outcome)
@@ -775,6 +947,10 @@ async def iter_chat_sse(
             analyzer_cost=analyzer_cost,
             fallback_used=False,
             fallback_reason="exact_cache",
+            escalation_used=False,
+            escalation_reason=None,
+            original_tier=None,
+            escalated_tier=None,
             success=True,
             error_text=None,
             reg=reg,
@@ -797,6 +973,10 @@ async def iter_chat_sse(
     result = None
     fallback_used = False
     fallback_reason = None
+    escalation_used = False
+    escalation_reason = None
+    original_tier = None
+    escalated_tier = None
     success = True
     error_text = None
     completed = False
@@ -840,6 +1020,10 @@ async def iter_chat_sse(
         analyzer_cost=analyzer_cost,
         fallback_used=fallback_used,
         fallback_reason=fallback_reason,
+        escalation_used=escalation_used,
+        escalation_reason=escalation_reason,
+        original_tier=original_tier,
+        escalated_tier=escalated_tier,
         success=success and bool(result),
         error_text=error_text,
         reg=reg,

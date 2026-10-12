@@ -1,6 +1,7 @@
 /* ============================================================
-   Context-Aware Smart LLM Switcher - Client Application
-   Milestone 4: Modern ChatGPT-Style Frontend Architecture
+   Smart LLM Switcher - Client Application
+   Inspired by Antigravity 2.0 · Clean Developer Experience
+   Context-Aware Cost & Performance Routing Gateway
    ============================================================ */
 
 "use strict";
@@ -16,9 +17,7 @@ const $$ = (sel) => document.querySelectorAll(sel);
 /**
  * SettingsManager handles persistence of API keys, custom endpoints,
  * model tier overrides, and preferences in localStorage — encrypted at
- * rest with AES-GCM (WebCrypto). The encryption key is generated per
- * browser and stored separately; plaintext credentials never touch
- * localStorage.
+ * rest with AES-GCM (WebCrypto).
  */
 class SettingsManager {
   static STORAGE_KEY = "smart_llm_settings";
@@ -39,30 +38,22 @@ class SettingsManager {
         custom: "",
       },
       providerModels: {
-        geminiFast: "",
-        groqCoding: "",
-        groqReasoning: "",
-        openrouterAnalyzer: "",
-        openrouterPowerful: "",
-        openai: "",
+        geminiAnalyzer: "gemini-3.1-flash-lite",
+        geminiTier1: "gemini-3.5-flash-lite",
+        geminiTier3: "gemini-3.6-flash",
+        geminiTier6: "gemini-3.8-flash",
+        groqTier2: "openai/gpt-oss-20b",
+        groqTier4: "qwen/qwen3.8-27b",
+        groqTier5: "openai/gpt-oss-120b",
         custom: "",
-      },
-      tierOverrides: {
-        analyzer: "",
-        fast: "",
-        coding: "",
-        reasoning: "",
-        powerful: "",
       },
       preferences: {
         theme: "dark",
         strategy: "balanced",
-        autoScroll: true,
       },
     };
   }
 
-  /* --- AES-GCM encryption helpers (WebCrypto) -------------------------- */
   static async _getCryptoKey() {
     if (this._cryptoKey) return this._cryptoKey;
     if (this._cryptoKeyPromise) return this._cryptoKeyPromise;
@@ -115,7 +106,6 @@ class SettingsManager {
       apiKeys: { ...this.getDefaults().apiKeys, ...(parsed.apiKeys || {}) },
       customEndpoints: { ...this.getDefaults().customEndpoints, ...(parsed.customEndpoints || {}) },
       providerModels: { ...this.getDefaults().providerModels, ...(parsed.providerModels || {}) },
-      tierOverrides: { ...this.getDefaults().tierOverrides, ...(parsed.tierOverrides || {}) },
       preferences: { ...this.getDefaults().preferences, ...(parsed.preferences || {}) },
     };
   }
@@ -124,12 +114,10 @@ class SettingsManager {
     try {
       const raw = localStorage.getItem(this.STORAGE_KEY);
       if (!raw) return this.getDefaults();
-      // New format: AES-GCM encrypted base64 blob.
       if (raw.startsWith("enc:")) {
         const parsed = await this._decrypt(raw.slice(4));
         return parsed ? this._merge(parsed) : this.getDefaults();
       }
-      // Legacy plaintext: import, re-encrypt, remove plaintext.
       const legacy = JSON.parse(raw);
       const merged = this._merge(legacy);
       await this.save(merged);
@@ -153,16 +141,12 @@ class SettingsManager {
     const settings = await this.load();
     settings.apiKeys = this.getDefaults().apiKeys;
     settings.customEndpoints = this.getDefaults().customEndpoints;
-    settings.providerModels = this.getDefaults().providerModels;
-    settings.tierOverrides = this.getDefaults().tierOverrides;
     await this.save(settings);
   }
 
   static async getHeaders() {
     const settings = await this.load();
-    const headers = {
-      "Content-Type": "application/json",
-    };
+    const headers = { "Content-Type": "application/json" };
 
     const keys = settings.apiKeys || {};
     if (keys.gemini) headers["X-Gemini-Key"] = keys.gemini.trim();
@@ -178,29 +162,7 @@ class SettingsManager {
     }
 
     const providerModels = settings.providerModels || {};
-    const customModel = (providerModels.custom || "").trim();
-    if (customModel) {
-      headers["X-Custom-Model"] = customModel;
-    }
-
-    const tiers = settings.tierOverrides || {};
-    const analyzerModel = (tiers.analyzer || providerModels.openrouterAnalyzer || "").trim();
-    if (analyzerModel) {
-      headers["X-Base-Model"] = analyzerModel;
-      headers["X-Analyzer-Model"] = analyzerModel;
-    }
-
-    const fastModel = (tiers.fast || providerModels.geminiFast || "").trim();
-    if (fastModel) headers["X-Fast-Model"] = fastModel;
-
-    const codingModel = (tiers.coding || providerModels.groqCoding || "").trim();
-    if (codingModel) headers["X-Coding-Model"] = codingModel;
-
-    const reasoningModel = (tiers.reasoning || providerModels.groqReasoning || "").trim();
-    if (reasoningModel) headers["X-Reasoning-Model"] = reasoningModel;
-
-    const powerfulModel = (tiers.powerful || providerModels.openrouterPowerful || "").trim();
-    if (powerfulModel) headers["X-Powerful-Model"] = powerfulModel;
+    if (providerModels.custom) headers["X-Custom-Model"] = providerModels.custom.trim();
 
     return headers;
   }
@@ -208,7 +170,6 @@ class SettingsManager {
 
 /**
  * Centralized API Fetch Helper
- * Injects dynamic credentials and tier overrides into every request.
  */
 async function apiFetch(url, options = {}) {
   const defaultHeaders = await SettingsManager.getHeaders();
@@ -238,7 +199,6 @@ class SessionManager {
 
       if (!Array.isArray(this.sessions)) this.sessions = [];
 
-      // If no sessions exist or active is invalid, initialize one
       if (this.sessions.length === 0) {
         this.createSession("New Conversation", false);
       } else if (!this.activeSessionId || !this.sessions.some(s => s.id === this.activeSessionId)) {
@@ -300,30 +260,24 @@ class SessionManager {
     return false;
   }
 
+  deleteSession(id) {
+    this.sessions = this.sessions.filter(s => s.id !== id);
+    if (this.sessions.length === 0) {
+      this.createSession("New Conversation", true);
+    } else if (this.activeSessionId === id) {
+      this.activeSessionId = this.sessions[0].id;
+      this.persistActiveId();
+    }
+    this.save();
+  }
+
   renameSession(id, newTitle) {
     const s = this.sessions.find(item => item.id === id);
-    if (s && newTitle && newTitle.trim()) {
+    if (s && newTitle.trim()) {
       s.title = newTitle.trim();
       s.updatedAt = Date.now();
       this.save();
-      return true;
     }
-    return false;
-  }
-
-  deleteSession(id) {
-    const idx = this.sessions.findIndex(s => s.id === id);
-    if (idx !== -1) {
-      this.sessions.splice(idx, 1);
-      if (this.sessions.length === 0) {
-        this.createSession("New Conversation", true);
-      } else if (this.activeSessionId === id) {
-        this.activeSessionId = this.sessions[0].id;
-      }
-      this.save();
-      return true;
-    }
-    return false;
   }
 
   clearAll() {
@@ -332,149 +286,180 @@ class SessionManager {
     this.save();
   }
 
-  addMessage(role, content, telemetry = null) {
+  addMessage(role, content, meta = {}) {
     const active = this.getActive();
-    if (!active) return null;
+    if (!active) return;
 
-    const msg = {
-      id: "msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
-      role: role,
-      content: content,
-      telemetry: telemetry,
+    active.messages.push({
+      role,
+      content,
       timestamp: Date.now(),
-    };
-
-    active.messages.push(msg);
+      meta,
+    });
     active.updatedAt = Date.now();
 
-    // Auto-generate title on first user query
-    if (active.messages.length === 1 && role === "user") {
-      const generatedTitle = content.length > 32 ? content.substring(0, 32).trim() + "..." : content;
-      active.title = generatedTitle;
+    // Auto-title if first message
+    if (role === "user" && (active.title === "New Conversation" || active.messages.length <= 2)) {
+      const clean = content.trim().replace(/\n+/g, " ");
+      active.title = clean.length > 32 ? clean.substring(0, 32) + "..." : clean;
     }
-
     this.save();
-    return msg;
   }
 
-  getRecentHistoryForAPI(maxMessages = 10) {
+  getRecentHistoryForAPI(maxTurns = 10) {
     const active = this.getActive();
-    if (!active || !active.messages) return [];
-    return active.messages.slice(-maxMessages).map(m => ({
-      role: m.role,
-      content: m.content,
-    }));
-  }
-}
+    if (!active || !Array.isArray(active.messages)) return [];
 
-/**
- * ThemeManager handles Dark / Light mode switching with localStorage persistence.
- */
-class ThemeManager {
-  static THEME_KEY = "smart_llm_theme";
-
-  static init() {
-    const saved = localStorage.getItem(this.THEME_KEY) || "dark";
-    this.setTheme(saved);
-  }
-
-  static setTheme(theme) {
-    const root = document.documentElement;
-    const isLight = theme === "light";
-    root.setAttribute("data-theme", isLight ? "light" : "dark");
-    localStorage.setItem(this.THEME_KEY, isLight ? "light" : "dark");
-
-    // Update icons
-    const icon = $("theme-icon");
-    const headerIcon = $("header-theme-btn");
-    const text = $("theme-text");
-
-    const themeSVG = isLight ? "<svg class='icon-sym'><use href='#i-sun'/></svg>" : "<svg class='icon-sym'><use href='#i-moon'/></svg>";
-    if (icon) icon.innerHTML = themeSVG;
-    if (headerIcon) headerIcon.innerHTML = themeSVG;
-    if (text) text.textContent = isLight ? "Light Mode" : "Dark Mode";
-  }
-
-  static toggle() {
-    const current = document.documentElement.getAttribute("data-theme") || "dark";
-    this.setTheme(current === "dark" ? "light" : "dark");
+    return active.messages
+      .slice(-maxTurns * 2)
+      .map(m => ({
+        role: m.role,
+        content: m.content,
+      }));
   }
 }
 
 /* ============================================================
-   2. Global Variables & Initialization
+   2. Global Application State
    ============================================================ */
-
 let sessionManager = null;
 let activeAbortController = null;
-let dashboardRefreshInterval = null;
+let dashboardRefreshTimer = null;
 let isUserScrolledUp = false;
+let lastUserQuery = "";
 
-document.addEventListener("DOMContentLoaded", () => {
-  ThemeManager.init();
+/* ============================================================
+   3. Initialization & Lifecycle
+   ============================================================ */
+document.addEventListener("DOMContentLoaded", async () => {
   sessionManager = new SessionManager();
 
-  setupSidebar();
+  // Load and apply theme & preferences
+  await applyStoredPreferences();
+
+  // Setup DOM Event Listeners
+  setupSidebarControls();
   setupCanvasNavigation();
   setupComposer();
-  setupQuickChips();
+  setupRibbonToggle();
   setupSettingsModal();
   setupInspectorModal();
-  setupDashboardView();
   setupBenchmarkView();
+  setupModelRegistryView();
 
+  // Initial renders
   renderSidebarSessions();
   renderActiveSessionMessages();
-  checkInitialHealth();
+  checkEngineHealth();
+
+  // Load dynamic models in background
+  loadRegistryModels();
 });
 
 /* ============================================================
-   3. Sidebar & Session Navigation
+   4. Theme & Preferences
    ============================================================ */
+async function applyStoredPreferences() {
+  const settings = await SettingsManager.load();
+  const theme = settings.preferences?.theme || "dark";
+  document.documentElement.setAttribute("data-theme", theme);
+  updateThemeIcon(theme);
 
-function setupSidebar() {
-  const sidebar = $("sidebar");
-  const collapseBtn = $("sidebar-collapse-btn");
-  const openBtn = $("sidebar-open-btn");
-  const backdrop = $("sidebar-backdrop");
-  const newChatBtn = $("new-chat-btn");
-  const searchInput = $("session-search-input");
-  const clearSearchBtn = $("clear-search-btn");
-  const themeToggleBtn = $("theme-toggle-btn");
-  const headerThemeBtn = $("header-theme-btn");
-  const clearAllBtn = $("clear-all-sessions-btn");
+  const strat = settings.preferences?.strategy || "balanced";
+  const stratSelect = $("strategy-select");
+  if (stratSelect) stratSelect.value = strat;
+  updateStrategyBadge(strat);
+}
 
-  // Collapse / Open
-  collapseBtn?.addEventListener("click", () => {
-    sidebar.classList.add("collapsed");
-    sidebar.classList.remove("mobile-open");
-    backdrop?.classList.remove("active");
-  });
+function updateThemeIcon(theme) {
+  const icon = $("theme-icon");
+  const text = $("theme-text");
+  if (theme === "dark") {
+    if (icon) icon.innerHTML = "<svg class='icon-sym' aria-hidden='true'><use href='#i-moon'/></svg>";
+    if (text) text.textContent = "Dark Mode";
+  } else {
+    if (icon) icon.innerHTML = "<svg class='icon-sym' aria-hidden='true'><use href='#i-sun'/></svg>";
+    if (text) text.textContent = "Light Mode";
+  }
+}
 
-  openBtn?.addEventListener("click", () => {
-    sidebar.classList.remove("collapsed");
-    sidebar.classList.add("mobile-open");
-    backdrop?.classList.add("active");
-  });
+async function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") || "dark";
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  updateThemeIcon(next);
 
-  backdrop?.addEventListener("click", () => {
-    sidebar.classList.remove("mobile-open");
-    backdrop.classList.remove("active");
-  });
+  const settings = await SettingsManager.load();
+  settings.preferences.theme = next;
+  await SettingsManager.save(settings);
+}
 
-  // New Chat
-  newChatBtn?.addEventListener("click", () => {
+function updateStrategyBadge(strategy) {
+  const badge = $("header-strategy-badge");
+  if (!badge) return;
+  const label = badge.querySelector(".pill-label");
+  const names = {
+    balanced: "Balanced",
+    lowest_cost: "Lowest Cost",
+    fastest: "Fastest",
+    highest_quality: "Highest Quality",
+  };
+  if (label) label.textContent = names[strategy] || "Balanced";
+}
+
+/* ============================================================
+   5. Sidebar Controls & Session List
+   ============================================================ */
+function setupSidebarControls() {
+  // New Chat Button
+  $("new-chat-btn")?.addEventListener("click", () => {
     sessionManager.createSession("New Conversation", true);
     renderSidebarSessions();
     renderActiveSessionMessages();
     switchView("chat");
-    if (window.innerWidth <= 768) {
-      sidebar.classList.remove("mobile-open");
-      backdrop?.classList.remove("active");
+    $("query-input")?.focus();
+  });
+
+  // Sidebar Collapse / Expand
+  $("sidebar-collapse-btn")?.addEventListener("click", () => {
+    $("sidebar")?.classList.toggle("collapsed");
+  });
+
+  $("sidebar-open-btn")?.addEventListener("click", () => {
+    const sb = $("sidebar");
+    if (sb) {
+      if (sb.classList.contains("collapsed")) {
+        sb.classList.remove("collapsed");
+      } else {
+        sb.classList.toggle("mobile-open");
+        $("sidebar-backdrop")?.classList.toggle("active");
+      }
     }
   });
 
-  // Search Sessions
+  $("sidebar-backdrop")?.addEventListener("click", () => {
+    $("sidebar")?.classList.remove("mobile-open");
+    $("sidebar-backdrop")?.classList.remove("active");
+  });
+
+  // Theme Toggles
+  $("theme-toggle-btn")?.addEventListener("click", toggleTheme);
+  $("header-theme-btn")?.addEventListener("click", toggleTheme);
+
+  // Clear All Sessions
+  $("clear-all-sessions-btn")?.addEventListener("click", () => {
+    if (confirm("Are you sure you want to delete all saved conversations?")) {
+      sessionManager.clearAll();
+      renderSidebarSessions();
+      renderActiveSessionMessages();
+      showToast("All conversations cleared", "info");
+    }
+  });
+
+  // Search Sessions Filter
+  const searchInput = $("session-search-input");
+  const clearSearchBtn = $("clear-search-btn");
+
   searchInput?.addEventListener("input", () => {
     const q = searchInput.value.trim().toLowerCase();
     if (q) {
@@ -486,107 +471,114 @@ function setupSidebar() {
   });
 
   clearSearchBtn?.addEventListener("click", () => {
-    searchInput.value = "";
+    if (searchInput) searchInput.value = "";
     clearSearchBtn.classList.add("hidden");
     renderSidebarSessions();
-    searchInput.focus();
   });
 
-  // Theme Toggles
-  themeToggleBtn?.addEventListener("click", () => ThemeManager.toggle());
-  headerThemeBtn?.addEventListener("click", () => ThemeManager.toggle());
-
-  // Clear All Sessions
-  clearAllBtn?.addEventListener("click", () => {
-    if (confirm("Are you sure you want to clear all conversation sessions?")) {
-      sessionManager.clearAll();
-      renderSidebarSessions();
-      renderActiveSessionMessages();
-      showToast("All conversations cleared", "info");
+  // Keyboard shortcut listener
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+      e.preventDefault();
+      $("sidebar")?.classList.toggle("collapsed");
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+      e.preventDefault();
+      $("new-chat-btn")?.click();
     }
   });
 }
 
 function renderSidebarSessions(filterQuery = "") {
-  const list = $("session-list");
-  const countBadge = $("sessions-count-badge");
-  if (!list) return;
+  const listContainer = $("session-list");
+  if (!listContainer) return;
 
   const sessions = sessionManager.getAll();
-  const active = sessionManager.getActive();
+  const activeId = sessionManager.activeSessionId;
 
-  let filtered = sessions;
-  if (filterQuery) {
-    filtered = sessions.filter(s => s.title.toLowerCase().includes(filterQuery));
+  const filtered = filterQuery
+    ? sessions.filter(s => s.title.toLowerCase().includes(filterQuery))
+    : sessions;
+
+  if ($("sessions-count-badge")) {
+    $("sessions-count-badge").textContent = filtered.length.toString();
   }
 
-  if (countBadge) countBadge.textContent = sessions.length;
-
   if (filtered.length === 0) {
-    list.innerHTML = `<div class="empty-state" style="padding:16px 8px;font-size:12px;">No matching chats</div>`;
+    listContainer.innerHTML = `
+      <div style="padding:12px 10px;font-size:12px;color:var(--text-muted);text-align:center;">
+        ${filterQuery ? "No matching conversations" : "No conversations yet"}
+      </div>
+    `;
     return;
   }
 
-  list.innerHTML = filtered.map(s => {
-    const isActive = active && active.id === s.id;
+  listContainer.innerHTML = filtered.map(s => {
+    const isActive = s.id === activeId;
     return `
-      <div class="session-item ${isActive ? 'active' : ''}" data-id="${s.id}" data-action="session-click">
-        <div class="session-item-left">
-          <span class="session-icon"><svg class='icon-sym' aria-hidden='true'><use href='#i-chat'/></svg></span>
-          <span class="session-title" title="${escapeHtml(s.title)}">${escapeHtml(s.title)}</span>
-        </div>
-        <div class="session-actions">
-          <button class="btn-session-action" data-action="rename-session" data-id="${s.id}" title="Rename"><svg class='icon-sym' aria-hidden='true'><use href='#i-pencil'/></svg></button>
-          <button class="btn-session-action delete" data-action="delete-session" data-id="${s.id}" title="Delete"><svg class='icon-sym' aria-hidden='true'><use href='#i-trash'/></svg></button>
+      <div class="session-item ${isActive ? 'active' : ''}" data-id="${s.id}">
+        <span class="session-item-title" title="${escapeHtml(s.title)}">${escapeHtml(s.title)}</span>
+        <div class="session-item-actions">
+          <button class="btn-session-action rename" title="Rename" data-action="rename" data-id="${s.id}">✎</button>
+          <button class="btn-session-action delete" title="Delete" data-action="delete" data-id="${s.id}">✕</button>
         </div>
       </div>
     `;
   }).join("");
+
+  // Attach session item click handlers
+  listContainer.querySelectorAll(".session-item").forEach(el => {
+    el.addEventListener("click", (e) => {
+      const act = e.target.closest("button");
+      const id = el.dataset.id;
+      if (act) {
+        e.stopPropagation();
+        const action = act.dataset.action;
+        if (action === "delete") {
+          sessionManager.deleteSession(id);
+          renderSidebarSessions(filterQuery);
+          renderActiveSessionMessages();
+        } else if (action === "rename") {
+          promptRenameSession(id);
+        }
+        return;
+      }
+
+      sessionManager.switchSession(id);
+      renderSidebarSessions(filterQuery);
+      renderActiveSessionMessages();
+      switchView("chat");
+
+      if (window.innerWidth <= 768) {
+        $("sidebar")?.classList.remove("mobile-open");
+        $("sidebar-backdrop")?.classList.remove("active");
+      }
+    });
+  });
 }
 
-window.handleSessionClick = function(id) {
-  sessionManager.switchSession(id);
-  renderSidebarSessions();
-  renderActiveSessionMessages();
-  switchView("chat");
-
-  if (window.innerWidth <= 768) {
-    $("sidebar")?.classList.remove("mobile-open");
-    $("sidebar-backdrop")?.classList.remove("active");
-  }
-};
-
-window.promptRenameSession = function(id) {
-  const s = sessionManager.getAll().find(item => item.id === id);
-  if (!s) return;
-  const newTitle = prompt("Enter new title for this conversation:", s.title);
-  if (newTitle && newTitle.trim()) {
+function promptRenameSession(id) {
+  const session = sessionManager.sessions.find(s => s.id === id);
+  if (!session) return;
+  const newTitle = prompt("Enter conversation title:", session.title);
+  if (newTitle !== null) {
     sessionManager.renameSession(id, newTitle);
     renderSidebarSessions();
     updateActiveSessionHeader();
   }
-};
-
-window.handleDeleteSession = function(id) {
-  if (confirm("Delete this conversation?")) {
-    sessionManager.deleteSession(id);
-    renderSidebarSessions();
-    renderActiveSessionMessages();
-  }
-};
+}
 
 function updateActiveSessionHeader() {
   const active = sessionManager.getActive();
   const titleEl = $("active-session-title");
   if (titleEl && active) {
-    titleEl.textContent = active.title || "New Conversation";
+    titleEl.textContent = active.title;
   }
 }
 
 /* ============================================================
-   4. Canvas Navigation & View Switching
+   6. Navigation Views Controller
    ============================================================ */
-
 function setupCanvasNavigation() {
   const sidebarNavItems = $$(".sidebar-nav-item");
 
@@ -599,12 +591,6 @@ function setupCanvasNavigation() {
         $("sidebar-backdrop")?.classList.remove("active");
       }
     });
-  });
-
-  // Canvas Header Rename Button
-  $("rename-session-btn")?.addEventListener("click", () => {
-    const active = sessionManager.getActive();
-    if (active) promptRenameSession(active.id);
   });
 }
 
@@ -624,21 +610,22 @@ function switchView(viewName) {
   } else {
     stopDashboardAutoRefresh();
   }
+
+  if (viewName === "registry") {
+    loadRegistryModels();
+  }
 }
 
 /* ============================================================
-   5. Chat Rendering & Composer Handling
+   7. Composer & Chat Execution
    ============================================================ */
-
 function setupComposer() {
   const form = $("composer-form");
   const input = $("query-input");
-  const sendStopBtn = $("send-stop-btn");
   const strategySelect = $("strategy-select");
   const clearContextBtn = $("clear-context-btn");
   const messagesContainer = $("chat-messages");
 
-  // Setup Scroll Listener
   if (messagesContainer) {
     messagesContainer.addEventListener("scroll", () => {
       const threshold = 80;
@@ -687,7 +674,6 @@ function setupComposer() {
   form?.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    // If currently streaming, this button acts as Stop Generation
     if (activeAbortController) {
       stopGeneration();
       return;
@@ -696,32 +682,28 @@ function setupComposer() {
     const query = input.value.trim();
     if (!query) return;
 
-    // Reset Input
+    lastUserQuery = query;
     input.value = "";
     input.style.height = "auto";
 
-    // Append User Message to UI & Session
     appendUserMessageToUI(query);
     sessionManager.addMessage("user", query);
     renderSidebarSessions();
     updateActiveSessionHeader();
 
-    // Hide welcome hero if shown
     const welcome = $("welcome-hero");
     if (welcome) welcome.style.display = "none";
 
-    // Build Streaming Assistant Card
     const placeholder = createStreamingPlaceholder();
     const strategy = strategySelect ? strategySelect.value : "balanced";
     const historyPayload = sessionManager.getRecentHistoryForAPI(10);
 
     setStreamingState(true);
+    updatePipelineToAnalyzing();
 
     let streamedText = "";
     let reasoningText = "";
     let isFirstDelta = true;
-    let analyzerData = null;
-    let routingData = null;
 
     try {
       activeAbortController = new AbortController();
@@ -731,13 +713,13 @@ function setupComposer() {
         activeAbortController.signal,
         // onAnalyzer
         (info) => {
-          analyzerData = info;
           placeholder.updateAnalyzer(info);
+          updatePipelineAnalyzerResult(info);
         },
         // onRouting
         (route) => {
-          routingData = route;
           placeholder.updateRouting(route);
+          updatePipelineRouting(route);
         },
         // onReasoningDelta
         (chunk) => {
@@ -758,8 +740,10 @@ function setupComposer() {
           placeholder.card.remove();
           const finalResponse = doneData.response || streamedText;
           appendAssistantResponseToUI(query, finalResponse, doneData);
-          sessionManager.addMessage("assistant", finalResponse, doneData);
+          sessionManager.addMessage("assistant", finalResponse, { ...doneData, query });
           updateContextCounter();
+          updatePipelineDone(doneData);
+          loadDashboardStats();
         },
         // onError
         (errorMsg) => {
@@ -769,10 +753,9 @@ function setupComposer() {
     } catch (err) {
       if (err.name === "AbortError") {
         placeholder.showStoppedState(streamedText);
-        sessionManager.addMessage("assistant", streamedText || "[Generation stopped by user]", { stopped: true });
+        sessionManager.addMessage("assistant", streamedText || "[Generation stopped by user]", { stopped: true, query });
       } else {
         console.warn("SSE Stream failed, falling back to standard /api/chat:", err);
-        // Fallback to standard POST
         try {
           const resp = await apiFetch("/api/chat", {
             method: "POST",
@@ -783,8 +766,10 @@ function setupComposer() {
 
           placeholder.card.remove();
           appendAssistantResponseToUI(query, data.response, data);
-          sessionManager.addMessage("assistant", data.response, data);
+          sessionManager.addMessage("assistant", data.response, { ...data, query });
           updateContextCounter();
+          updatePipelineDone(data);
+          loadDashboardStats();
         } catch (postErr) {
           placeholder.showError(postErr.message);
         }
@@ -797,6 +782,15 @@ function setupComposer() {
   });
 }
 
+function stopGeneration() {
+  if (activeAbortController) {
+    activeAbortController.abort();
+    activeAbortController = null;
+    setStreamingState(false);
+    showToast("Generation stopped", "info");
+  }
+}
+
 function setStreamingState(isStreaming) {
   const btn = $("send-stop-btn");
   const icon = $("send-btn-icon");
@@ -806,77 +800,164 @@ function setStreamingState(isStreaming) {
     btn.classList.add("stop-state");
     btn.title = "Stop Generation";
     icon.innerHTML = "<svg class='icon-sym' aria-hidden='true'><use href='#i-stop'/></svg>";
-    const pv = $("pipeline-visualizer");
-    if (pv) {
-      pv.classList.remove("hidden");
-      $$("#pipeline-visualizer .pipeline-node").forEach(n => n.classList.remove("active", "analyzer", "routing", "output"));
-      $("node-query")?.classList.add("active");
-    }
   } else {
     btn.classList.remove("stop-state");
     btn.title = "Send Message (Enter)";
     icon.innerHTML = "<svg class='icon-sym' aria-hidden='true'><use href='#i-arrow-up'/></svg>";
-    const pv = $("pipeline-visualizer");
-    if (pv) {
-      setTimeout(() => pv.classList.add("hidden"), 1000); // fade out
-    }
   }
-}
-
-function stopGeneration() {
-  if (activeAbortController) {
-    activeAbortController.abort();
-    activeAbortController = null;
-    showToast("Generation stopped", "info");
-  }
-}
-
-function updateStrategyBadge(strategy) {
-  const badge = $("header-strategy-badge");
-  if (!badge) return;
-
-  const map = {
-    balanced: { icon: "<svg class='icon-sym' aria-hidden='true'><use href='#i-scale'/></svg>", label: "Balanced" },
-    lowest_cost: { icon: "<svg class='icon-sym' aria-hidden='true'><use href='#i-dollar'/></svg>", label: "Lowest Cost" },
-    fastest: { icon: "<svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg>", label: "Fastest Speed" },
-    highest_quality: { icon: "<svg class='icon-sym' aria-hidden='true'><use href='#i-target'/></svg>", label: "Max Quality" },
-  };
-
-  const s = map[strategy] || map.balanced;
-  badge.innerHTML = `<span class="pill-icon">${s.icon}</span><span class="pill-label">${s.label}</span>`;
-}
-
-function updateContextCounter() {
-  const active = sessionManager.getActive();
-  const countEl = $("context-turn-count");
-  if (countEl && active) {
-    countEl.textContent = Math.floor(active.messages.length / 2);
-  }
-}
-
-function setupQuickChips() {
-  // Welcome hero starter prompt chips (scoped to welcome hero)
-  $$(".quick-chip-card").forEach(chip => {
-    chip.addEventListener("click", () => {
-      const q = chip.dataset.query;
-      if (q) {
-        const input = $("query-input");
-        if (input) {
-          input.value = q;
-          input.style.height = "auto";
-          input.style.height = `${Math.min(input.scrollHeight, 180)}px`;
-          input.focus();
-          $("composer-form")?.requestSubmit();
-        }
-      }
-    });
-  });
 }
 
 /* ============================================================
-   6. UI Message Rendering & Expandable Reasoning Drawer
+   8. Compact Architecture Ribbon Controller
    ============================================================ */
+function setupRibbonToggle() {
+  const toggleBtn = $("ribbon-toggle-btn");
+  const drawer = $("ribbon-drawer");
+  const arrow = $("ribbon-toggle-arrow");
 
+  toggleBtn?.addEventListener("click", () => {
+    if (!drawer) return;
+    drawer.classList.toggle("collapsed");
+    const isCollapsed = drawer.classList.contains("collapsed");
+    if (arrow) arrow.textContent = isCollapsed ? "▾" : "▴";
+  });
+}
+
+function normalizeTierKey(tier) {
+  if (!tier) return "tier_1";
+  const s = String(tier).toLowerCase();
+  if (s.includes("tier_1") || s.includes("tier 1") || s.includes("flash-lite")) return "tier_1";
+  if (s.includes("tier_2") || s.includes("tier 2") || s.includes("20b")) return "tier_2";
+  if (s.includes("tier_3") || s.includes("tier 3") || s.includes("3.6")) return "tier_3";
+  if (s.includes("tier_4") || s.includes("tier 4") || s.includes("qwen") || s.includes("coding")) return "tier_4";
+  if (s.includes("tier_5") || s.includes("tier 5") || s.includes("120b") || s.includes("reasoning")) return "tier_5";
+  if (s.includes("tier_6") || s.includes("tier 6") || s.includes("3.8") || s.includes("powerful")) return "tier_6";
+  return "tier_1";
+}
+
+function formatTierDisplay(tier) {
+  const norm = normalizeTierKey(tier);
+  switch (norm) {
+    case "tier_1": return "Tier 1: Gemini 3.5 Flash-Lite (Fast / Routine)";
+    case "tier_2": return "Tier 2: Groq GPT-OSS 20B (Fast General)";
+    case "tier_3": return "Tier 3: Gemini 3.6 Flash (Balanced)";
+    case "tier_4": return "Tier 4: Groq Qwen3.8 27B (Coding Specialist)";
+    case "tier_5": return "Tier 5: Groq GPT-OSS 120B (Deep Reasoning)";
+    case "tier_6": return "Tier 6: Gemini 3.8 Flash (High Capability)";
+    default: return String(tier || "Tier 1");
+  }
+}
+
+function resetPipelineRibbon() {
+  const an = $("pnode-analyzer");
+  if (an) {
+    an.className = "ribbon-node analyzer";
+    const stateEl = $("pnode-analyzer-state");
+    if (stateEl) stateEl.textContent = "Single-Pass Decision";
+  }
+  $$(".rnode-tier").forEach(c => {
+    c.classList.remove("active-tier", "escalated-tier");
+  });
+  const dot = $("pipeline-status-dot");
+  if (dot) dot.className = "status-indicator-dot";
+  const msg = $("pipeline-status-msg");
+  if (msg) msg.textContent = "Analyzer Ready · 6 Response Tiers Active";
+  const esc = $("pipeline-escalation-pill");
+  if (esc) esc.classList.add("hidden");
+}
+
+function updatePipelineToAnalyzing() {
+  resetPipelineRibbon();
+  const an = $("pnode-analyzer");
+  if (an) {
+    an.classList.add("analyzing");
+    const stateEl = $("pnode-analyzer-state");
+    if (stateEl) stateEl.textContent = "Evaluating intent & complexity...";
+  }
+  const dot = $("pipeline-status-dot");
+  if (dot) dot.className = "status-indicator-dot analyzing";
+  const msg = $("pipeline-status-msg");
+  if (msg) msg.textContent = "Gemini 3.1 Flash-Lite Analyzer running...";
+}
+
+function updatePipelineAnalyzerResult(info) {
+  const an = $("pnode-analyzer");
+  const isSelf = info.answer_mode === "self";
+  if (an) {
+    an.classList.remove("analyzing");
+    const stateEl = $("pnode-analyzer-state");
+    if (stateEl) {
+      stateEl.textContent = isSelf
+        ? "Direct Self-Answer (0 downstream tokens)"
+        : `Triage: ${(info.task_type || 'General').toUpperCase()} (${info.complexity || 'Medium'})`;
+    }
+  }
+
+  const targetTier = normalizeTierKey(info.target_tier || info.required_capability);
+  if (targetTier && !isSelf) {
+    const card = $(`pnode-${targetTier}`);
+    if (card) card.classList.add("active-tier");
+  }
+
+  const msg = $("pipeline-status-msg");
+  if (msg) {
+    msg.textContent = isSelf
+      ? "Resolved in Single-Pass Self-Answer Mode"
+      : `Analyzer: ${(info.task_type || 'General').toUpperCase()} ➔ ${formatTierDisplay(targetTier)}`;
+  }
+}
+
+function updatePipelineRouting(route) {
+  $$(".rnode-tier").forEach(c => c.classList.remove("active-tier"));
+  const tierKey = normalizeTierKey(route.target_tier);
+  if (tierKey) {
+    const card = $(`pnode-${tierKey}`);
+    if (card) card.classList.add("active-tier");
+  }
+  const dot = $("pipeline-status-dot");
+  if (dot) dot.className = "status-indicator-dot active";
+  const msg = $("pipeline-status-msg");
+  if (msg) {
+    msg.textContent = `Routed to ${route.target_name || route.target_model || 'Model'} (${route.target_tier || ''})`;
+  }
+}
+
+function updatePipelineDone(outcome) {
+  const isEscalated = Boolean(outcome.escalation_used || outcome.escalated);
+  const servedTier = normalizeTierKey(outcome.escalated_tier || outcome.model?.tier || outcome.original_tier || "tier_1");
+
+  $$(".rnode-tier").forEach(c => c.classList.remove("active-tier", "escalated-tier"));
+  const card = $(`pnode-${servedTier}`);
+  if (card) {
+    card.classList.add("active-tier");
+    if (isEscalated) card.classList.add("escalated-tier");
+  }
+
+  if (isEscalated) {
+    const escPill = $("pipeline-escalation-pill");
+    const escText = $("pipeline-escalation-text");
+    if (escPill && escText) {
+      escPill.classList.remove("hidden");
+      escText.textContent = `Escalated: ${formatTierDisplay(outcome.original_tier)} → ${formatTierDisplay(outcome.escalated_tier || servedTier)}`;
+    }
+  }
+
+  const dot = $("pipeline-status-dot");
+  if (dot) dot.className = "status-indicator-dot";
+  const msg = $("pipeline-status-msg");
+  if (msg) {
+    const modelName = outcome.model?.model_name || outcome.selected_model || "Model";
+    const costVal = outcome.total_cost_usd != null ? outcome.total_cost_usd : (outcome.estimated_cost_usd || 0);
+    const costStr = `$${costVal.toFixed(6)}`;
+    const latVal = outcome.total_latency_ms != null ? outcome.total_latency_ms : (outcome.latency_ms || 0);
+    const latStr = `${Math.round(latVal)}ms`;
+    msg.textContent = `Served: ${modelName} · ${latStr} · ${costStr}`;
+  }
+}
+
+/* ============================================================
+   9. Chat Messages Rendering
+   ============================================================ */
 function renderActiveSessionMessages() {
   const container = $("chat-messages");
   if (!container) return;
@@ -889,172 +970,136 @@ function renderActiveSessionMessages() {
     container.innerHTML = `
       <div class="welcome-hero" id="welcome-hero">
         <div class="welcome-badge">
-          <span class="badge-icon"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg></span>
-          <span>Intelligent Context-Aware Multi-Provider Switching</span>
+          <svg class='icon-sym' aria-hidden='true'><use href='#i-node-switch'/></svg>
+          <span>Context-Aware Multi-Tier Gateway</span>
         </div>
-        <h2 class="welcome-title">How can I help you optimize today?</h2>
+        <h2 class="welcome-title">Smart LLM Switcher</h2>
         <p class="welcome-desc">
-          Every prompt is evaluated by our <strong>Analyzer LLM</strong>. Simple queries execute immediately in 
-          <span class="badge-mode-mini self"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Self-Mode</span> with 100% downstream savings, while complex coding and reasoning tasks switch seamlessly to specialized 
-          <span class="badge-mode-mini switch"><svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Switch-Mode</span> models (Gemini, Groq Qwen Coder, 120B Reasoning, or Custom Endpoints).
+          Two-stage intelligent routing: <strong>Gemini 3.1 Flash-Lite Analyzer</strong> triages incoming intent and complexity in real time. Routine requests resolve immediately in single-pass self-mode with zero downstream calls, while complex coding, reasoning, and multi-turn tasks switch dynamically across 6 calibrated response tiers.
         </p>
 
-        <div class="architecture-flow-cards">
-          <div class="arch-card gemini">
-            <div class="arch-card-header">
-              <span class="arch-dot gemini"></span>
-              <span class="arch-name">Google Gemini</span>
-            </div>
-            <div class="arch-tier">Fast / Low-Cost Tier</div>
-            <div class="arch-cost">$0.075 / 1M input · $0.30 / 1M output</div>
-          </div>
-          <div class="arch-card groq">
-            <div class="arch-card-header">
-              <span class="arch-dot groq"></span>
-              <span class="arch-name">Groq Qwen 27B</span>
-            </div>
-            <div class="arch-tier">Specialized Coding Tier</div>
-            <div class="arch-cost">300+ tok/sec Ultra-fast LPU generation</div>
-          </div>
-          <div class="arch-card groq">
-            <div class="arch-card-header">
-              <span class="arch-dot groq"></span>
-              <span class="arch-name">Groq 120B OSS</span>
-            </div>
-            <div class="arch-tier">Deep Reasoning Tier</div>
-            <div class="arch-cost">Multi-step architectural deduction</div>
-          </div>
-          <div class="arch-card openrouter">
-            <div class="arch-card-header">
-              <span class="arch-dot openrouter"></span>
-              <span class="arch-name">OpenRouter / Base</span>
-            </div>
-            <div class="arch-tier">Structured Analyzer LLM</div>
-            <div class="arch-cost">Context evaluation & zero-waste routing</div>
-          </div>
-        </div>
-
         <div class="welcome-prompts-section">
-          <span class="welcome-prompts-label">Try a prompt to see transparent switching:</span>
+          <span class="welcome-prompts-label">Choose a scenario to test context-aware switching across tiers:</span>
           <div class="welcome-prompts-grid" id="welcome-quick-chips">
-            <button class="quick-chip-card" data-query="What is an API and how does REST work?">
+            <button class="quick-chip-card" data-query="Summarize the primary benefits of semantic caching in 2 bullet points.">
               <div class="chip-top">
-                <span class="chip-tier-tag fast"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Fast Tier</span>
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-bolt'/></svg> Tier 1: Fast / Routine</span>
                 <span class="chip-arrow">→</span>
               </div>
-              <div class="chip-query">What is an API and how does REST work?</div>
+              <div class="chip-query">Summarize the primary benefits of semantic caching in 2 bullet points.</div>
             </button>
-            <button class="quick-chip-card" data-query="Write a Python implementation of Dijkstra's algorithm with priority queue.">
+            <button class="quick-chip-card" data-query="Explain the difference between TCP and UDP with real-world networking examples.">
               <div class="chip-top">
-                <span class="chip-tier-tag coding"><svg class='icon-sym' aria-hidden='true'><use href='#i-hash'/></svg> Coding Tier</span>
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-cpu'/></svg> Tier 2: Fast General</span>
                 <span class="chip-arrow">→</span>
               </div>
-              <div class="chip-query">Write a Python implementation of Dijkstra's algorithm with priority queue.</div>
+              <div class="chip-query">Explain the difference between TCP and UDP with real-world networking examples.</div>
             </button>
-            <button class="quick-chip-card" data-query="Design a fault-tolerant distributed cache architecture with replication and failover for 10 million concurrent users.">
+            <button class="quick-chip-card" data-query="Compare relational databases and document stores for high-throughput write workloads.">
               <div class="chip-top">
-                <span class="chip-tier-tag reasoning"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg> Reasoning Tier</span>
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-scale'/></svg> Tier 3: Balanced Workhorse</span>
                 <span class="chip-arrow">→</span>
               </div>
-              <div class="chip-query">Design a fault-tolerant distributed cache architecture for 10M users.</div>
+              <div class="chip-query">Compare relational databases and document stores for high-throughput write workloads.</div>
             </button>
-            <button class="quick-chip-card" data-query="Now optimize the space complexity of that previous implementation.">
+            <button class="quick-chip-card" data-query="Write a thread-safe Python implementation of an LRU Cache with TTL expiration.">
               <div class="chip-top">
-                <span class="chip-tier-tag context"><svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Context Follow-up</span>
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-code'/></svg> Tier 4: Coding Specialist</span>
                 <span class="chip-arrow">→</span>
               </div>
-              <div class="chip-query">Now optimize the space complexity of that previous implementation.</div>
+              <div class="chip-query">Write a thread-safe Python implementation of an LRU Cache with TTL expiration.</div>
+            </button>
+            <button class="quick-chip-card" data-query="Prove that the square root of 2 is irrational and analyze its algebraic implications.">
+              <div class="chip-top">
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-node-switch'/></svg> Tier 5: Deep Reasoning</span>
+                <span class="chip-arrow">→</span>
+              </div>
+              <div class="chip-query">Prove that the square root of 2 is irrational and analyze its algebraic implications.</div>
+            </button>
+            <button class="quick-chip-card" data-query="Design a globally distributed payment ledger ensuring exactly-once processing with high availability.">
+              <div class="chip-top">
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-layers'/></svg> Tier 6: High Capability</span>
+                <span class="chip-arrow">→</span>
+              </div>
+              <div class="chip-query">Design a globally distributed payment ledger with exactly-once processing.</div>
             </button>
           </div>
         </div>
       </div>
     `;
-    setupQuickChips();
+
+    // Attach chip clicks
+    container.querySelectorAll(".quick-chip-card").forEach(chip => {
+      chip.addEventListener("click", () => {
+        const query = chip.dataset.query;
+        const input = $("query-input");
+        if (input) {
+          input.value = query;
+          input.focus();
+          $("composer-form")?.requestSubmit();
+        }
+      });
+    });
     return;
   }
 
   container.innerHTML = "";
   active.messages.forEach(msg => {
     if (msg.role === "user") {
-      appendUserMessageToUI(msg.content);
-    } else {
-      appendAssistantResponseToUI("", msg.content, msg.telemetry || {});
+      appendUserMessageToUI(msg.content, false);
+    } else if (msg.role === "assistant") {
+      appendAssistantResponseToUI("", msg.content, msg.meta || {}, false);
     }
   });
 
   smoothScrollToBottom(container);
 }
 
-function appendUserMessageToUI(text) {
+function updateContextCounter() {
+  const active = sessionManager.getActive();
+  const count = active && Array.isArray(active.messages) ? active.messages.length : 0;
+  if ($("context-turn-count")) {
+    $("context-turn-count").textContent = count.toString();
+  }
+}
+
+function appendUserMessageToUI(content, shouldScroll = true) {
   const container = $("chat-messages");
   if (!container) return;
 
   const msgEl = document.createElement("div");
   msgEl.className = "chat-msg user";
-  msgEl.innerHTML = `
-    <div class="msg-content-wrap">
-      <div class="user-bubble">${escapeHtml(text)}</div>
-    </div>
-    <div class="msg-avatar"><svg class='icon-sym' aria-hidden='true'><use href='#i-person'/></svg></div>
-  `;
+  msgEl.innerHTML = `<div class="user-bubble">${escapeHtml(content)}</div>`;
   container.appendChild(msgEl);
-  smoothScrollToBottom(container);
+
+  if (shouldScroll) smoothScrollToBottom(container);
 }
 
 function createStreamingPlaceholder() {
   const container = $("chat-messages");
+  const cardId = "stream_" + Date.now();
+
   const msgEl = document.createElement("div");
   msgEl.className = "chat-msg assistant";
-  const drawerId = "drawer_stream_" + Date.now();
+  msgEl.id = cardId;
 
   msgEl.innerHTML = `
-    <div class="msg-avatar"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg></div>
+    <div class="msg-avatar"><svg class='icon-sym' aria-hidden='true'><use href='#i-node-switch'/></svg></div>
     <div class="msg-content-wrap">
       <div class="assistant-card">
-        <!-- Live Reasoning Drawer -->
-        <div class="reasoning-drawer expanded" id="${drawerId}">
-          <div class="drawer-toggle" data-action="toggle-reasoning" data-target="${drawerId}">
-            <div class="drawer-summary">
-              <span class="drawer-icon pulse"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg></span>
-              <span class="drawer-title" id="${drawerId}_title">Analyzer LLM evaluating query & context...</span>
-              <span class="drawer-badge tier" id="${drawerId}_badge">Routing</span>
-            </div>
-            <div class="drawer-chevron">▾</div>
-          </div>
-          <div class="drawer-content">
-            <div class="drawer-grid">
-              <div class="drawer-stat-card">
-                <span class="stat-label">Execution Mode</span>
-                <span class="stat-val" id="${drawerId}_mode">Evaluating...</span>
-              </div>
-              <div class="drawer-stat-card">
-                <span class="stat-label">Task Type</span>
-                <span class="stat-val" id="${drawerId}_task">—</span>
-              </div>
-              <div class="drawer-stat-card">
-                <span class="stat-label">Complexity</span>
-                <div class="complexity-meter"><div class="complexity-bar" id="${drawerId}_comp_bar" style="width:50%"></div></div>
-                <span class="stat-sub" id="${drawerId}_comp_val">—</span>
-              </div>
-              <div class="drawer-stat-card">
-                <span class="stat-label">Target Model</span>
-                <span class="stat-val" id="${drawerId}_target">—</span>
-                <span class="stat-sub" id="${drawerId}_provider">—</span>
-              </div>
-            </div>
-            <div class="drawer-section" id="${drawerId}_reason_wrap">
-              <div class="section-title"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg> Analyzer Rationale</div>
-              <div class="rationale-box" id="${drawerId}_reason">Awaiting analyzer decision...</div>
-            </div>
-            <div class="drawer-section reasoning-stream-container" id="${drawerId}_thinking_wrap" style="display:none;">
-              <div class="section-title"><svg class='icon-sym' aria-hidden='true'><use href='#i-chat'/></svg> Internal Thought Stream</div>
-              <pre class="reasoning-stream-text" id="${drawerId}_thinking"></pre>
-            </div>
+        
+        <div class="routing-badge-bar">
+          <span class="routing-tier-pill" id="${cardId}_tier">Analyzing...</span>
+          <span class="routing-model-name" id="${cardId}_model">Gemini 3.1 Flash-Lite</span>
+          <div class="routing-telemetry-meta" id="${cardId}_meta">
+            <span id="${cardId}_lat">Evaluating prompt...</span>
           </div>
         </div>
 
-        <!-- Body -->
-        <div class="msg-text-body" id="${drawerId}_body" style="display:none;"></div>
+        <div class="msg-text-body" id="${cardId}_body">
+          <span style="color:var(--text-muted);font-style:italic;">Routing query across calibrated model tiers...</span>
+        </div>
+
       </div>
     </div>
   `;
@@ -1066,95 +1111,47 @@ function createStreamingPlaceholder() {
     card: msgEl,
     updateAnalyzer: (info) => {
       const isSelf = info.answer_mode === "self";
-      const badge = $(`${drawerId}_badge`);
-      const mode = $(`${drawerId}_mode`);
-      const task = $(`${drawerId}_task`);
-      const compBar = $(`${drawerId}_comp_bar`);
-      const compVal = $(`${drawerId}_comp_val`);
-      const reason = $(`${drawerId}_reason`);
-      const title = $(`${drawerId}_title`);
-
-      if (badge) {
-        badge.className = `drawer-badge ${isSelf ? 'self' : 'switch'}`;
-        badge.innerHTML = isSelf ? "<svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Self-Mode" : "<svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Switch-Mode";
-      }
-      if (mode) mode.textContent = isSelf ? "Direct Self-Answer" : "Specialized Switch";
-      if (task) task.textContent = (info.task_type || "general").toUpperCase();
-      if (compVal) compVal.textContent = `${info.complexity || 'medium'} (${info.complexity_score ?? '0.5'})`;
-      if (compBar) compBar.style.width = `${Math.round((info.complexity_score || 0.5) * 100)}%`;
-      if (reason) reason.textContent = `"${info.reason || 'Optimal execution tier selected.'}"`;
-      if (title) title.textContent = isSelf ? "Resolved in Direct Self-Mode (0ms downstream)" : `Routing to ${info.target_provider || 'Specialized Model'}`;
-      
-      const pv = $("pipeline-visualizer");
-      if (pv) {
-         $$("#pipeline-visualizer .pipeline-node").forEach(n => n.classList.remove("active", "analyzer", "routing", "output"));
-         $("node-analyzer")?.classList.add("active", "analyzer");
-      }
+      const tierEl = $(`${cardId}_tier`);
+      const modelEl = $(`${cardId}_model`);
+      if (tierEl) tierEl.textContent = isSelf ? "Self-Answer" : (info.required_capability || "Tier 1").toUpperCase();
+      if (modelEl) modelEl.textContent = isSelf ? "Resolved in Single Pass" : `Routing (${info.task_type || 'General'})`;
     },
     updateRouting: (route) => {
-      const target = $(`${drawerId}_target`);
-      const provider = $(`${drawerId}_provider`);
-      const title = $(`${drawerId}_title`);
-
-      if (target) target.textContent = route.target_name || route.target_model;
-      if (provider) provider.textContent = `${(route.target_provider || '').toUpperCase()} (${route.target_tier || ''})`;
-      if (title) title.textContent = `Routed to ${route.target_name || route.target_model}`;
-
-      const pv = $("pipeline-visualizer");
-      if (pv) {
-         $$("#pipeline-visualizer .pipeline-node").forEach(n => n.classList.remove("active", "analyzer", "routing", "output"));
-         $("node-scoreboard")?.classList.add("active", "routing");
-         setTimeout(() => {
-           $$("#pipeline-visualizer .pipeline-node").forEach(n => n.classList.remove("active", "analyzer", "routing", "output"));
-           $("node-model")?.classList.add("active", "routing");
-         }, 400);
-      }
+      const tierEl = $(`${cardId}_tier`);
+      const modelEl = $(`${cardId}_model`);
+      if (tierEl) tierEl.textContent = (route.target_tier || "Tier 1").toUpperCase();
+      if (modelEl) modelEl.textContent = route.target_name || route.target_model || "Model";
     },
-    appendReasoningDelta: (fullReasoning) => {
-      const wrap = $(`${drawerId}_thinking_wrap`);
-      const text = $(`${drawerId}_thinking`);
-      if (wrap) wrap.style.display = "block";
-      if (text) text.textContent = fullReasoning;
-      smoothScrollToBottom(container);
-    },
+    appendReasoningDelta: (reasoning) => {},
     startResponse: () => {
-      const body = $(`${drawerId}_body`);
-      if (body) body.style.display = "block";
-      const pv = $("pipeline-visualizer");
-      if (pv) {
-         $$("#pipeline-visualizer .pipeline-node").forEach(n => n.classList.remove("active", "analyzer", "routing", "output"));
-         $("node-output")?.classList.add("active", "output");
-      }
+      const body = $(`${cardId}_body`);
+      if (body) body.innerHTML = "";
     },
-    appendDelta: (fullText) => {
-      const body = $(`${drawerId}_body`);
+    appendDelta: (text) => {
+      const body = $(`${cardId}_body`);
       if (body) {
-        body.style.display = "block";
-        body.innerHTML = formatMarkdown(fullText);
-  _renderMathInElement(body);
+        body.innerHTML = formatMarkdown(text);
+        _renderMathInElement(body);
       }
       smoothScrollToBottom(container);
     },
     showError: (err) => {
-      const title = $(`${drawerId}_title`);
-      const reason = $(`${drawerId}_reason`);
-      if (title) title.innerHTML = `<span style="color:var(--accent-red)"><svg class='icon-sym' aria-hidden='true'><use href='#i-warning'/></svg> Stream Error</span>`;
-      if (reason) reason.innerHTML = `<span style="color:var(--accent-red)">${escapeHtml(err)}</span>`;
+      const body = $(`${cardId}_body`);
+      if (body) {
+        body.innerHTML = `<span style="color:var(--accent-red);">Stream error: ${escapeHtml(err)}</span>`;
+      }
     },
     showStoppedState: (text) => {
-      const title = $(`${drawerId}_title`);
-      if (title) title.textContent = "Generation Stopped by User";
-      const body = $(`${drawerId}_body`);
+      const body = $(`${cardId}_body`);
       if (body && text) {
-        body.style.display = "block";
-        body.innerHTML = formatMarkdown(text) + `<p style="color:var(--text-muted);font-style:italic;">[Generation stopped by user]</p>`;
-  _renderMathInElement(body);
+        body.innerHTML = formatMarkdown(text) + `<p style="color:var(--text-muted);font-style:italic;margin-top:8px;">[Generation stopped by user]</p>`;
+        _renderMathInElement(body);
       }
     }
   };
 }
 
-function appendAssistantResponseToUI(query, text, data = {}) {
+function appendAssistantResponseToUI(query, text, data = {}, shouldScroll = true) {
   const container = $("chat-messages");
   if (!container) return;
 
@@ -1169,130 +1166,121 @@ function appendAssistantResponseToUI(query, text, data = {}) {
   const taskType = analyzer.task_type || data.task_type || "general";
   const complexity = analyzer.complexity || data.complexity || "medium";
   const complexityScore = analyzer.complexity_score ?? data.complexity_score ?? 0.5;
-  const targetTier = model.tier || analyzer.target_tier || "fast";
+  const servedTierNorm = normalizeTierKey(data.tier || model.tier || analyzer.required_capability || "tier_1");
   const targetModelName = model.model_name || model.model_id || data.selected_model || "Gemini Flash";
-  const targetProvider = model.provider || analyzer.target_provider || data.selected_provider || "gemini";
   const routingReason = data.routing_reason || analyzer.reason || model.reason || "Cost-optimal model selection";
 
-  const totalCost = data.total_cost_usd != null ? `$${data.total_cost_usd.toFixed(6)}` : "—";
-  const baselineCost = data.baseline_cost_usd != null ? `$${data.baseline_cost_usd.toFixed(6)}` : "—";
-  const savingsUsd = data.savings_usd != null ? `$${data.savings_usd.toFixed(6)}` : "—";
-  const savingsPct = data.savings_percent != null ? `${data.savings_percent.toFixed(1)}%` : null;
+  const isEscalated = Boolean(data.escalation_used || data.escalated);
 
-  const totalTokens = data.total_tokens ? `${data.total_tokens.toLocaleString()} tok` : "—";
-  const inTokens = data.input_tokens != null ? data.input_tokens : (analyzer.input_tokens || 0);
-  const outTokens = data.output_tokens != null ? data.output_tokens : (analyzer.output_tokens || 0);
+  const costNumber = data.total_cost_usd != null ? data.total_cost_usd : (data.estimated_cost_usd || 0.0);
+  const costStr = `$${costNumber.toFixed(6)}`;
+  const latencyNumber = data.total_latency_ms != null ? data.total_latency_ms : (data.latency_ms || 0.0);
+  const latencyStr = `${Math.round(latencyNumber)} ms`;
+  const savingsPct = data.savings_percent != null && data.savings_percent > 0 ? `${data.savings_percent.toFixed(1)}% saved` : null;
 
-  const totalLatency = data.total_latency_ms != null ? `${Math.round(data.total_latency_ms)} ms` : "—";
-  const genLatency = data.latency_ms != null ? `${Math.round(data.latency_ms)} ms` : "0 ms";
-  const analyzerLatency = data.analyzer_latency_ms != null ? `${Math.round(data.analyzer_latency_ms)} ms` : "—";
-  const ttft = data.ttft_ms != null ? `${Math.round(data.ttft_ms)} ms` : "—";
-
-  const fallbackBadge = data.fallback_used ? `<span class="drawer-badge" style="background:rgba(245,158,11,0.2);color:var(--accent-amber)"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Fallback Used</span>` : "";
+  // Build candidate scoreboard rows
+  let scoreboardRows = "";
+  if (Array.isArray(data.candidates) && data.candidates.length > 0) {
+    scoreboardRows = data.candidates.map(c => `
+      <tr class="${c.selected ? 'selected' : ''}">
+        <td><strong>${escapeHtml(c.tier.toUpperCase())}</strong></td>
+        <td>${escapeHtml(c.name)}</td>
+        <td>${c.total.toFixed(2)}</td>
+        <td>${Math.round(c.expected_latency_ms)}ms</td>
+        <td>$${c.expected_cost_usd.toFixed(6)}</td>
+        <td>${c.selected ? '✓ Selected' : '—'}</td>
+      </tr>
+    `).join("");
+  }
 
   msgEl.innerHTML = `
-    <div class="msg-avatar"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg></div>
+    <div class="msg-avatar"><svg class='icon-sym' aria-hidden='true'><use href='#i-node-switch'/></svg></div>
     <div class="msg-content-wrap">
       <div class="assistant-card">
         
-        <!-- Expandable Reasoning Drawer Accordion -->
-        <div class="reasoning-drawer collapsed" id="${drawerId}">
-          <div class="drawer-toggle" data-action="toggle-reasoning" data-target="${drawerId}">
-            <div class="drawer-summary">
-              <span class="drawer-icon"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg></span>
-              <span class="drawer-title">${isSelf ? 'Direct Self-Mode' : 'Routed to ' + escapeHtml(targetModelName)}</span>
-              <span class="drawer-badge ${isSelf ? 'self' : 'switch'}">${isSelf ? "<svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Self-Mode" : "<svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Switch-Mode"}</span>
-              <span class="drawer-metric"><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> ${totalLatency}</span>
-              ${savingsPct ? `<span class="drawer-metric text-green"><svg class='icon-sym' aria-hidden='true'><use href='#i-trend-down'/></svg> ${savingsPct} saved</span>` : ''}
-              ${fallbackBadge}
-            </div>
-            <div class="drawer-chevron">▾</div>
-          </div>
-
-          <div class="drawer-content">
-            <!-- 4-Stat Grid -->
-            <div class="drawer-grid">
-              <div class="drawer-stat-card">
-                <span class="stat-label">Execution Mode</span>
-                <span class="stat-val ${isSelf ? 'text-green' : 'text-cyan'}">${isSelf ? `<svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Direct Self-Answer` : `<svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Specialized Switch`}</span>
-                <span class="stat-sub">${isSelf ? 'Zero downstream cost' : 'Targeted model dispatched'}</span>
-              </div>
-              <div class="drawer-stat-card">
-                <span class="stat-label">Task Classification</span>
-                <span class="stat-val">${escapeHtml(taskType.toUpperCase())}</span>
-                <span class="stat-sub">Domain categorized</span>
-              </div>
-              <div class="drawer-stat-card">
-                <span class="stat-label">Complexity Score</span>
-                <div class="complexity-meter">
-                  <div class="complexity-bar" style="width: ${Math.round(complexityScore * 100)}%"></div>
-                </div>
-                <span class="stat-sub">${escapeHtml(complexity)} (${complexityScore})</span>
-              </div>
-              <div class="drawer-stat-card">
-                <span class="stat-label">Served Model</span>
-                <span class="stat-val">${escapeHtml(targetModelName)}</span>
-                <span class="stat-sub">${escapeHtml(targetProvider.toUpperCase())} · ${escapeHtml(targetTier)}</span>
-              </div>
-            </div>
-
-            <!-- Routing Rationale -->
-            <div class="drawer-section">
-              <div class="section-title"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg> Analyzer Rationale</div>
-              <div class="rationale-box">"${escapeHtml(routingReason)}"</div>
-            </div>
-
-            <!-- Granular Performance & Cost Grid -->
-            <div class="drawer-telemetry-grid">
-              <div class="t-box">
-                <span class="t-label">Time to First Token</span>
-                <span class="t-val">${ttft}</span>
-              </div>
-              <div class="t-box">
-                <span class="t-label">Analyzer Latency</span>
-                <span class="t-val">${analyzerLatency}</span>
-              </div>
-              <div class="t-box">
-                <span class="t-label">Generation Latency</span>
-                <span class="t-val">${genLatency}</span>
-              </div>
-              <div class="t-box">
-                <span class="t-label">Token Breakdown</span>
-                <span class="t-val">${inTokens} in · ${outTokens} out</span>
-                <span class="t-sub">${totalTokens}</span>
-              </div>
-              <div class="t-box highlight-cost">
-                <span class="t-label">Actual Cost</span>
-                <span class="t-val">${totalCost}</span>
-                <span class="t-sub">Baseline: ${baselineCost}</span>
-              </div>
-              <div class="t-box highlight-savings">
-                <span class="t-label">Net Cost Reduction</span>
-                <span class="t-val text-green">${savingsUsd} (${savingsPct || '0%'})</span>
-                <span class="t-sub">vs always-powerful model</span>
-              </div>
-            </div>
+        <!-- Humanized Routing Badge Bar -->
+        <div class="routing-badge-bar">
+          <span class="routing-tier-pill">${isSelf ? 'Self-Answer' : servedTierNorm.toUpperCase()}</span>
+          <span class="routing-model-name">${escapeHtml(targetModelName)}</span>
+          <div class="routing-telemetry-meta">
+            <span>${latencyStr}</span>
+            <span>·</span>
+            <span>${costStr}</span>
+            ${savingsPct ? `<span>·</span><span class="savings-text">${savingsPct} vs baseline</span>` : ''}
           </div>
         </div>
 
-        <!-- Assistant Message Body -->
+        <!-- Assistant Markdown Answer -->
         <div class="msg-text-body">
           ${formatMarkdown(text)}
         </div>
 
-        <!-- Message Footer -->
-        <div class="telemetry-footer">
-          <div class="telemetry-chips">
-            <div class="t-chip"><span><svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Latency:</span> <strong>${totalLatency}</strong></div>
-            <div class="t-chip"><span><svg class='icon-sym' aria-hidden='true'><use href='#i-hash'/></svg> Tokens:</span> <strong>${totalTokens}</strong></div>
-            <div class="t-chip"><span><svg class='icon-sym' aria-hidden='true'><use href='#i-dollar'/></svg> Cost:</span> <strong>${totalCost}</strong></div>
-            ${savingsPct ? `<div class="t-chip savings"><span><svg class='icon-sym' aria-hidden='true'><use href='#i-trend-down'/></svg> Saved:</span> <strong>${savingsPct} vs baseline</strong></div>` : ''}
+        <!-- Expandable Routing & Scoreboard Drawer -->
+        <div class="routing-drawer" id="${drawerId}">
+          <div class="routing-drawer-head" data-action="toggle-drawer" data-target="${drawerId}">
+            <span>Routing Rationale &amp; Scoreboard</span>
+            <span class="drawer-arrow">▾</span>
           </div>
+          <div class="routing-drawer-content hidden" id="${drawerId}_content">
+            <div class="drawer-grid">
+              <div class="drawer-cell">
+                <span class="drawer-cell-label">Task Type</span>
+                <span class="drawer-cell-val">${escapeHtml(taskType.toUpperCase())}</span>
+              </div>
+              <div class="drawer-cell">
+                <span class="drawer-cell-label">Complexity</span>
+                <span class="drawer-cell-val">${escapeHtml(complexity.toUpperCase())} (${complexityScore})</span>
+              </div>
+              <div class="drawer-cell">
+                <span class="drawer-cell-label">Verification</span>
+                <span class="drawer-cell-val ${isEscalated ? 'text-amber' : 'text-green'}">
+                  ${isEscalated ? '⚡ Escalated to Frontier' : '✓ Quality Verified'}
+                </span>
+              </div>
+            </div>
+            
+            <div class="drawer-reason">
+              "${escapeHtml(routingReason)}"
+            </div>
+
+            ${scoreboardRows ? `
+              <div style="margin-top:6px;">
+                <span class="drawer-cell-label">Candidate Tier Scoreboard:</span>
+                <table class="scoreboard-table">
+                  <thead>
+                    <tr>
+                      <th>Tier</th>
+                      <th>Model</th>
+                      <th>Score</th>
+                      <th>Latency</th>
+                      <th>Est. Cost</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>${scoreboardRows}</tbody>
+                </table>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        <!-- Telemetry Actions Bar -->
+        <div class="telemetry-footer">
           <div class="telemetry-actions">
-            <button class="btn-icon-action" data-action="copy-message" data-text="${escapeHtml(text)}" title="Copy Response"><svg class='icon-sym' aria-hidden='true'><use href='#i-copy'/></svg> Copy</button>
-            ${data.request_id ? `<button class="btn-icon-action" data-action="open-inspector" data-id="${data.request_id}" title="Inspect Full Telemetry"><svg class='icon-sym' aria-hidden='true'><use href='#i-search'/></svg> Inspect</button>` : ''}
-            ${data.request_id ? `<button class="btn-icon-action" data-action="feedback" data-id="${data.request_id}" data-rating="1" title="Good Response"><svg class='icon-sym' aria-hidden='true'><use href='#i-thumb-up'/></svg></button>` : ''}
-            ${data.request_id ? `<button class="btn-icon-action" data-action="feedback" data-id="${data.request_id}" data-rating="-1" title="Poor Response"><svg class='icon-sym' aria-hidden='true'><use href='#i-thumb-down'/></svg></button>` : ''}
+            <button class="btn-icon-action" data-action="copy-message" data-text="${escapeHtml(text)}" title="Copy Response">
+              <svg class='icon-sym' aria-hidden='true'><use href='#i-copy'/></svg> Copy Answer
+            </button>
+            ${data.request_id ? `
+              <button class="btn-icon-action" data-action="open-inspector" data-id="${data.request_id}" title="Inspect Full Telemetry">
+                <svg class='icon-sym' aria-hidden='true'><use href='#i-search'/></svg> Inspect
+              </button>
+              <button class="btn-icon-action" data-action="feedback" data-id="${data.request_id}" data-rating="1" title="Helpful Response">
+                <svg class='icon-sym' aria-hidden='true'><use href='#i-thumb-up'/></svg>
+              </button>
+              <button class="btn-icon-action" data-action="feedback" data-id="${data.request_id}" data-rating="-1" title="Poor Response">
+                <svg class='icon-sym' aria-hidden='true'><use href='#i-thumb-down'/></svg>
+              </button>
+            ` : ''}
           </div>
         </div>
 
@@ -1300,23 +1288,57 @@ function appendAssistantResponseToUI(query, text, data = {}) {
     </div>
   `;
 
+  // Drawer Toggle Handler
+  const drawerHead = msgEl.querySelector(`[data-target="${drawerId}"]`);
+  const drawerContent = msgEl.querySelector(`#${drawerId}_content`);
+  const arrow = msgEl.querySelector(".drawer-arrow");
+
+  drawerHead?.addEventListener("click", () => {
+    if (!drawerContent) return;
+    drawerContent.classList.toggle("hidden");
+    if (arrow) arrow.textContent = drawerContent.classList.contains("hidden") ? "▾" : "▴";
+  });
+
+  // Action Button Handlers (Copy, Feedback, Inspector)
+  msgEl.querySelectorAll("[data-action]").forEach(btn => {
+    const act = btn.dataset.action;
+    if (act === "copy-message") {
+      btn.addEventListener("click", () => {
+        navigator.clipboard.writeText(btn.dataset.text || text);
+        showToast("Answer copied to clipboard", "success");
+      });
+    } else if (act === "open-inspector") {
+      btn.addEventListener("click", () => {
+        openInspectorModal(btn.dataset.id);
+      });
+    } else if (act === "feedback") {
+      btn.addEventListener("click", async () => {
+        const reqId = parseInt(btn.dataset.id, 10);
+        const rating = parseInt(btn.dataset.rating, 10);
+        try {
+          const resp = await apiFetch("/api/feedback", {
+            method: "POST",
+            body: JSON.stringify({ request_id: reqId, rating }),
+          });
+          if (resp.ok) {
+            btn.classList.add("active-feedback");
+            showToast("Feedback recorded", "success");
+          }
+        } catch (e) {
+          console.error("Feedback error:", e);
+        }
+      });
+    }
+  });
+
   container.appendChild(msgEl);
-  // Render LaTeX math ($...$ / $$...$$) inside the final markdown body.
   _renderMathInElement(msgEl.querySelector(".msg-text-body"));
-  smoothScrollToBottom(container);
+  if (shouldScroll) smoothScrollToBottom(container);
 }
 
-window.toggleReasoningDrawer = function(id) {
-  const drawer = $(id);
-  if (!drawer) return;
-  drawer.classList.toggle("expanded");
-  drawer.classList.toggle("collapsed");
-};
-
 /* ============================================================
-   7. Resilient SSE Stream Consumer (R4)
+   10. SSE Stream Reader
    ============================================================ */
-
 async function executeStreamingChat(payload, signal, onAnalyzer, onRouting, onReasoningDelta, onDelta, onDone, onError) {
   const resp = await apiFetch("/api/chat/stream", {
     method: "POST",
@@ -1330,7 +1352,7 @@ async function executeStreamingChat(payload, signal, onAnalyzer, onRouting, onRe
   }
 
   const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8");
   let buffer = "";
 
   while (true) {
@@ -1338,500 +1360,232 @@ async function executeStreamingChat(payload, signal, onAnalyzer, onRouting, onRe
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n\n");
-    buffer = parts.pop(); // Keep incomplete chunk in buffer
+    const lines = buffer.split("\n\n");
+    buffer = lines.pop() || "";
 
-    for (const part of parts) {
-      const dataLine = part.split("\n").find(l => l.startsWith("data:"));
-      if (!dataLine) continue;
+    for (const block of lines) {
+      const trimmed = block.trim();
+      if (!trimmed.startsWith("data:")) continue;
 
-      let evt;
+      const rawJson = trimmed.replace(/^data:\s*/, "");
       try {
-        evt = JSON.parse(dataLine.slice(5).trim());
-      } catch (e) {
-        console.warn("Malformed SSE JSON:", dataLine);
-        continue;
-      }
+        const evt = JSON.parse(rawJson);
+        const eventType = evt.event || evt.type;
 
-      switch (evt.event) {
-        case "analyzer":
-          if (onAnalyzer) onAnalyzer(evt.info || evt);
-          break;
-        case "routing":
-          if (onRouting) onRouting(evt);
-          break;
-        case "reasoning_delta":
-          if (onReasoningDelta) onReasoningDelta(evt.text || "");
-          break;
-        case "delta":
-          if (onDelta && !evt._handled) {
-            onDelta(evt.text || "");
-            evt._handled = true;
-          }
-          break;
-        case "content_delta":
-          if (onDelta && !evt._handled) {
-            onDelta(evt.text || "");
-            evt._handled = true;
-          }
-          break;
-        case "done":
-          if (onDone) onDone(evt);
-          break;
-        case "error":
-          if (onError) onError(evt.detail || "Streaming error occurred");
-          break;
+        if (eventType === "analyzer" && onAnalyzer) {
+          onAnalyzer(evt.info || evt.data || evt);
+        } else if (eventType === "routing" && onRouting) {
+          onRouting(evt.data || evt);
+        } else if ((eventType === "reasoning_delta" || eventType === "reasoning") && onReasoningDelta) {
+          const chunk = evt.text || evt.delta || (evt.data && (evt.data.text || evt.data.delta)) || "";
+          onReasoningDelta(chunk);
+        } else if (eventType === "delta" && onDelta) {
+          const chunk = evt.text || evt.delta || (evt.data && (evt.data.text || evt.data.delta)) || "";
+          onDelta(chunk);
+        } else if (eventType === "done" && onDone) {
+          onDone(evt.data || evt);
+        } else if (eventType === "error" && onError) {
+          onError(evt.detail || evt.message || (evt.data && evt.data.message) || "Unknown error");
+        }
+      } catch (jsonErr) {
+        console.warn("SSE json parse error:", jsonErr, rawJson);
       }
     }
   }
 }
 
-function smoothScrollToBottom(container) {
-  if (!container || isUserScrolledUp) return;
-  container.scrollTo({
-    top: container.scrollHeight,
-    behavior: "smooth",
+/* ============================================================
+   11. View 2: Model Registry & Architecture Tiers
+   ============================================================ */
+function setupModelRegistryView() {
+  $("refresh-registry-btn")?.addEventListener("click", () => {
+    loadRegistryModels();
+    showToast("Model registry updated", "info");
   });
 }
 
-/* ============================================================
-   8. Markdown Parser & Code Syntax Highlighting
-   ============================================================ */
+async function loadRegistryModels() {
+  const tbody = $("registry-table-body");
+  if (!tbody) return;
 
-function escapeHtml(s) {
-  return String(s || "").replace(/[&<>"']/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[c]));
-}
-
-function escapeAttr(s) {
-  if (s === null || s === undefined) return '""';
-  return JSON.stringify(String(s)).replace(/"/g, '&quot;');
-}
-
-function highlightSyntax(code, lang = "") {
-  let escaped = escapeHtml(code);
-
-  // Common keywords across languages (Python, Java, JS/TS, C++, Go, Rust, SQL)
-  const keywords = /\b(public|private|protected|static|final|void|class|interface|extends|implements|new|this|super|int|float|double|boolean|char|byte|short|long|String|System|out|println|def|from|import|return|yield|if|else|elif|for|while|do|try|except|catch|finally|throw|throws|with|as|async|await|function|const|let|var|switch|case|default|break|continue|typeof|instanceof|null|undefined|true|false|None|True|False|SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|JOIN|GROUP|ORDER|BY|HAVING|LIMIT)\b/g;
-  escaped = escaped.replace(keywords, '<span class="syn-kw">$1</span>');
-
-  // Strings (quoted)
-  escaped = escaped.replace(/(&quot;[\s\S]*?&quot;|&#39;[\s\S]*?&#39;|`[\s\S]*?`)/g, '<span class="syn-str">$1</span>');
-
-  // Numbers
-  escaped = escaped.replace(/\b(\d+(\.\d+)?)\b/g, '<span class="syn-num">$1</span>');
-
-  // Comments (# or //)
-  escaped = escaped.replace(/(#.*|\/\/.*)$/gm, '<span class="syn-comment">$1</span>');
-
-  return escaped;
-}
-
-/* ------------------------------------------------------------------
-   Standard Markdown Rendering: marked + DOMPurify + KaTeX
-   - marked: full CommonMark/GFM parser (tables, ordered lists, links,
-     nested markdown — replaces the limited regex chain)
-   - DOMPurify: XSS sanitization of the parsed HTML
-   - KaTeX: LaTeX math rendering for $inline$, $$block$$, \(..\), \[..\]
-   ------------------------------------------------------------------ */
-let _katexReady = false;
-if (typeof katex !== "undefined") _katexReady = true;
-
-function _renderMathInElement(el) {
-  if (!_katexReady || typeof renderMathInElement !== "function" || !el) return;
   try {
-    renderMathInElement(el, {
-      delimiters: [
-        { left: "$$", right: "$$", display: true },
-        { left: "\\[", right: "\\]", display: true },
-        { left: "\\(", right: "\\)", display: false },
-        { left: "$", right: "$", display: false },
-      ],
-      throwOnError: false,
-    });
-  } catch (err) {
-    console.warn("KaTeX math rendering failed:", err);
-  }
-}
+    const resp = await apiFetch("/api/models");
+    if (!resp.ok) throw new Error("Failed to fetch models");
 
-function formatMarkdown(text) {
-  if (!text) return "";
+    const data = await resp.json();
+    const models = data.models || [];
 
-  if (typeof marked !== "undefined" && typeof DOMPurify !== "undefined") {
-    const renderer = new marked.Renderer();
-    // Keep the app's syntax highlighting + CSP-safe copy button on fenced code.
-    renderer.code = function(code, lang) {
-      // In marked v12+, the first argument can be an object token { text, lang, escaped }
-      let cleanCode = typeof code === "object" ? (code.text || "") : (code || "");
-      let cleanLang = typeof code === "object" ? (code.lang || "") : (lang || "");
-      cleanLang = (cleanLang || "").trim().toLowerCase() || "code";
-      cleanCode = cleanCode.replace(/\n$/, "");
+    if ($("reg-total-models")) $("reg-total-models").textContent = models.length.toString();
+
+    // Find price range, min latency, max context
+    if (models.length > 0) {
+      const minIn = Math.min(...models.map(m => m.input_price_per_mtok));
+      const maxOut = Math.max(...models.map(m => m.output_price_per_mtok));
+      const minLat = Math.min(...models.map(m => m.expected_latency_ms));
+      const maxCtx = Math.max(...models.map(m => m.context_window));
+
+      if ($("reg-price-range")) $("reg-price-range").textContent = `$${minIn.toFixed(2)} – $${maxOut.toFixed(2)}`;
+      if ($("reg-min-lat")) $("reg-min-lat").textContent = `~${minLat} ms`;
+      if ($("reg-max-context")) $("reg-max-context").textContent = maxCtx.toLocaleString();
+    }
+
+    tbody.innerHTML = models.map(m => {
+      const tierTag = m.tier.toUpperCase();
+      const inPrice = `$${m.input_price_per_mtok.toFixed(3)}`;
+      const outPrice = `$${m.output_price_per_mtok.toFixed(3)}`;
+      const isOnline = m.available;
+      const statusBadge = isOnline
+        ? `<span style="color:var(--accent-green-bright);font-weight:600;">● Active (${m.mode})</span>`
+        : `<span style="color:var(--text-muted);">○ Inactive</span>`;
 
       return `
-        <div class="code-block-wrapper">
-          <div class="code-block-header">
-            <span class="code-lang-label">${escapeHtml(cleanLang)}</span>
-            <button type="button" class="btn-copy-code" data-action="copy-code"><svg class='icon-sym' aria-hidden='true'><use href='#i-copy'/></svg> Copy Code</button>
+        <tr>
+          <td><span class="routing-tier-pill">${escapeHtml(tierTag)}</span></td>
+          <td><strong>${escapeHtml(m.name)}</strong></td>
+          <td>${escapeHtml((m.provider || 'gemini').toUpperCase())}</td>
+          <td>${m.quality != null ? (m.quality * 100).toFixed(0) + '%' : '—'}</td>
+          <td>${m.reasoning != null ? (m.reasoning * 100).toFixed(0) + '%' : '—'}</td>
+          <td>${m.coding != null ? (m.coding * 100).toFixed(0) + '%' : '—'}</td>
+          <td>${inPrice} / ${outPrice}</td>
+          <td>~${m.expected_latency_ms} ms</td>
+          <td>${m.context_window ? m.context_window.toLocaleString() : '—'}</td>
+          <td>${statusBadge}</td>
+        </tr>
+      `;
+    }).join("");
+
+    // Populate Tier Guidelines Cards Grid
+    const guidelinesGrid = $("tier-guidelines-grid");
+    if (guidelinesGrid) {
+      guidelinesGrid.innerHTML = `
+        <div class="guideline-card">
+          <div class="guideline-card-head">
+            <span class="routing-tier-pill">ANALYZER</span>
+            <span class="prov-tag gemini">Google Gemini</span>
           </div>
-          <pre><code class="language-${escapeHtml(cleanLang)}">${highlightSyntax(cleanCode, cleanLang)}</code></pre>
+          <div class="guideline-title">Gemini 3.1 Flash-Lite</div>
+          <p class="guideline-desc">Evaluates incoming prompts and context in a single pass. Resolves routine queries in Self-Answer mode with 0 downstream calls; classifies tasks into Coding, Reasoning, or General.</p>
+        </div>
+        <div class="guideline-card">
+          <div class="guideline-card-head">
+            <span class="routing-tier-pill">TIER 1</span>
+            <span class="prov-tag gemini">Google Gemini</span>
+          </div>
+          <div class="guideline-title">Gemini 3.5 Flash-Lite (Fast / Routine)</div>
+          <p class="guideline-desc">Ideal for short summaries, greetings, terminology definitions, and high-frequency, low-latency conversational turns ($0.075 / $0.30 per Mtok).</p>
+        </div>
+        <div class="guideline-card">
+          <div class="guideline-card-head">
+            <span class="routing-tier-pill">TIER 2</span>
+            <span class="prov-tag groq">Groq LPU</span>
+          </div>
+          <div class="guideline-title">GPT-OSS 20B (Fast General Purpose)</div>
+          <p class="guideline-desc">High token velocity on Groq hardware. Great for quick explanations, casual Q&amp;A, and routine factual synthesis (~200 ms latency).</p>
+        </div>
+        <div class="guideline-card">
+          <div class="guideline-card-head">
+            <span class="routing-tier-pill">TIER 3</span>
+            <span class="prov-tag gemini">Google Gemini</span>
+          </div>
+          <div class="guideline-title">Gemini 3.6 Flash (Balanced Workhorse)</div>
+          <p class="guideline-desc">Optimal middle-ground balancing quality and cost for general analysis, complex dialogue, and document queries with 1M context window.</p>
+        </div>
+        <div class="guideline-card">
+          <div class="guideline-card-head">
+            <span class="routing-tier-pill">TIER 4</span>
+            <span class="prov-tag groq">Groq LPU</span>
+          </div>
+          <div class="guideline-title">Qwen3.8 27B (Coding Specialist)</div>
+          <p class="guideline-desc">Trained and calibrated for software engineering, refactoring, algorithmic DSA tasks, and code review (0.96 coding capability score).</p>
+        </div>
+        <div class="guideline-card">
+          <div class="guideline-card-head">
+            <span class="routing-tier-pill">TIER 5</span>
+            <span class="prov-tag groq">Groq LPU</span>
+          </div>
+          <div class="guideline-title">GPT-OSS 120B (Deep Reasoning)</div>
+          <p class="guideline-desc">Advanced reasoning model for mathematical proofs, complex logic puzzles, multi-constraint deduction, and intricate decision trees.</p>
+        </div>
+        <div class="guideline-card">
+          <div class="guideline-card-head">
+            <span class="routing-tier-pill">TIER 6</span>
+            <span class="prov-tag gemini">Google Gemini</span>
+          </div>
+          <div class="guideline-title">Gemini 3.8 Flash (High Capability)</div>
+          <p class="guideline-desc">Top-tier high capability model for difficult system architecture, ambiguous research questions, and fallback escalation (backed by gemini-3.5-flash fallback).</p>
         </div>
       `;
-    };
-    const parsed = marked.parse(text, { renderer, gfm: true, breaks: true });
-    return DOMPurify.sanitize(parsed, {
-      ADD_ATTR: ["data-action", "data-code", "data-text", "data-id", "data-rating", "data-target", "target"],
-    });
-  }
-
-  // Fallback when vendor libs are unavailable: plain escaped text.
-  return `<p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>`;
-}
-
-window.copyCodeBlock = function(btn, codeText) {
-  let text = codeText;
-  if (!text) {
-    const wrapper = btn.closest(".code-block-wrapper");
-    const codeEl = wrapper ? wrapper.querySelector("pre code") : null;
-    if (codeEl) text = codeEl.textContent;
-  }
-  if (!text) return;
-  const doFeedback = () => {
-    const orig = btn.innerHTML;
-    btn.innerHTML = `<span style="color:var(--accent-green);font-weight:700;">✓ Copied!</span>`;
-    setTimeout(() => {
-      btn.innerHTML = orig;
-    }, 2000);
-    showToast("Code copied to clipboard", "success");
-  };
-
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(doFeedback).catch(() => {
-      // Fallback
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      doFeedback();
-    });
-  } else {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    document.body.removeChild(ta);
-    doFeedback();
-  }
-};
-
-window.copyMessageText = function(btn, text) {
-  navigator.clipboard.writeText(text);
-  const orig = btn.innerHTML;
-  btn.innerHTML = `✓ Copied`;
-  setTimeout(() => { btn.innerHTML = orig; }, 2000);
-  showToast("Answer copied to clipboard", "success");
-};
-
-/* ------------------------------------------------------------------
-   CSP-Safe Global Action Delegation
-   Replaces every inline onclick handler with data-action attributes so
-   the whole app runs under a strict Content-Security-Policy
-   (script-src 'self' — no unsafe-inline script execution allowed).
-   ------------------------------------------------------------------ */
-document.addEventListener("click", (e) => {
-  const el = e.target.closest("[data-action]");
-  if (!el) return;
-  const id = el.dataset.id;
-  switch (el.dataset.action) {
-    case "session-click":
-      // Inner action buttons (rename/delete) dispatch their own actions.
-      if (e.target.closest(".session-actions")) return;
-      handleSessionClick(id);
-      break;
-    case "rename-session": promptRenameSession(id); break;
-    case "delete-session": handleDeleteSession(id); break;
-    case "toggle-reasoning": toggleReasoningDrawer(el.dataset.target); break;
-    case "copy-message": copyMessageText(el, el.dataset.text); break;
-    case "copy-code": copyCodeBlock(el, el.dataset.code); break;
-    case "open-inspector": openInspectorModal(parseInt(id, 10)); break;
-    case "feedback":
-      recordMessageFeedback(parseInt(id, 10), parseInt(el.dataset.rating, 10), el);
-      break;
-  }
-});
-
-/* ============================================================
-   9. Dynamic Settings Modal & Provider Management (R2)
-   ============================================================ */
-
-function setupSettingsModal() {
-  const modal = $("settings-modal");
-  const openBtn = $("open-settings-btn");
-  const headerSettingsBtn = $("header-settings-btn");
-  const closeBtn = $("close-settings-btn");
-  const backdrop = $("settings-backdrop");
-  const saveBtn = $("save-settings-btn");
-  const resetBtn = $("reset-settings-btn");
-  const clearKeysBtn = $("clear-keys-btn");
-
-  // Open / Close
-  const openModal = () => {
-    loadSettingsIntoUI();
-    modal?.classList.remove("hidden");
-  };
-  const closeModal = () => {
-    modal?.classList.add("hidden");
-  };
-
-  openBtn?.addEventListener("click", openModal);
-  headerSettingsBtn?.addEventListener("click", openModal);
-  closeBtn?.addEventListener("click", closeModal);
-  backdrop?.addEventListener("click", closeModal);
-
-  // Tab switching inside settings
-  $$(".settings-tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      $$(".settings-tab").forEach(t => t.classList.remove("active"));
-      $$(".settings-panel").forEach(p => p.classList.remove("active"));
-
-      tab.classList.add("active");
-      const targetPanel = $(`tab-${tab.dataset.tab}`);
-      if (targetPanel) targetPanel.classList.add("active");
-    });
-  });
-
-  // Password visibility toggles
-  $$(".btn-toggle-mask").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const targetId = btn.dataset.target;
-      const input = $(targetId);
-      if (input) {
-        input.type = input.type === "password" ? "text" : "password";
-        btn.innerHTML = input.type === "password" ? "<svg class='icon-sym' aria-hidden='true'><use href='#i-eye'/></svg>" : "<svg class='icon-sym' aria-hidden='true'><use href='#i-lock'/></svg>";
-      }
-    });
-  });
-
-  // Connection Test Buttons
-  $$(".btn-test-conn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const provider = btn.dataset.provider;
-      await testProviderConnection(provider);
-    });
-  });
-
-  // Save Settings
-  saveBtn?.addEventListener("click", async () => {
-    const current = await SettingsManager.load();
-
-    current.apiKeys.gemini = ($("key-gemini")?.value || "").trim();
-    current.apiKeys.groq = ($("key-groq")?.value || "").trim();
-    current.apiKeys.openrouter = ($("key-openrouter")?.value || "").trim();
-    current.apiKeys.openai = ($("key-openai")?.value || "").trim();
-    current.apiKeys.custom = ($("key-custom")?.value || "").trim();
-
-    current.customEndpoints.custom = ($("url-custom")?.value || "").trim();
-
-    // Provider Specific Models (Tabs 1-5)
-    current.providerModels.geminiFast = ($("model-gemini-fast")?.value || "").trim();
-    current.providerModels.groqCoding = ($("model-groq-coding")?.value || "").trim();
-    current.providerModels.groqReasoning = ($("model-groq-reasoning")?.value || "").trim();
-    current.providerModels.openrouterAnalyzer = ($("model-openrouter-analyzer")?.value || "").trim();
-    current.providerModels.openrouterPowerful = ($("model-openrouter-powerful")?.value || "").trim();
-    current.providerModels.openai = ($("model-openai")?.value || "").trim();
-    current.providerModels.custom = ($("model-custom")?.value || "").trim();
-
-    // Tier Overrides (Tab 6 - sync with provider models if configured)
-    current.tierOverrides.analyzer = ($("override-analyzer")?.value || current.providerModels.openrouterAnalyzer || "").trim();
-    current.tierOverrides.fast = ($("override-fast")?.value || current.providerModels.geminiFast || "").trim();
-    current.tierOverrides.coding = ($("override-coding")?.value || current.providerModels.groqCoding || "").trim();
-    current.tierOverrides.reasoning = ($("override-reasoning")?.value || current.providerModels.groqReasoning || "").trim();
-    current.tierOverrides.powerful = ($("override-powerful")?.value || current.providerModels.openrouterPowerful || "").trim();
-
-    await SettingsManager.save(current);
-    showToast("Settings and API keys saved successfully", "success");
-    closeModal();
-    checkInitialHealth();
-  });
-
-  // Reset to Defaults
-  resetBtn?.addEventListener("click", async () => {
-    if (confirm("Reset all settings to server defaults?")) {
-      await SettingsManager.save(SettingsManager.getDefaults());
-      await loadSettingsIntoUI();
-      showToast("Settings reset to defaults", "info");
-    }
-  });
-
-  // Clear Keys
-  clearKeysBtn?.addEventListener("click", async () => {
-    if (confirm("Clear all stored API keys and custom endpoints?")) {
-      await SettingsManager.clearKeys();
-      await loadSettingsIntoUI();
-      showToast("All stored keys cleared", "info");
-    }
-  });
-}
-
-async function loadSettingsIntoUI() {
-  const s = await SettingsManager.load();
-
-  // API Keys
-  if ($("key-gemini")) $("key-gemini").value = s.apiKeys.gemini || "";
-  if ($("key-groq")) $("key-groq").value = s.apiKeys.groq || "";
-  if ($("key-openrouter")) $("key-openrouter").value = s.apiKeys.openrouter || "";
-  if ($("key-openai")) $("key-openai").value = s.apiKeys.openai || "";
-  if ($("key-custom")) $("key-custom").value = s.apiKeys.custom || "";
-
-  // Custom Endpoint & Model
-  if ($("url-custom")) $("url-custom").value = s.customEndpoints.custom || "";
-  if ($("model-custom")) $("model-custom").value = s.providerModels?.custom || "";
-
-  // Provider Models (Tabs 1-4)
-  if ($("model-gemini-fast")) $("model-gemini-fast").value = s.providerModels?.geminiFast || s.tierOverrides?.fast || "gemini-2.5-flash-lite";
-  if ($("model-groq-coding")) $("model-groq-coding").value = s.providerModels?.groqCoding || s.tierOverrides?.coding || "qwen/qwen3.6-27b";
-  if ($("model-groq-reasoning")) $("model-groq-reasoning").value = s.providerModels?.groqReasoning || s.tierOverrides?.reasoning || "openai/gpt-oss-120b";
-  if ($("model-openrouter-analyzer")) $("model-openrouter-analyzer").value = s.providerModels?.openrouterAnalyzer || s.tierOverrides?.analyzer || "meta-llama/llama-3.2-3b-instruct";
-  if ($("model-openrouter-powerful")) $("model-openrouter-powerful").value = s.providerModels?.openrouterPowerful || s.tierOverrides?.powerful || "meta-llama/llama-3.1-70b-instruct";
-  if ($("model-openai")) $("model-openai").value = s.providerModels?.openai || "gpt-4o-mini";
-
-  // Tier Overrides (Tab 6)
-  if ($("override-analyzer")) $("override-analyzer").value = s.tierOverrides?.analyzer || s.providerModels?.openrouterAnalyzer || "";
-  if ($("override-fast")) $("override-fast").value = s.tierOverrides?.fast || s.providerModels?.geminiFast || "";
-  if ($("override-coding")) $("override-coding").value = s.tierOverrides?.coding || s.providerModels?.groqCoding || "";
-  if ($("override-reasoning")) $("override-reasoning").value = s.tierOverrides?.reasoning || s.providerModels?.groqReasoning || "";
-  if ($("override-powerful")) $("override-powerful").value = s.tierOverrides?.powerful || s.providerModels?.openrouterPowerful || "";
-}
-
-async function testProviderConnection(provider) {
-  const badge = $(`status-${provider}-test`);
-  if (badge) {
-    badge.className = "status-test-badge";
-    badge.innerHTML = `<span class="spinner-small"></span> Testing...`;
-  }
-
-  // Gather active input values
-  const s = await SettingsManager.load();
-  const apiKey = ($(`key-${provider}`)?.value || s.apiKeys[provider] || "").trim();
-  const baseUrl = ($("url-custom")?.value || s.customEndpoints.custom || "").trim();
-
-  let testModel = null;
-  if (provider === "custom") {
-    testModel = ($("model-custom")?.value || s.providerModels?.custom || "").trim();
-  } else if (provider === "gemini") {
-    testModel = ($("model-gemini-fast")?.value || s.providerModels?.geminiFast || "").trim();
-  } else if (provider === "groq") {
-    testModel = ($("model-groq-coding")?.value || s.providerModels?.groqCoding || "").trim();
-  } else if (provider === "openrouter") {
-    testModel = ($("model-openrouter-analyzer")?.value || s.providerModels?.openrouterAnalyzer || "").trim();
-  } else if (provider === "openai") {
-    testModel = ($("model-openai")?.value || s.providerModels?.openai || "").trim();
-  }
-
-  try {
-    const resp = await apiFetch(`/api/providers/test/${provider}`, {
-      method: "POST",
-      body: JSON.stringify({
-        provider: provider,
-        api_key: apiKey || null,
-        base_url: baseUrl || null,
-        model: testModel || null,
-      }),
-    });
-    const data = await resp.json();
-
-    if (badge) {
-      if (resp.ok && data.ok) {
-        badge.className = "status-test-badge connected";
-        badge.textContent = `✓ Connected (${data.latency_ms}ms)`;
-      } else {
-        badge.className = "status-test-badge error";
-        badge.textContent = `✗ ${data.message || "Failed"}`;
-      }
     }
   } catch (err) {
-    if (badge) {
-      badge.className = "status-test-badge error";
-      badge.textContent = `✗ ${err.message}`;
-    }
-  }
-}
-
-async function checkInitialHealth() {
-  try {
-    const resp = await apiFetch("/api/providers/health");
-    if (!resp.ok) return;
-    const data = await resp.json();
-
-    const dot = $("sidebar-provider-dot");
-    const headerStatus = $("engine-status-text");
-
-    if (data.overall_status === "connected") {
-      if (dot) dot.className = "status-dot-indicator";
-      if (headerStatus) headerStatus.textContent = "Providers Active";
-    } else if (data.overall_status === "degraded") {
-      if (dot) dot.className = "status-dot-indicator checking";
-      if (headerStatus) headerStatus.textContent = "Demo / Fallback Mode";
-    } else {
-      if (dot) dot.className = "status-dot-indicator checking";
-      if (headerStatus) headerStatus.textContent = "Server Defaults";
-    }
-  } catch (err) {
-    console.warn("Initial health check failed:", err);
+    console.error("Failed to load model registry:", err);
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-state">Failed to load models. Ensure server is running.</td></tr>`;
   }
 }
 
 /* ============================================================
-   10. Telemetry & Analytics Dashboard View
+   12. View 3: Telemetry & Dashboard Analytics
    ============================================================ */
-
-function setupDashboardView() {
-  $("refresh-dashboard-btn")?.addEventListener("click", loadDashboardStats);
-}
-
 function startDashboardAutoRefresh() {
   stopDashboardAutoRefresh();
-  dashboardRefreshInterval = setInterval(loadDashboardStats, 6000);
+  dashboardRefreshTimer = setInterval(loadDashboardStats, 10000);
 }
 
 function stopDashboardAutoRefresh() {
-  if (dashboardRefreshInterval) {
-    clearInterval(dashboardRefreshInterval);
-    dashboardRefreshInterval = null;
+  if (dashboardRefreshTimer) {
+    clearInterval(dashboardRefreshTimer);
+    dashboardRefreshTimer = null;
   }
 }
 
 async function loadDashboardStats() {
+  $("refresh-dashboard-btn")?.addEventListener("click", () => {
+    loadDashboardStats();
+    showToast("Telemetry refreshed", "info");
+  });
+
   try {
     const resp = await apiFetch("/api/stats");
     if (!resp.ok) return;
+
     const s = await resp.json();
+    const totalReq = s.total_requests || 0;
 
     // Update KPI Cards
-    if ($("stat-total-requests")) $("stat-total-requests").textContent = s.total_requests.toLocaleString();
-    if ($("stat-success-rate")) $("stat-success-rate").textContent = `Success Rate: ${(s.success_rate * 100).toFixed(1)}%`;
-    if ($("stat-savings-usd")) $("stat-savings-usd").textContent = `$${s.estimated_savings_usd.toFixed(4)}`;
-    if ($("stat-savings-pct")) $("stat-savings-pct").textContent = `${s.savings_percent.toFixed(1)}% savings vs baseline`;
-    if ($("stat-avg-latency")) $("stat-avg-latency").textContent = `${Math.round(s.average_total_latency_ms)} ms`;
-    if ($("stat-analyzer-latency")) $("stat-analyzer-latency").textContent = `Gen: ${Math.round(s.average_latency_ms)} ms avg`;
-    if ($("stat-total-cost")) $("stat-total-cost").textContent = `$${s.total_cost_usd.toFixed(6)}`;
-    if ($("stat-baseline-cost")) $("stat-baseline-cost").textContent = `Baseline: $${s.baseline_cost_usd.toFixed(6)}`;
-    if ($("stat-total-tokens")) $("stat-total-tokens").textContent = s.total_tokens.toLocaleString();
-    if ($("stat-fallbacks")) $("stat-fallbacks").textContent = s.fallback_count.toString();
+    if ($("stat-total-requests")) $("stat-total-requests").textContent = totalReq.toLocaleString();
+    if ($("stat-success-rate")) {
+      $("stat-success-rate").textContent = totalReq > 0
+        ? `Success: ${((s.success_rate || 0) * 100).toFixed(1)}%`
+        : `Success: —`;
+    }
+    if ($("stat-savings-usd")) $("stat-savings-usd").textContent = `$${(s.estimated_savings_usd || s.savings_usd || 0).toFixed(6)}`;
+    if ($("stat-savings-pct")) $("stat-savings-pct").textContent = `${(s.savings_percent || 0).toFixed(1)}% savings vs baseline`;
+    if ($("stat-avg-latency")) $("stat-avg-latency").textContent = `${Math.round(s.average_total_latency_ms || 0)} ms`;
+    if ($("stat-analyzer-latency")) $("stat-analyzer-latency").textContent = `Gen: ${Math.round(s.average_latency_ms || 0)} ms avg`;
+    if ($("stat-total-cost")) $("stat-total-cost").textContent = `$${(s.total_cost_usd || 0).toFixed(6)}`;
+    if ($("stat-baseline-cost")) $("stat-baseline-cost").textContent = `Tier 6 Baseline: $${(s.baseline_cost_usd || 0).toFixed(6)}`;
+    if ($("stat-total-tokens")) $("stat-total-tokens").textContent = (s.total_tokens || 0).toLocaleString();
+    if ($("stat-fallbacks")) $("stat-fallbacks").textContent = (s.fallback_count || 0).toString();
+    if ($("stat-escalations-sub")) $("stat-escalations-sub").textContent = `${s.escalations || s.escalation_count || 0} escalations · ${s.fallback_count || 0} failovers`;
 
-    // Render Distribution Charts
-    renderBarChart("chart-model-dist", s.model_distribution || []);
+    // Render Charts
     renderBarChart("chart-tier-dist", s.tier_distribution || []);
+    renderBarChart("chart-model-dist", s.model_distribution || []);
     renderBarChart("chart-task-dist", s.task_distribution || []);
     renderBarChart("chart-complexity-dist", s.complexity_distribution || []);
 
-    // Render History Table
-    renderHistoryTable(s.recent_requests || []);
+    // Render Live History Table
+    let requests = s.recent_requests || [];
+    try {
+      const histResp = await apiFetch("/api/history?limit=30");
+      if (histResp.ok) {
+        const histData = await histResp.json();
+        if (Array.isArray(histData)) requests = histData;
+      }
+    } catch (_) {}
+
+    renderHistoryTable(requests);
   } catch (err) {
-    console.error("Failed to load dashboard statistics:", err);
+    console.error("Failed to load telemetry stats:", err);
   }
 }
 
@@ -1840,7 +1594,11 @@ function renderBarChart(containerId, data) {
   if (!container) return;
 
   if (!data || data.length === 0) {
-    container.innerHTML = `<div class="empty-state" style="padding:15px">No telemetry data recorded yet</div>`;
+    container.innerHTML = `
+      <div style="padding:16px 10px;text-align:center;font-size:12px;color:var(--text-muted);">
+        No records yet
+      </div>
+    `;
     return;
   }
 
@@ -1850,9 +1608,10 @@ function renderBarChart(containerId, data) {
   container.innerHTML = data.map(d => {
     const pct = ((d.count / maxVal) * 100).toFixed(0);
     const share = ((d.count / total) * 100).toFixed(0);
+    const label = containerId === "chart-tier-dist" ? formatTierDisplay(d.name) : d.name;
     return `
       <div class="chart-bar-row">
-        <span class="chart-bar-label" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</span>
+        <span class="chart-bar-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
         <div class="chart-bar-track">
           <div class="chart-bar-fill" style="width:${pct}%"></div>
         </div>
@@ -1867,37 +1626,54 @@ function renderHistoryTable(requests) {
   if (!tbody) return;
 
   if (!requests || requests.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">No requests executed yet. Run queries in Chat Studio!</td></tr>`;
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" class="empty-state">
+          No transactions recorded yet. Ask a question to begin live context-aware switching.
+        </td>
+      </tr>
+    `;
     return;
   }
 
   tbody.innerHTML = requests.map(r => {
     const cost = r.total_cost_usd != null ? `$${r.total_cost_usd.toFixed(6)}` : "—";
-    const statusIcon = r.success ? `<span style="color:var(--accent-green)">✓</span>` : `<span style="color:var(--accent-red)">✗</span>`;
-    const fb = r.fallback_used ? `<span style="color:var(--accent-amber)">Yes</span>` : `<span style="color:var(--text-muted)">No</span>`;
+    const statusIcon = r.success
+      ? `<span style="color:var(--accent-green-bright);font-weight:600;">✓ Ok</span>`
+      : `<span style="color:var(--accent-red);font-weight:600;">✗ Error</span>`;
+    const fb = r.fallback_used
+      ? `<span style="color:var(--accent-amber);font-weight:600;">Yes</span>`
+      : `<span style="color:var(--text-muted);">No</span>`;
+    const tierDisplay = formatTierDisplay(r.target_tier || r.tier);
 
     return `
       <tr data-action="open-inspector" data-id="${r.id}">
-        <td>${escapeHtml(r.timestamp.split(" ")[1] || r.timestamp)}</td>
+        <td>${escapeHtml(r.timestamp ? (r.timestamp.split(" ")[1] || r.timestamp) : "—")}</td>
         <td title="${escapeHtml(r.query)}" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
           ${escapeHtml(r.query)}
         </td>
-        <td><span class="drawer-badge tier">${escapeHtml(r.task_type)}</span></td>
-        <td><span class="drawer-badge">${escapeHtml(r.complexity)}</span></td>
-        <td><code>${escapeHtml(r.selected_model)}</code></td>
-        <td>${Math.round(r.total_latency_ms)} ms</td>
+        <td><span class="routing-tier-pill">${escapeHtml((r.task_type || "general").toUpperCase())}</span></td>
+        <td>${escapeHtml(r.complexity || "medium")}</td>
+        <td title="${escapeHtml(tierDisplay)}"><code>${escapeHtml(r.selected_model || "Model")}</code></td>
+        <td>${Math.round(r.total_latency_ms || r.latency_ms || 0)} ms</td>
         <td>${cost}</td>
         <td>${fb}</td>
         <td>${statusIcon}</td>
       </tr>
     `;
   }).join("");
+
+  tbody.querySelectorAll("tr").forEach(row => {
+    row.addEventListener("click", () => {
+      const id = row.dataset.id;
+      if (id) openInspectorModal(id);
+    });
+  });
 }
 
 /* ============================================================
-   11. Research Benchmark Lab
+   13. View 4: Research Benchmark Lab
    ============================================================ */
-
 function setupBenchmarkView() {
   const runBtn = $("run-benchmark-btn");
   if (!runBtn) return;
@@ -1914,50 +1690,46 @@ function setupBenchmarkView() {
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.detail || "Benchmark failed");
 
-      // Update Summary Cards
       const cards = $("benchmark-summary-cards");
       if (cards) cards.style.display = "grid";
 
       if ($("bm-overall-savings")) $("bm-overall-savings").textContent = `${data.overall_cost_savings_percent.toFixed(1)}%`;
-      if ($("bm-saved-dollars")) $("bm-saved-dollars").textContent = `$${data.total_cost_saved_usd.toFixed(4)} saved across test suite`;
+      if ($("bm-saved-dollars")) $("bm-saved-dollars").textContent = `$${data.total_cost_saved_usd.toFixed(4)} saved across suite`;
       if ($("bm-overall-speedup")) $("bm-overall-speedup").textContent = `${data.overall_speedup_percent.toFixed(1)}%`;
-      if ($("bm-smart-cost")) $("bm-smart-cost").textContent = `$${data.smart_total_cost_usd.toFixed(6)}`;
-      if ($("bm-baseline-cost")) $("bm-baseline-cost").textContent = `vs Baseline 1: $${data.baseline1_total_cost_usd.toFixed(6)}`;
+      if ($("bm-smart-cost")) $("bm-smart-cost").textContent = `$${data.smart_total_cost_usd.toFixed(4)}`;
+      if ($("bm-baseline-cost")) $("bm-baseline-cost").textContent = `vs Baseline 1: $${data.baseline1_total_cost_usd.toFixed(4)}`;
 
-      // Render Comparison Table
+      // Render Matrix Table
       const tbody = $("benchmark-tbody");
-      if (tbody) {
+      if (tbody && Array.isArray(data.items)) {
         tbody.innerHTML = data.items.map(item => `
           <tr>
             <td>
-              <strong>${escapeHtml(item.query)}</strong>
-              <div style="margin-top:4px"><span class="drawer-badge tier">${escapeHtml(item.task_type)}</span> <span class="drawer-badge">${escapeHtml(item.complexity)}</span></div>
+              <strong>${escapeHtml(item.query)}</strong><br>
+              <span style="font-size:11px;color:var(--text-muted);">${escapeHtml(item.task_type.toUpperCase())} · ${escapeHtml(item.complexity)}</span>
             </td>
             <td>
-              <div><code>${escapeHtml(item.baseline1_model)}</code></div>
-              <div style="color:var(--text-muted);font-size:11px">$${item.baseline1_cost_usd.toFixed(6)} · ${item.baseline1_latency_ms} ms</div>
+              <code>${escapeHtml(item.baseline1_model)}</code><br>
+              <span style="font-size:11px;color:var(--text-muted);">$${item.baseline1_cost_usd.toFixed(6)} · ${item.baseline1_latency_ms}ms</span>
             </td>
             <td>
-              <div><code>${escapeHtml(item.baseline2_model)}</code></div>
-              <div style="color:var(--text-muted);font-size:11px">$${item.baseline2_cost_usd.toFixed(6)} · ${item.baseline2_latency_ms} ms</div>
+              <code>${escapeHtml(item.baseline2_model)}</code><br>
+              <span style="font-size:11px;color:var(--text-muted);">$${item.baseline2_cost_usd.toFixed(6)} · ${item.baseline2_latency_ms}ms</span>
             </td>
             <td>
-              <div style="color:var(--accent-cyan);font-weight:600"><code>${escapeHtml(item.smart_model)}</code></div>
-              <div style="color:var(--text-muted);font-size:11px">$${item.smart_cost_usd.toFixed(6)} · ${item.smart_latency_ms} ms</div>
+              <code>${escapeHtml(item.smart_model)}</code><br>
+              <span style="font-size:11px;color:var(--text-muted);">$${item.smart_cost_usd.toFixed(6)} · ${item.smart_latency_ms}ms</span>
             </td>
-            <td>
-              <strong class="text-green">${item.smart_savings_percent.toFixed(1)}%</strong>
-            </td>
-            <td>
-              <strong class="text-blue">${item.smart_speedup_percent.toFixed(1)}%</strong>
-            </td>
+            <td><strong class="text-green">${item.smart_savings_percent.toFixed(1)}%</strong></td>
+            <td><strong class="text-blue">${item.smart_speedup_percent.toFixed(1)}%</strong></td>
           </tr>
         `).join("");
       }
 
-      showToast("Multi-domain benchmark completed", "success");
+      showToast("Benchmark completed successfully", "success");
     } catch (err) {
-      alert("Benchmark failed: " + err.message);
+      console.error("Benchmark error:", err);
+      showToast(err.message, "error");
     } finally {
       runBtn.disabled = false;
       runBtn.innerHTML = `<span>▶</span> Run Multi-Domain Benchmark`;
@@ -1966,147 +1738,338 @@ function setupBenchmarkView() {
 }
 
 /* ============================================================
-   12. Telemetry Inspector Modal & User Feedback
+   14. Settings & Provider Modal
    ============================================================ */
+function setupSettingsModal() {
+  const modal = $("settings-modal");
+  const openBtn = $("open-settings-btn");
+  const headerOpenBtn = $("header-settings-btn");
+  const closeBtn = $("close-settings-btn");
+  const backdrop = $("settings-backdrop");
+  const saveBtn = $("save-settings-btn");
+  const resetBtn = $("reset-settings-btn");
+  const clearKeysBtn = $("clear-keys-btn");
 
+  const openModal = async () => {
+    modal?.classList.remove("hidden");
+    await populateSettingsForm();
+  };
+
+  const closeModal = () => {
+    modal?.classList.add("hidden");
+  };
+
+  openBtn?.addEventListener("click", openModal);
+  headerOpenBtn?.addEventListener("click", openModal);
+  closeBtn?.addEventListener("click", closeModal);
+  backdrop?.addEventListener("click", closeModal);
+
+  // Tab switching
+  $$(".settings-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      $$(".settings-tab").forEach(t => t.classList.remove("active"));
+      $$(".settings-panel").forEach(p => p.classList.remove("active"));
+
+      tab.classList.add("active");
+      const targetPanel = $(`tab-${tab.dataset.tab}`);
+      if (targetPanel) targetPanel.classList.add("active");
+    });
+  });
+
+  // Password mask toggles
+  $$(".btn-toggle-mask").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const targetInput = $(btn.dataset.target);
+      if (targetInput) {
+        targetInput.type = targetInput.type === "password" ? "text" : "password";
+      }
+    });
+  });
+
+  // Test provider connection buttons
+  $$(".btn-test-conn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const prov = btn.dataset.provider;
+      const statusBadge = $(`status-${prov}-test`);
+      if (!statusBadge) return;
+
+      statusBadge.textContent = "Testing...";
+      statusBadge.className = "status-test-badge";
+
+      const keyInput = $(`key-${prov}`);
+      const apiKey = keyInput ? keyInput.value.trim() : "";
+      const basePayload = { provider: prov };
+      if (apiKey) basePayload.api_key = apiKey;
+
+      if (prov === "custom") {
+        basePayload.base_url = $("url-custom")?.value.trim() || "";
+        basePayload.model = $("model-custom")?.value.trim() || "";
+      }
+
+      try {
+        const resp = await apiFetch(`/api/providers/test/${prov}`, {
+          method: "POST",
+          body: JSON.stringify(basePayload),
+        });
+        const res = await resp.json();
+        if (res.ok) {
+          statusBadge.textContent = `Connected (${res.latency_ms} ms)`;
+          statusBadge.className = "status-test-badge success";
+        } else {
+          statusBadge.textContent = res.message || "Failed";
+          statusBadge.className = "status-test-badge error";
+        }
+      } catch (e) {
+        statusBadge.textContent = "Error testing";
+        statusBadge.className = "status-test-badge error";
+      }
+    });
+  });
+
+  // Save Settings
+  saveBtn?.addEventListener("click", async () => {
+    const settings = await SettingsManager.load();
+
+    settings.apiKeys.gemini = $("key-gemini")?.value.trim() || "";
+    settings.apiKeys.groq = $("key-groq")?.value.trim() || "";
+    settings.apiKeys.openrouter = $("key-openrouter")?.value.trim() || "";
+    settings.apiKeys.openai = $("key-openai")?.value.trim() || "";
+    settings.apiKeys.custom = $("key-custom")?.value.trim() || "";
+
+    settings.customEndpoints.custom = $("url-custom")?.value.trim() || "";
+
+    settings.providerModels.geminiAnalyzer = $("model-gemini-analyzer")?.value.trim() || "gemini-3.1-flash-lite";
+    settings.providerModels.geminiTier1 = $("model-gemini-tier1")?.value.trim() || "gemini-3.5-flash-lite";
+    settings.providerModels.geminiTier3 = $("model-gemini-tier3")?.value.trim() || "gemini-3.6-flash";
+    settings.providerModels.geminiTier6 = $("model-gemini-tier6")?.value.trim() || "gemini-3.8-flash";
+    settings.providerModels.groqTier2 = $("model-groq-tier2")?.value.trim() || "openai/gpt-oss-20b";
+    settings.providerModels.groqTier4 = $("model-groq-tier4")?.value.trim() || "qwen/qwen3.8-27b";
+    settings.providerModels.groqTier5 = $("model-groq-tier5")?.value.trim() || "openai/gpt-oss-120b";
+    settings.providerModels.custom = $("model-custom")?.value.trim() || "";
+
+    await SettingsManager.save(settings);
+    showToast("Settings saved securely", "success");
+    closeModal();
+    checkEngineHealth();
+    loadRegistryModels();
+  });
+
+  // Reset Defaults
+  resetBtn?.addEventListener("click", async () => {
+    if (confirm("Reset settings to defaults?")) {
+      const defs = SettingsManager.getDefaults();
+      await SettingsManager.save(defs);
+      await populateSettingsForm();
+      showToast("Reset to default settings", "info");
+    }
+  });
+
+  // Clear Keys
+  clearKeysBtn?.addEventListener("click", async () => {
+    if (confirm("Clear all configured API keys?")) {
+      await SettingsManager.clearKeys();
+      await populateSettingsForm();
+      showToast("All API keys cleared", "info");
+      checkEngineHealth();
+    }
+  });
+}
+
+async function populateSettingsForm() {
+  const settings = await SettingsManager.load();
+
+  if ($("key-gemini")) $("key-gemini").value = settings.apiKeys.gemini || "";
+  if ($("key-groq")) $("key-groq").value = settings.apiKeys.groq || "";
+  if ($("key-openrouter")) $("key-openrouter").value = settings.apiKeys.openrouter || "";
+  if ($("key-openai")) $("key-openai").value = settings.apiKeys.openai || "";
+  if ($("key-custom")) $("key-custom").value = settings.apiKeys.custom || "";
+
+  if ($("url-custom")) $("url-custom").value = settings.customEndpoints.custom || "";
+  if ($("model-custom")) $("model-custom").value = settings.providerModels.custom || "";
+
+  if ($("model-gemini-analyzer")) $("model-gemini-analyzer").value = settings.providerModels.geminiAnalyzer || "gemini-3.1-flash-lite";
+  if ($("model-gemini-tier1")) $("model-gemini-tier1").value = settings.providerModels.geminiTier1 || "gemini-3.5-flash-lite";
+  if ($("model-gemini-tier3")) $("model-gemini-tier3").value = settings.providerModels.geminiTier3 || "gemini-3.6-flash";
+  if ($("model-gemini-tier6")) $("model-gemini-tier6").value = settings.providerModels.geminiTier6 || "gemini-3.8-flash";
+
+  if ($("model-groq-tier2")) $("model-groq-tier2").value = settings.providerModels.groqTier2 || "openai/gpt-oss-20b";
+  if ($("model-groq-tier4")) $("model-groq-tier4").value = settings.providerModels.groqTier4 || "qwen/qwen3.8-27b";
+  if ($("model-groq-tier5")) $("model-groq-tier5").value = settings.providerModels.groqTier5 || "openai/gpt-oss-120b";
+}
+
+async function checkEngineHealth() {
+  try {
+    const resp = await apiFetch("/health");
+    if (!resp.ok) return;
+
+    const data = await resp.json();
+    const mode = data.mode || "demo";
+
+    const badge = $("engine-status-badge");
+    const text = $("engine-status-text");
+    const dot = $("sidebar-provider-dot");
+
+    if (mode === "real") {
+      if (text) text.textContent = "Router Online · Real API";
+      if (dot) dot.className = "status-dot-indicator";
+    } else {
+      if (text) text.textContent = "Router Online · Demo Mode";
+      if (dot) dot.className = "status-dot-indicator warning";
+    }
+  } catch (err) {
+    const text = $("engine-status-text");
+    const dot = $("sidebar-provider-dot");
+    if (text) text.textContent = "Router Offline";
+    if (dot) dot.className = "status-dot-indicator error";
+  }
+}
+
+/* ============================================================
+   15. Telemetry Inspector Modal
+   ============================================================ */
 function setupInspectorModal() {
   const modal = $("inspector-modal");
   const closeBtn = $("close-inspector-btn");
   const backdrop = $("inspector-backdrop");
 
   const closeModal = () => modal?.classList.add("hidden");
-
   closeBtn?.addEventListener("click", closeModal);
   backdrop?.addEventListener("click", closeModal);
 }
 
-window.openInspectorModal = async function(requestId) {
+async function openInspectorModal(requestId) {
   const modal = $("inspector-modal");
-  const modalBody = $("modal-body");
-  if (!modal || !modalBody) return;
+  const body = $("modal-body");
+  const title = $("modal-title");
+  if (!modal || !body) return;
 
   modal.classList.remove("hidden");
-  modalBody.innerHTML = `<div class="empty-state">Loading telemetry for Request #${requestId}...</div>`;
+  if (title) title.innerHTML = `<svg class='icon-sym'><use href='#i-search'/></svg> Request #${requestId} Telemetry`;
+  body.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text-muted);">Loading telemetry record...</div>`;
 
   try {
     const resp = await apiFetch(`/api/requests/${requestId}`);
-    const r = await resp.json();
-    if (!resp.ok) throw new Error(r.detail || "Request record not found");
+    if (!resp.ok) throw new Error("Request record not found");
 
-    modalBody.innerHTML = `
-      <div class="panel-card" style="margin-bottom:14px;">
-        <h4 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px;">Query & Classification</h4>
-        <p style="font-size:14px;font-weight:600;margin-bottom:8px;">${escapeHtml(r.query)}</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <span class="drawer-badge tier">Task: ${escapeHtml(r.task_type)}</span>
-          <span class="drawer-badge">Complexity: ${escapeHtml(r.complexity)} (${r.complexity_score})</span>
-          <span class="drawer-badge ${r.answer_mode === 'self' ? 'self' : 'switch'}">${r.answer_mode === 'self' ? `<svg class='icon-sym' aria-hidden='true'><use href='#i-bolt'/></svg> Self-Mode` : `<svg class='icon-sym' aria-hidden='true'><use href='#i-swap'/></svg> Switch-Mode`}</span>
-          <span class="drawer-badge">Strategy: ${escapeHtml(r.strategy || 'balanced')}</span>
+    const d = await resp.json();
+    body.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="padding:10px 14px;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);">
+          <strong>Prompt:</strong>
+          <p style="margin-top:4px;color:var(--text-secondary);">${escapeHtml(d.query)}</p>
+        </div>
+
+        <div class="drawer-grid">
+          <div class="drawer-cell">
+            <span class="drawer-cell-label">Served Model</span>
+            <span class="drawer-cell-val">${escapeHtml(d.selected_model || 'Model')} (${escapeHtml(d.provider || '')})</span>
+          </div>
+          <div class="drawer-cell">
+            <span class="drawer-cell-label">Tier</span>
+            <span class="drawer-cell-val">${escapeHtml(formatTierDisplay(d.target_tier))}</span>
+          </div>
+          <div class="drawer-cell">
+            <span class="drawer-cell-label">Total Cost (USD)</span>
+            <span class="drawer-cell-val text-green">$${(d.total_cost_usd || d.estimated_cost || 0).toFixed(6)}</span>
+          </div>
+          <div class="drawer-cell">
+            <span class="drawer-cell-label">Latency</span>
+            <span class="drawer-cell-val">${Math.round(d.total_latency_ms || d.latency_ms || 0)} ms</span>
+          </div>
+          <div class="drawer-cell">
+            <span class="drawer-cell-label">Tokens Metered</span>
+            <span class="drawer-cell-val">${(d.total_tokens || 0).toLocaleString()}</span>
+          </div>
+          <div class="drawer-cell">
+            <span class="drawer-cell-label">Routing Strategy</span>
+            <span class="drawer-cell-val">${escapeHtml(d.strategy || 'balanced')}</span>
+          </div>
+        </div>
+
+        <div style="margin-top:8px;">
+          <span class="drawer-cell-label">Complete Telemetry JSON:</span>
+          <pre class="code-block-pre" style="margin-top:4px;border-radius:var(--radius-sm);max-height:220px;overflow-y:auto;"><code>${escapeHtml(JSON.stringify(d, null, 2))}</code></pre>
         </div>
       </div>
-
-      <div class="dashboard-panels-grid" style="margin-bottom:14px;">
-        <div class="panel-card">
-          <h4 style="font-size:13px;color:var(--accent-blue);margin-bottom:8px;"><svg class='icon-sym' aria-hidden='true'><use href='#i-cpu'/></svg> Analyzer LLM Decision</h4>
-          <p><strong>Analyzer Model:</strong> ${escapeHtml(r.analyzer_model)} (${escapeHtml(r.analyzer_provider)})</p>
-          <p><strong>Analyzer Latency:</strong> ${Math.round(r.analyzer_latency_ms)} ms</p>
-          <p><strong>Analyzer Tokens:</strong> ${r.analyzer_input_tokens || 0} in / ${r.analyzer_output_tokens || 0} out</p>
-          <p><strong>Analyzer Cost:</strong> $${(r.analyzer_cost || 0).toFixed(6)}</p>
-          <p style="margin-top:6px;font-style:italic;color:var(--text-secondary);">"${escapeHtml(r.routing_reason || '—')}"</p>
-        </div>
-
-        <div class="panel-card">
-          <h4 style="font-size:13px;color:var(--accent-cyan);margin-bottom:8px;"><svg class='icon-sym' aria-hidden='true'><use href='#i-target'/></svg> Execution & Served Model</h4>
-          <p><strong>Served Model:</strong> <code>${escapeHtml(r.selected_model)}</code> (${escapeHtml(r.selected_provider)})</p>
-          <p><strong>Generation Latency:</strong> ${Math.round(r.latency_ms)} ms ${r.ttft_ms ? `(TTFT: ${Math.round(r.ttft_ms)}ms)` : ''}</p>
-          <p><strong>Model Tokens:</strong> ${r.input_tokens || 0} in / ${r.output_tokens || 0} out</p>
-          <p><strong>Model Cost:</strong> $${(r.estimated_cost || 0).toFixed(6)}</p>
-          <p><strong>Fallback Used:</strong> ${r.fallback_used ? '<span style="color:var(--accent-amber)">Yes</span>' : 'No'}</p>
-        </div>
-      </div>
-
-      <div class="panel-card" style="margin-bottom:14px;">
-        <h4 style="font-size:13px;color:var(--accent-green);margin-bottom:8px;"><svg class='icon-sym' aria-hidden='true'><use href='#i-dollar'/></svg> Optimization Summary</h4>
-        <div class="drawer-telemetry-grid">
-          <div class="t-box">
-            <span class="t-label">Total Latency</span>
-            <span class="t-val">${Math.round(r.total_latency_ms)} ms</span>
-          </div>
-          <div class="t-box">
-            <span class="t-label">Total Cost</span>
-            <span class="t-val">$${((r.estimated_cost || 0) + (r.analyzer_cost || 0)).toFixed(6)}</span>
-          </div>
-          <div class="t-box highlight-savings">
-            <span class="t-label">Net Cost Reduction</span>
-            <span class="t-val text-green">${(r.savings_percent || 0).toFixed(1)}% ($${(r.savings_usd || 0).toFixed(6)})</span>
-          </div>
-        </div>
-      </div>
-
-      ${r.candidates && r.candidates.length > 0 ? `
-        <div class="panel-card">
-          <h4 style="font-size:13px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;">Multi-Factor Candidate Scoreboard</h4>
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr><th>Candidate Model</th><th>Provider</th><th>Tier</th><th>Score</th><th>Est. Cost</th></tr>
-              </thead>
-              <tbody>
-                ${r.candidates.map(c => `
-                  <tr>
-                    <td><code>${escapeHtml(c.model_id)}</code> ${c.selected ? '✓' : ''}</td>
-                    <td>${escapeHtml(c.provider)}</td>
-                    <td>${escapeHtml(c.tier)}</td>
-                    <td><strong>${c.total.toFixed(3)}</strong></td>
-                    <td>$${c.expected_cost_usd.toFixed(6)}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ` : ''}
     `;
   } catch (err) {
-    modalBody.innerHTML = `<div class="empty-state text-red">Failed to load telemetry record: ${escapeHtml(err.message)}</div>`;
+    body.innerHTML = `<div style="color:var(--accent-red);padding:16px;">Failed to load request: ${escapeHtml(err.message)}</div>`;
   }
-};
-
-window.recordMessageFeedback = async function(requestId, rating, btn) {
-  try {
-    const resp = await apiFetch("/api/feedback", {
-      method: "POST",
-      body: JSON.stringify({ request_id: requestId, rating: rating }),
-    });
-    if (resp.ok) {
-      btn.style.color = rating === 1 ? "var(--accent-green)" : "var(--accent-red)";
-      btn.style.borderColor = rating === 1 ? "var(--accent-green)" : "var(--accent-red)";
-      showToast(rating === 1 ? "Feedback recorded: Positive" : "Feedback recorded: Negative", "info");
-    }
-  } catch (e) {
-    console.error("Feedback failed:", e);
-  }
-};
+}
 
 /* ============================================================
-   13. Toast Notification Helper
+   16. Utilities: Markdown, LaTeX Math, Scrolling, Toasts
    ============================================================ */
+function formatMarkdown(text) {
+  if (!text) return "";
+  try {
+    if (typeof marked !== "undefined") {
+      marked.setOptions({
+        gfm: true,
+        breaks: true,
+      });
+      const rawHtml = marked.parse(text);
+      if (typeof DOMPurify !== "undefined") {
+        return DOMPurify.sanitize(rawHtml);
+      }
+      return rawHtml;
+    }
+  } catch (e) {
+    console.warn("Markdown parsing failed:", e);
+  }
+  return escapeHtml(text);
+}
 
-function showToast(message, type = "info", duration = 3000) {
+function _renderMathInElement(elem) {
+  if (!elem) return;
+  try {
+    if (typeof renderMathInElement === "function") {
+      renderMathInElement(elem, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\[", right: "\\]", display: true },
+          { left: "\\(", right: "\\)", display: false }
+        ],
+        throwOnError: false,
+      });
+    }
+  } catch (e) {
+    console.warn("KaTeX render failed:", e);
+  }
+}
+
+function smoothScrollToBottom(container) {
+  if (!container || isUserScrolledUp) return;
+  container.scrollTo({
+    top: container.scrollHeight,
+    behavior: "smooth",
+  });
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function showToast(message, type = "info") {
   const container = $("toast-container");
   if (!container) return;
 
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
-
-  const icon = type === "success" ? "✓" : (type === "error" ? "✗" : "ℹ");
-  toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(message)}</span>`;
-
+  toast.textContent = message;
   container.appendChild(toast);
 
   setTimeout(() => {
     toast.style.opacity = "0";
-    toast.style.transform = "translateY(12px) scale(0.95)";
+    toast.style.transform = "translateY(10px)";
+    toast.style.transition = "all 0.2s ease";
     setTimeout(() => toast.remove(), 200);
-  }, duration);
+  }, 2800);
 }

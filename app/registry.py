@@ -1,12 +1,13 @@
 """Model Registry: Declarative metadata and dynamic catalog for all LLM models.
 
-Providers supported:
-  - Gemini: Fast / low-cost and high-context models
-  - Groq: Ultra-low latency coding and reasoning models
-  - OpenRouter: Unified gateway analyzer and backup tiers
-  - OpenAI: Direct GPT-4o, GPT-4o-mini, o1/o3-mini models
-  - Custom: User-provided OpenAI-compatible endpoints (Ollama, vLLM, Azure)
-  - Mock: Deterministic offline demo mode
+Architecture:
+  - Analyzer LLM: Gemini 3.1 Flash-Lite
+  - Tier 1: Gemini 3.5 Flash-Lite (Lightweight / Fast)
+  - Tier 2: Groq GPT-OSS 20B (Fast General Purpose)
+  - Tier 3: Gemini 3.6 Flash (Balanced)
+  - Tier 4: Groq Qwen3.8 27B (Coding Specialist)
+  - Tier 5: Groq GPT-OSS 120B (Advanced Reasoning)
+  - Tier 6: Gemini 3.8 Flash (High-Capability Gemini, with resilient fallback to gemini-3.5-flash)
 """
 
 from dataclasses import dataclass
@@ -20,7 +21,17 @@ from .security import ResolvedCredentials, resolve_credentials_from_headers
 #                               in$/Mtok, out$/Mtok, latency_ms, context_window)
 # ---------------------------------------------------------------------------
 KNOWN_MODELS: Dict[str, tuple] = {
-    # Gemini models (Google AI API)
+    # 6 Core Architecture Tiers + Analyzer
+    "gemini:gemini-3.1-flash-lite":     (0.82, 0.80, 0.80, 0.050, 0.20, 250, 1000000),
+    "gemini:gemini-3.5-flash-lite":     (0.82, 0.78, 0.78, 0.075, 0.30, 300, 1000000),
+    "groq:openai/gpt-oss-20b":          (0.84, 0.80, 0.82, 0.100, 0.20, 200, 8192),
+    "gemini:gemini-3.6-flash":          (0.88, 0.85, 0.86, 0.150, 0.60, 450, 1000000),
+    "groq:qwen/qwen3.8-27b":            (0.92, 0.88, 0.96, 0.200, 0.60, 320, 32768),
+    "groq:openai/gpt-oss-120b":         (0.96, 0.97, 0.92, 0.590, 0.79, 480, 8192),
+    "gemini:gemini-3.8-flash":          (0.97, 0.95, 0.94, 0.300, 1.20, 600, 1000000),
+    "gemini:gemini-3.5-flash":          (0.86, 0.82, 0.82, 0.150, 0.60, 400, 1000000),
+
+    # Legacy Gemini models
     "gemini:gemini-2.5-flash-lite":     (0.80, 0.72, 0.75, 0.075, 0.30, 400, 1000000),
     "gemini:gemini-2.5-flash":          (0.86, 0.80, 0.82, 0.150, 0.60, 600, 1000000),
     "gemini:gemini-flash-latest":       (0.86, 0.80, 0.82, 0.150, 0.60, 600, 1000000),
@@ -28,12 +39,9 @@ KNOWN_MODELS: Dict[str, tuple] = {
     "gemini:gemini-2.5-pro":            (0.95, 0.94, 0.92, 1.250, 5.00, 1200, 2000000),
     "gemini:gemini-1.5-pro":            (0.92, 0.90, 0.88, 1.250, 5.00, 1200, 2000000),
 
-    # Groq models
+    # Legacy Groq models
     "groq:groq/compound-mini":         (0.84, 0.82, 0.84, 0.08, 0.15, 200, 128000),
-    "groq:qwen/qwen3.8-27b":            (0.90, 0.86, 0.96, 0.20, 0.60, 350, 32768),
     "groq:qwen/qwen3.6-27b":            (0.90, 0.86, 0.96, 0.20, 0.60, 350, 32768),
-    "groq:openai/gpt-oss-120b":         (0.95, 0.97, 0.92, 0.59, 0.79, 500, 8192),
-    "groq:openai/gpt-oss-20b":          (0.82, 0.78, 0.84, 0.10, 0.20, 250, 8192),
     "groq:llama-3.3-70b-versatile":     (0.91, 0.88, 0.86, 0.59, 0.79, 450, 128000),
     "groq:llama-3.1-8b-instant":        (0.75, 0.70, 0.72, 0.05, 0.08, 200, 128000),
     "groq:deepseek-r1-distill-llama-70b": (0.94, 0.96, 0.90, 0.59, 0.79, 700, 128000),
@@ -65,18 +73,19 @@ KNOWN_MODELS: Dict[str, tuple] = {
 }
 
 # Fallback tier defaults
-ANALYZER_DEFAULTS = (0.68, 0.58, 0.60, 0.06, 0.06, 300, 131072)
-FAST_DEFAULTS = (0.80, 0.72, 0.75, 0.075, 0.30, 400, 1000000)
-BALANCED_DEFAULTS = (0.76, 0.72, 0.74, 0.08, 0.08, 600, 8192)
-CODING_DEFAULTS = (0.90, 0.86, 0.96, 0.20, 0.60, 350, 32768)
-POWERFUL_DEFAULTS = (0.95, 0.94, 0.92, 1.25, 5.00, 1200, 2000000)
-REASONING_DEFAULTS = (0.95, 0.97, 0.92, 0.59, 0.79, 500, 8192)
+ANALYZER_DEFAULTS = (0.82, 0.80, 0.80, 0.05, 0.20, 250, 1000000)
+TIER1_DEFAULTS = (0.82, 0.78, 0.78, 0.075, 0.30, 300, 1000000)
+TIER2_DEFAULTS = (0.84, 0.80, 0.82, 0.10, 0.20, 200, 8192)
+TIER3_DEFAULTS = (0.88, 0.85, 0.86, 0.15, 0.60, 450, 1000000)
+TIER4_DEFAULTS = (0.92, 0.88, 0.96, 0.20, 0.60, 320, 32768)
+TIER5_DEFAULTS = (0.96, 0.97, 0.92, 0.59, 0.79, 480, 8192)
+TIER6_DEFAULTS = (0.97, 0.95, 0.94, 0.30, 1.20, 600, 1000000)
 CUSTOM_DEFAULTS = (0.85, 0.80, 0.80, 0.10, 0.20, 400, 32768)
 
 
 @dataclass(frozen=True)
 class ModelSpec:
-    model_id: str                 # Internal ID: "gemini-fast", "groq-coding", "openai-fast", etc.
+    model_id: str                 # Internal ID: "gemini-tier_1", "groq-tier_2", etc.
     name: str                     # Display name
     provider: str                 # "gemini" | "groq" | "openrouter" | "openai" | "custom" | "mock"
     endpoint_model: str           # Model identifier sent to provider API
@@ -89,7 +98,8 @@ class ModelSpec:
     reasoning: float              # 0..1
     coding: float                 # 0..1
     context_window: int
-    tier: str                     # "analyzer", "fast", "balanced", "coding", "powerful", "reasoning", "custom"
+    tier: str                     # "analyzer", "tier_1", "tier_2", "tier_3", "tier_4", "tier_5", "tier_6"
+    fallback_model: Optional[str] = None  # Resilient fallback endpoint for this model
     demo_mode: bool = False
     custom_endpoint: bool = False
 
@@ -123,8 +133,10 @@ def _build_model(
     tier_defaults: tuple,
     tier_label: str,
     provider: str,
+    fallback_model: Optional[str] = None,
     demo_mode: bool = False,
     custom_endpoint: bool = False,
+    model_id_override: Optional[str] = None,
 ) -> Optional[ModelSpec]:
     """Build a single ModelSpec for a given tier and provider."""
     if not model_name:
@@ -133,8 +145,9 @@ def _build_model(
         return None
 
     quality, reasoning, coding, in_price, out_price, latency, ctx = _model_metadata(provider, model_name, tier_defaults)
+    mid = model_id_override or f"{provider}-{tier}"
     return ModelSpec(
-        model_id=f"{provider}-{tier}",
+        model_id=mid,
         name=f"{model_name} ({tier_label})",
         provider=provider,
         endpoint_model=model_name,
@@ -148,6 +161,7 @@ def _build_model(
         coding=coding,
         context_window=ctx,
         tier=tier,
+        fallback_model=fallback_model,
         demo_mode=demo_mode,
         custom_endpoint=custom_endpoint,
     )
@@ -174,10 +188,10 @@ def _build_demo_models() -> List[ModelSpec]:
             demo_mode=True,
         ),
         ModelSpec(
-            model_id="demo-fast",
-            name="Demo Fast Tier (Simulation)",
+            model_id="demo-tier_1",
+            name="Demo Tier 1 - Fast (Simulation)",
             provider="mock",
-            endpoint_model="demo-fast",
+            endpoint_model="demo-tier_1",
             api_key="",
             base_url="",
             input_price_per_mtok=0.075,
@@ -187,14 +201,31 @@ def _build_demo_models() -> List[ModelSpec]:
             reasoning=0.75,
             coding=0.75,
             context_window=32768,
-            tier="fast",
+            tier="tier_1",
             demo_mode=True,
         ),
         ModelSpec(
-            model_id="demo-balanced",
-            name="Demo Balanced Tier (Simulation)",
+            model_id="demo-tier_2",
+            name="Demo Tier 2 - Fast General (Simulation)",
             provider="mock",
-            endpoint_model="demo-balanced",
+            endpoint_model="demo-tier_2",
+            api_key="",
+            base_url="",
+            input_price_per_mtok=0.10,
+            output_price_per_mtok=0.20,
+            expected_latency_ms=200,
+            quality=0.84,
+            reasoning=0.80,
+            coding=0.82,
+            context_window=8192,
+            tier="tier_2",
+            demo_mode=True,
+        ),
+        ModelSpec(
+            model_id="demo-tier_3",
+            name="Demo Tier 3 - Balanced (Simulation)",
+            provider="mock",
+            endpoint_model="demo-tier_3",
             api_key="",
             base_url="",
             input_price_per_mtok=0.15,
@@ -204,14 +235,14 @@ def _build_demo_models() -> List[ModelSpec]:
             reasoning=0.82,
             coding=0.84,
             context_window=32768,
-            tier="balanced",
+            tier="tier_3",
             demo_mode=True,
         ),
         ModelSpec(
-            model_id="demo-coding",
-            name="Demo Coding Specialist (Simulation)",
+            model_id="demo-tier_4",
+            name="Demo Tier 4 - Coding (Simulation)",
             provider="mock",
-            endpoint_model="demo-coding",
+            endpoint_model="demo-tier_4",
             api_key="",
             base_url="",
             input_price_per_mtok=0.20,
@@ -221,14 +252,14 @@ def _build_demo_models() -> List[ModelSpec]:
             reasoning=0.88,
             coding=0.96,
             context_window=32768,
-            tier="coding",
+            tier="tier_4",
             demo_mode=True,
         ),
         ModelSpec(
-            model_id="demo-reasoning",
-            name="Demo Deep Reasoning (Simulation)",
+            model_id="demo-tier_5",
+            name="Demo Tier 5 - Reasoning (Simulation)",
             provider="mock",
-            endpoint_model="demo-reasoning",
+            endpoint_model="demo-tier_5",
             api_key="",
             base_url="",
             input_price_per_mtok=0.59,
@@ -238,14 +269,14 @@ def _build_demo_models() -> List[ModelSpec]:
             reasoning=0.97,
             coding=0.92,
             context_window=32768,
-            tier="reasoning",
+            tier="tier_5",
             demo_mode=True,
         ),
         ModelSpec(
-            model_id="demo-powerful",
-            name="Demo Ultra Powerful Baseline (Simulation)",
+            model_id="demo-tier_6",
+            name="Demo Tier 6 - High Capability (Simulation)",
             provider="mock",
-            endpoint_model="demo-powerful",
+            endpoint_model="demo-tier_6",
             api_key="",
             base_url="",
             input_price_per_mtok=1.25,
@@ -255,7 +286,7 @@ def _build_demo_models() -> List[ModelSpec]:
             reasoning=0.96,
             coding=0.95,
             context_window=64000,
-            tier="powerful",
+            tier="tier_6",
             demo_mode=True,
         ),
     ]
@@ -265,7 +296,7 @@ def build_models_from_credentials(
     creds: ResolvedCredentials,
     settings: Optional[Settings] = None,
 ) -> List[ModelSpec]:
-    """Dynamically construct model catalog from resolved credentials and overrides."""
+    """Dynamically construct model catalog from resolved credentials and environment."""
     cfg = settings or default_settings
     specs: List[ModelSpec] = []
 
@@ -273,150 +304,195 @@ def build_models_from_credentials(
     if cfg.mock_models_mode in ("true", "1", "yes") or not creds.has_real_providers:
         return _build_demo_models()
 
-    # 1. Base / Analyzer Tier
-    # Priority: OpenRouter > Gemini > Groq > OpenAI > Custom
-    analyzer_model_name = creds.base_model or cfg.analyzer_model
-    if creds.has_openrouter:
-        m = _build_model(
-            "analyzer", analyzer_model_name,
-            creds.openrouter_api_key or "", cfg.openrouter_base_url,
-            ANALYZER_DEFAULTS, "Analyzer", "openrouter"
+    # 1. Analyzer LLM: Gemini 3.1 Flash-Lite
+    analyzer_key = (
+        creds.gemini_analyzer_api_key
+        or cfg.gemini_analyzer_api_key
+        or creds.gemini_api_key
+        or cfg.gemini_api_key
+    )
+    analyzer_model_name = creds.gemini_analyzer_model or cfg.gemini_analyzer_model
+    if analyzer_key and analyzer_model_name:
+        m_analyzer = _build_model(
+            "analyzer",
+            analyzer_model_name,
+            analyzer_key,
+            cfg.gemini_base_url,
+            ANALYZER_DEFAULTS,
+            "Analyzer LLM",
+            "gemini",
+            model_id_override="gemini-analyzer",
         )
-        if m: specs.append(m)
-    elif creds.has_gemini:
-        m = _build_model(
-            "analyzer", creds.fast_model or cfg.gemini_fast_model,
-            creds.gemini_api_key or "", cfg.gemini_base_url,
-            ANALYZER_DEFAULTS, "Analyzer", "gemini"
-        )
-        if m: specs.append(m)
-    elif creds.has_groq:
-        m = _build_model(
-            "analyzer", "llama-3.1-8b-instant",
-            creds.groq_api_key or "", cfg.groq_base_url,
-            ANALYZER_DEFAULTS, "Analyzer", "groq"
-        )
-        if m: specs.append(m)
-    elif creds.has_openai:
-        m = _build_model(
-            "analyzer", cfg.openai_model,
-            creds.openai_api_key or "", cfg.openai_base_url,
-            ANALYZER_DEFAULTS, "Analyzer", "openai"
-        )
-        if m: specs.append(m)
-    elif creds.has_custom:
-        m = _build_model(
-            "analyzer", creds.custom_model or cfg.custom_model,
-            creds.custom_api_key or "", creds.custom_base_url or "",
-            ANALYZER_DEFAULTS, "Analyzer", "custom", custom_endpoint=True
-        )
-        if m: specs.append(m)
+        if m_analyzer:
+            specs.append(m_analyzer)
 
-    # 2. Google Gemini Models
-    if creds.has_gemini:
-        fast_model_name = creds.fast_model or cfg.gemini_fast_model
-        fast_gemini = _build_model(
-            "fast", fast_model_name,
-            creds.gemini_api_key or "", cfg.gemini_base_url,
-            FAST_DEFAULTS, "Fast Tier", "gemini"
+    # 2. Tier 1: Gemini 3.5 Flash-Lite
+    t1_key = (
+        creds.gemini_tier1_api_key
+        or cfg.gemini_tier1_api_key
+        or creds.gemini_api_key
+        or cfg.gemini_api_key
+    )
+    t1_model = creds.gemini_tier1_model or cfg.gemini_tier1_model
+    if t1_key and t1_model:
+        m_t1 = _build_model(
+            "tier_1",
+            t1_model,
+            t1_key,
+            cfg.gemini_base_url,
+            TIER1_DEFAULTS,
+            "Tier 1: Lightweight / Fast",
+            "gemini",
+            model_id_override="gemini-tier_1",
         )
-        if fast_gemini: specs.append(fast_gemini)
+        if m_t1:
+            specs.append(m_t1)
 
-        # Also register Gemini 2.5 Flash / Pro if available
-        pro_gemini = _build_model(
-            "powerful", "gemini-2.5-pro",
-            creds.gemini_api_key or "", cfg.gemini_base_url,
-            POWERFUL_DEFAULTS, "Pro Tier", "gemini"
+    # 3. Tier 2: Groq GPT-OSS 20B
+    t2_key = (
+        creds.groq_tier2_api_key
+        or cfg.groq_tier2_api_key
+        or creds.groq_api_key
+        or cfg.groq_api_key
+    )
+    t2_model = creds.groq_tier2_model or cfg.groq_tier2_model
+    if t2_key and t2_model:
+        m_t2 = _build_model(
+            "tier_2",
+            t2_model,
+            t2_key,
+            cfg.groq_base_url,
+            TIER2_DEFAULTS,
+            "Tier 2: Fast General Purpose",
+            "groq",
+            model_id_override="groq-tier_2",
         )
-        if pro_gemini: specs.append(pro_gemini)
+        if m_t2:
+            specs.append(m_t2)
 
-    # 3. Groq Models (Coding + Reasoning)
-    if creds.has_groq:
-        coding_model_name = creds.coding_model or cfg.groq_coding_model
-        groq_coding = _build_model(
-            "coding", coding_model_name,
-            creds.groq_api_key or "", cfg.groq_base_url,
-            CODING_DEFAULTS, "Coding Tier", "groq"
+    # 4. Tier 3: Gemini 3.6 Flash
+    t3_key = (
+        creds.gemini_tier3_api_key
+        or cfg.gemini_tier3_api_key
+        or creds.gemini_api_key
+        or cfg.gemini_api_key
+    )
+    t3_model = creds.gemini_tier3_model or cfg.gemini_tier3_model
+    if t3_key and t3_model:
+        m_t3 = _build_model(
+            "tier_3",
+            t3_model,
+            t3_key,
+            cfg.gemini_base_url,
+            TIER3_DEFAULTS,
+            "Tier 3: Balanced",
+            "gemini",
+            model_id_override="gemini-tier_3",
         )
-        if groq_coding: specs.append(groq_coding)
+        if m_t3:
+            specs.append(m_t3)
 
-        reasoning_model_name = creds.reasoning_model or cfg.groq_reasoning_model
-        groq_reasoning = _build_model(
-            "reasoning", reasoning_model_name,
-            creds.groq_api_key or "", cfg.groq_base_url,
-            REASONING_DEFAULTS, "Reasoning Tier", "groq"
+    # 5. Tier 4: Groq Qwen3.8 27B
+    t4_key = (
+        creds.groq_tier4_api_key
+        or cfg.groq_tier4_api_key
+        or creds.groq_api_key
+        or cfg.groq_api_key
+    )
+    t4_model = creds.groq_tier4_model or cfg.groq_tier4_model
+    if t4_key and t4_model:
+        m_t4 = _build_model(
+            "tier_4",
+            t4_model,
+            t4_key,
+            cfg.groq_base_url,
+            TIER4_DEFAULTS,
+            "Tier 4: Coding Specialist",
+            "groq",
+            model_id_override="groq-tier_4",
         )
-        if groq_reasoning: specs.append(groq_reasoning)
+        if m_t4:
+            specs.append(m_t4)
 
-        groq_fast = _build_model(
-            "fast-backup", "groq/compound-mini",
-            creds.groq_api_key or "", cfg.groq_base_url,
-            FAST_DEFAULTS, "Fast Backup", "groq"
+    # 6. Tier 5: Groq GPT-OSS 120B
+    t5_key = (
+        creds.groq_tier5_api_key
+        or cfg.groq_tier5_api_key
+        or creds.groq_api_key
+        or cfg.groq_api_key
+    )
+    t5_model = creds.groq_tier5_model or cfg.groq_tier5_model
+    if t5_key and t5_model:
+        m_t5 = _build_model(
+            "tier_5",
+            t5_model,
+            t5_key,
+            cfg.groq_base_url,
+            TIER5_DEFAULTS,
+            "Tier 5: Advanced Reasoning",
+            "groq",
+            model_id_override="groq-tier_5",
         )
-        if groq_fast: specs.append(groq_fast)
+        if m_t5:
+            specs.append(m_t5)
 
-    # 4. Direct OpenAI Models
+    # 7. Tier 6: Gemini 3.8 Flash (with resilient fallback to gemini-3.5-flash)
+    t6_key = (
+        creds.gemini_tier6_api_key
+        or cfg.gemini_tier6_api_key
+        or creds.gemini_api_key
+        or cfg.gemini_api_key
+    )
+    t6_model = creds.gemini_tier6_model or cfg.gemini_tier6_model
+    t6_fallback = (
+        creds.gemini_tier6_fallback_model
+        or cfg.gemini_tier6_fallback_model
+        or "gemini-3.5-flash"
+    )
+    if t6_key and t6_model:
+        m_t6 = _build_model(
+            "tier_6",
+            t6_model,
+            t6_key,
+            cfg.gemini_base_url,
+            TIER6_DEFAULTS,
+            "Tier 6: High-Capability Gemini",
+            "gemini",
+            fallback_model=t6_fallback,
+            model_id_override="gemini-tier_6",
+        )
+        if m_t6:
+            specs.append(m_t6)
+
+    # 8. Extra / Test Providers (OpenAI, Custom, OpenRouter if configured)
     if creds.has_openai:
-        openai_fast = _build_model(
-            "fast-backup", "gpt-4o-mini",
-            creds.openai_api_key or "", cfg.openai_base_url,
-            FAST_DEFAULTS, "Fast Tier", "openai"
-        )
-        if openai_fast: specs.append(openai_fast)
-
-        openai_powerful = _build_model(
-            "powerful", "gpt-4o",
-            creds.openai_api_key or "", cfg.openai_base_url,
-            POWERFUL_DEFAULTS, "Powerful Tier", "openai"
-        )
-        if openai_powerful: specs.append(openai_powerful)
-
-        openai_reasoning = _build_model(
-            "reasoning-backup", "o3-mini",
-            creds.openai_api_key or "", cfg.openai_base_url,
-            REASONING_DEFAULTS, "Reasoning Backup", "openai"
-        )
-        if openai_reasoning: specs.append(openai_reasoning)
-
-    # 5. OpenRouter Models (Backup & Powerful baseline)
-    if creds.has_openrouter:
         op_fast = _build_model(
-            "fast-backup", cfg.openrouter_fast_model,
-            creds.openrouter_api_key or "", cfg.openrouter_base_url,
-            FAST_DEFAULTS, "Fast Backup", "openrouter"
+            "tier_1", creds.fast_model or cfg.openai_model,
+            creds.openai_api_key or "", cfg.openai_base_url,
+            TIER1_DEFAULTS, "OpenAI Tier", "openai",
+            model_id_override="openai-tier_1",
         )
-        if op_fast: specs.append(op_fast)
+        if op_fast and not any(s.model_id == "openai-tier_1" for s in specs):
+            specs.append(op_fast)
 
-        op_coding = _build_model(
-            "coding-backup", cfg.openrouter_coding_model,
-            creds.openrouter_api_key or "", cfg.openrouter_base_url,
-            CODING_DEFAULTS, "Coding Backup", "openrouter"
-        )
-        if op_coding: specs.append(op_coding)
+        if not any(s.tier == "analyzer" for s in specs):
+            op_an = _build_model(
+                "analyzer", cfg.openai_model,
+                creds.openai_api_key or "", cfg.openai_base_url,
+                ANALYZER_DEFAULTS, "Analyzer", "openai",
+                model_id_override="openai-analyzer",
+            )
+            if op_an:
+                specs.append(op_an)
 
-        op_reasoning = _build_model(
-            "reasoning-backup", cfg.openrouter_reasoning_model,
-            creds.openrouter_api_key or "", cfg.openrouter_base_url,
-            REASONING_DEFAULTS, "Reasoning Backup", "openrouter"
-        )
-        if op_reasoning: specs.append(op_reasoning)
-
-        powerful_model_name = creds.powerful_model or cfg.openrouter_powerful_model
-        op_powerful = _build_model(
-            "powerful", powerful_model_name,
-            creds.openrouter_api_key or "", cfg.openrouter_base_url,
-            POWERFUL_DEFAULTS, "Powerful Baseline", "openrouter"
-        )
-        if op_powerful: specs.append(op_powerful)
-
-    # 6. Custom OpenAI-Compatible Endpoint
     if creds.has_custom:
         custom_spec = _build_model(
             "custom", creds.custom_model or cfg.custom_model,
             creds.custom_api_key or "custom-key", creds.custom_base_url or "",
             CUSTOM_DEFAULTS, "Custom Endpoint", "custom", custom_endpoint=True
         )
-        if custom_spec: specs.append(custom_spec)
+        if custom_spec:
+            specs.append(custom_spec)
 
     # Fallback to demo models if somehow zero models were instantiated
     if not specs:
@@ -458,31 +534,49 @@ class ModelRegistry:
 
     def get_by_provider_and_tier(self, provider: str, tier: str) -> Optional[ModelSpec]:
         p = provider.lower()
+        t = tier.lower()
         for s in self._specs.values():
-            if s.provider.lower() == p and s.tier == tier and s.available:
+            if s.provider.lower() == p and s.tier.lower() == t and s.available:
                 return s
         return None
 
     def get_by_tier(self, tier: str) -> Optional[ModelSpec]:
-        preferred_provider = {
-            "fast": "gemini",
-            "coding": "groq",
-            "reasoning": "groq",
-            "powerful": "openrouter",
-            "balanced": "gemini",
-            "custom": "custom",
-        }.get(tier, "gemini")
+        """Resolves model by tier name ('tier_1'..'tier_6' or legacy aliases)."""
+        t = tier.lower().strip()
+        tier_alias = {
+            "tier_1": "tier_1",
+            "tier1": "tier_1",
+            "fast": "tier_1",
+            "fast-backup": "tier_1",
+            "tier_2": "tier_2",
+            "tier2": "tier_2",
+            "tier_3": "tier_3",
+            "tier3": "tier_3",
+            "balanced": "tier_3",
+            "tier_4": "tier_4",
+            "tier4": "tier_4",
+            "coding": "tier_4",
+            "coding-backup": "tier_4",
+            "tier_5": "tier_5",
+            "tier5": "tier_5",
+            "reasoning": "tier_5",
+            "reasoning-backup": "tier_5",
+            "tier_6": "tier_6",
+            "tier6": "tier_6",
+            "powerful": "tier_6",
+        }.get(t, t)
 
-        match = self.get_by_provider_and_tier(preferred_provider, tier)
-        if match:
-            return match
-
-        # Fallback to any available model in that tier
+        # 1. Exact match on normalized tier
         for s in self._specs.values():
-            if tier in s.tier and s.available and s.tier != "analyzer":
+            if s.tier.lower() == tier_alias and s.available and s.tier != "analyzer":
                 return s
 
-        # General fallback to any available non-analyzer model
+        # 2. Match substring in tier
+        for s in self._specs.values():
+            if (t in s.tier.lower() or tier_alias in s.tier.lower()) and s.available and s.tier != "analyzer":
+                return s
+
+        # 3. Fallback to any available non-analyzer model
         candidates = [s for s in self.available() if s.tier != "analyzer"]
         return candidates[0] if candidates else None
 
@@ -492,7 +586,6 @@ class ModelRegistry:
                 return s
         avail = self.available()
         if not avail:
-            # Fallback to demo analyzer
             demo_models = _build_demo_models()
             return demo_models[0]
         return avail[0]
@@ -502,6 +595,10 @@ class ModelRegistry:
         avail = [m for m in self.available() if m.tier != "analyzer"]
         if not avail:
             return None
+        # Prefer Tier 6 if available
+        t6 = self.get_by_tier("tier_6")
+        if t6 and t6.available:
+            return t6
         return max(avail, key=lambda s: s.quality)
 
     def has_real(self) -> bool:
@@ -525,6 +622,7 @@ class ModelRegistry:
                 "output_price_per_mtok": s.output_price_per_mtok,
                 "expected_latency_ms": s.expected_latency_ms,
                 "tier": s.tier,
+                "fallback_model": s.fallback_model,
             }
             for s in self.all()
         ]

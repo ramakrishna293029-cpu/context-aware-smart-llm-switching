@@ -1,37 +1,14 @@
 """FastAPI Application: Context-Aware Smart LLM Switching for Cost & Performance Optimization.
 
-Request Flow:
-USER QUERY
-  │
-  ▼
-RESOLVE CREDENTIALS & DYNAMIC REGISTRY (Headers -> Settings -> Mock)
-  │
-  ▼
-CHECK BUDGET & RATE LIMITS
-  │
-  ▼
-ANALYZER LLM (meta-llama/llama-3.2-3b-instruct or configured Base Analyzer)
-  │ (Produces structured complexity, task type, self vs switch decision)
-  │
-  ├──► [answer_mode == "self"]: Base model directly answered in 1 cheap call!
-  │    (Bypasses downstream models -> Ultra-low latency & 100% downstream savings)
-  │
-  └──► [answer_mode == "switch"]: Smart Multi-Factor Router
-       │ (Evaluates quality, complexity, reasoning, coding, cost, latency)
-       ├──► GEMINI (Fast / Low-Cost Model: gemini-2.5-flash-lite / gemini-2.5-flash)
-       ├──► GROQ (Coding Model: qwen3.6-27b / reasoning: gpt-oss-120b)
-       ├──► OPENAI (Direct GPT-4o / GPT-4o-mini / o3-mini)
-       ├──► CUSTOM (Ollama / vLLM / Azure endpoints)
-       └──► OPENROUTER (Unified fallback gateway & powerful baseline)
-       │
-       ▼
-EXECUTE WITH FALLBACK RESILIENCE & CONTEXT TOKEN BUDGETING
-  │
-  ▼
-STORE TELEMETRY (Tokens, Latencies, Real Cost vs Baseline, Savings)
-  │
-  ▼
-RETURN TRANSPARENT RESPONSE & SSE STREAMING
+System Architecture:
+  Analyzer: Gemini 3.1 Flash-Lite
+  6 Response Model Tiers:
+    - Tier 1: Gemini 3.5 Flash-Lite
+    - Tier 2: Groq GPT-OSS 20B
+    - Tier 3: Gemini 3.6 Flash
+    - Tier 4: Groq Qwen3.8 27B
+    - Tier 5: Groq GPT-OSS 120B
+    - Tier 6: Gemini 3.8 Flash (resilient fallback: gemini-3.5-flash)
 """
 
 import asyncio
@@ -98,8 +75,8 @@ STATIC_DIR = BASE_DIR / "static"
 
 app = FastAPI(
     title="Context-Aware Smart LLM Router",
-    version="2.5.0",
-    description="Context-Aware Smart LLM Switching with Dynamic Multi-Provider Routing and SSE Streaming",
+    version="3.0.0",
+    description="Context-Aware Smart LLM Switching: Gemini 3.1 Flash-Lite Analyzer + 6 Response Model Tiers",
 )
 logger = logging.getLogger("smart-llm-router")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -151,7 +128,7 @@ adapter_factory.register(openrouter_adapter)
 adapter_factory.register(groq_adapter)
 adapter_factory.register(custom_adapter)
 adapter_factory.register(mock_adapter)
-adapter_factory.set_default(openai_adapter)
+adapter_factory.set_default(gemini_adapter)
 
 # Rate Limiting State
 _rate_hits: Dict[str, List[float]] = defaultdict(list)
@@ -197,10 +174,6 @@ def _get_request_context(request: Request) -> tuple[ResolvedCredentials, ModelRe
     return creds, reg
 
 
-_HEALTH_CACHE: dict = {"ts": 0.0, "payload": None}
-_HEALTH_CACHE_TTL = 60.0
-
-
 # ---------------------------------------------------------------------------
 # Public Endpoints
 # ---------------------------------------------------------------------------
@@ -212,28 +185,36 @@ async def index():
     return {"message": "Context-Aware Smart LLM Switching API is running.", "docs": "/docs"}
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
+
+
 @app.get("/health")
 async def health(request: Request):
     creds, reg = _get_request_context(request)
     return {
         "status": "ok",
         "mode": "real" if reg.has_real() else "demo",
-        "architecture": "analyzer-llm",
-        "version": "2.5.0",
+        "architecture": "Gemini 3.1 Flash-Lite Analyzer + 6 Response Model Tiers",
+        "version": "3.0.0",
         "models_count": len(reg.available()),
         "providers": {
-            "openrouter": creds.has_openrouter,
             "gemini": creds.has_gemini,
             "groq": creds.has_groq,
+            "openrouter": creds.has_openrouter,
             "openai": creds.has_openai,
             "custom": creds.has_custom,
         },
-        "configured_models": {
-            "analyzer": creds.base_model or settings.analyzer_model,
-            "fast_gemini": creds.fast_model or settings.gemini_fast_model,
-            "coding_groq": creds.coding_model or settings.groq_coding_model,
-            "reasoning_groq": creds.reasoning_model or settings.groq_reasoning_model,
-            "openai_model": settings.openai_model,
+        "tiers": {
+            "analyzer": settings.gemini_analyzer_model,
+            "tier_1": settings.gemini_tier1_model,
+            "tier_2": settings.groq_tier2_model,
+            "tier_3": settings.gemini_tier3_model,
+            "tier_4": settings.groq_tier4_model,
+            "tier_5": settings.groq_tier5_model,
+            "tier_6": settings.gemini_tier6_model,
+            "tier_6_fallback": settings.gemini_tier6_fallback_model,
         },
     }
 
@@ -244,28 +225,9 @@ async def provider_health(request: Request):
     creds, reg = _get_request_context(request)
     results = {}
 
-    # OpenRouter check
-    if creds.has_openrouter:
-        m = reg.get_by_provider_and_tier("openrouter", "fast-backup") or reg.get_by_provider_and_tier("openrouter", "analyzer")
-        if not m:
-            m = reg.get_by_provider_and_tier("openrouter", "powerful")
-        if m:
-            try:
-                t0 = time.perf_counter()
-                adapter = adapter_factory.get("openrouter")
-                res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
-                lat = (time.perf_counter() - t0) * 1000.0
-                results["openrouter"] = ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
-            except Exception as e:
-                results["openrouter"] = ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
-        else:
-            results["openrouter"] = ProviderStatusItem(status="disabled")
-    else:
-        results["openrouter"] = ProviderStatusItem(status="missing_api_key")
-
-    # Gemini check
+    # Gemini check (Tier 1 or Analyzer)
     if creds.has_gemini:
-        m = reg.get_by_provider_and_tier("gemini", "fast") or reg.get_by_provider_and_tier("gemini", "powerful")
+        m = reg.get_by_tier("tier_1") or reg.get_analyzer()
         if m:
             try:
                 t0 = time.perf_counter()
@@ -280,9 +242,9 @@ async def provider_health(request: Request):
     else:
         results["gemini"] = ProviderStatusItem(status="missing_api_key")
 
-    # Groq check
+    # Groq check (Tier 2 or Tier 4)
     if creds.has_groq:
-        m = reg.get_by_provider_and_tier("groq", "coding") or reg.get_by_provider_and_tier("groq", "reasoning") or reg.get_by_provider_and_tier("groq", "fast-backup")
+        m = reg.get_by_tier("tier_2") or reg.get_by_tier("tier_4") or reg.get_by_tier("tier_5")
         if m:
             try:
                 t0 = time.perf_counter()
@@ -297,9 +259,26 @@ async def provider_health(request: Request):
     else:
         results["groq"] = ProviderStatusItem(status="missing_api_key")
 
-    # OpenAI direct check
+    # OpenRouter check (optional)
+    if creds.has_openrouter:
+        m = reg.get_by_provider_and_tier("openrouter", "fast-backup") or reg.get_by_provider_and_tier("openrouter", "powerful")
+        if m:
+            try:
+                t0 = time.perf_counter()
+                adapter = adapter_factory.get("openrouter")
+                res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
+                lat = (time.perf_counter() - t0) * 1000.0
+                results["openrouter"] = ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
+            except Exception as e:
+                results["openrouter"] = ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
+        else:
+            results["openrouter"] = ProviderStatusItem(status="disabled")
+    else:
+        results["openrouter"] = ProviderStatusItem(status="missing_api_key")
+
+    # OpenAI direct check (optional)
     if creds.has_openai:
-        m = reg.get_by_provider_and_tier("openai", "fast-backup") or reg.get_by_provider_and_tier("openai", "powerful")
+        m = reg.get_by_provider_and_tier("openai", "tier_1") or reg.get_by_provider_and_tier("openai", "fast-backup")
         if m:
             try:
                 t0 = time.perf_counter()
@@ -316,7 +295,7 @@ async def provider_health(request: Request):
 
     # Custom check (optional)
     if creds.has_custom:
-        m = reg.get_by_provider_and_tier("custom", "custom") or reg.get_by_provider_and_tier("custom", "analyzer")
+        m = reg.get_by_provider_and_tier("custom", "custom")
         if m:
             try:
                 t0 = time.perf_counter()
@@ -352,7 +331,7 @@ async def test_single_provider(provider: str, request: Request, req: Optional[Pr
     model_name = (req.model if (req and req.model) else None)
 
     if not model_name:
-        spec = reg.get_by_provider_and_tier(prov, "fast") or reg.get_by_provider_and_tier(prov, "coding") or reg.get_by_provider_and_tier(prov, "analyzer")
+        spec = reg.get_by_provider_and_tier(prov, "tier_1") or reg.get_by_provider_and_tier(prov, "tier_2") or reg.get_analyzer()
         model_name = spec.endpoint_model if spec else "default"
 
     test_spec = ModelSpec(
@@ -427,7 +406,7 @@ async def analyze(req: AnalyzeRequest, request: Request):
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, request: Request):
-    """Unary chat endpoint: executes query with context management, routing, and fallback."""
+    """Unary chat endpoint: executes query with context management, routing, Box 6 quality check & escalation."""
     _check_rate_limit(request)
     creds, reg = _get_request_context(request)
     return await run_unary_chat(req.query, req.history, req.strategy, reg)
@@ -456,7 +435,6 @@ async def chat_stream(req: ChatRequest, request: Request):
     )
 
 
-
 @app.post("/api/feedback", response_model=FeedbackResponse)
 async def feedback(req: FeedbackRequest):
     ok = tracker.record_feedback(req.request_id, req.rating)
@@ -466,6 +444,7 @@ async def feedback(req: FeedbackRequest):
 
 
 @app.get("/api/stats")
+@app.get("/api/metrics")
 async def stats():
     return tracker.dashboard_stats()
 
@@ -502,6 +481,7 @@ async def benchmark_matrix(request: Request):
                 "output_price_per_mtok": m.output_price_per_mtok,
                 "expected_latency_ms": m.expected_latency_ms,
                 "context_window": m.context_window,
+                "fallback_model": m.fallback_model,
             }
             for m in models
         ]
@@ -515,21 +495,12 @@ BENCHMARK_DEFAULT_QUERIES = [
     "Explain the time complexity differences between QuickSort and MergeSort in 2 sentences.",
     "Write a SQL query with window functions to calculate 7-day rolling revenue per customer.",
 ]
-BENCHMARK_MAX_QUERIES = 8  # guard: each query triggers real billable provider calls
+BENCHMARK_MAX_QUERIES = 8
 
 
 @app.post("/api/benchmark/run", response_model=BenchmarkResult)
 async def run_benchmark(req: BenchmarkRunRequest, request: Request):
-    """Real 3-Way Comparative Experiment (Section 27).
-
-    Baseline 1 (always the strongest model), Baseline 2 (static tier heuristic),
-    and the Smart Router (analyzer + multi-factor routing) are each executed as
-    REAL provider calls — concurrently via asyncio.gather — with
-    provider-reported token usage and measured wall-clock latency. Costs come
-    from actual usage, never simulated formulas. In demo mode (no credentials)
-    the run executes against the labeled mock adapter and is reported with
-    execution_mode="demo".
-    """
+    """Comparative Experiment: Baseline 1 (Tier 6), Baseline 2 (Static Routing), Smart Router."""
     creds, reg = _get_request_context(request)
     _check_rate_limit(request)
     sample_queries = (req.queries or BENCHMARK_DEFAULT_QUERIES)[:BENCHMARK_MAX_QUERIES]
@@ -537,29 +508,26 @@ async def run_benchmark(req: BenchmarkRunRequest, request: Request):
         raise HTTPException(status_code=422, detail="At least one benchmark query is required.")
 
     available = reg.available()
-    powerful_model = reg.strongest() or reg.get_by_tier("reasoning")
-    fast_model = reg.get_by_tier("fast")
-    coding_model = reg.get_by_tier("coding")
+    powerful_model = reg.get_by_tier("tier_6") or reg.strongest()
+    fast_model = reg.get_by_tier("tier_1") or reg.get_by_tier("tier_2")
+    coding_model = reg.get_by_tier("tier_4")
     if not powerful_model or not (fast_model or coding_model):
         raise HTTPException(
             status_code=503,
-            detail="Benchmark requires a powerful baseline and a fast/coding model in the registry.",
+            detail="Benchmark requires Tier 6 baseline and response models in the registry.",
         )
 
     execution_mode = "real" if reg.has_real() else "demo"
 
     async def _run_baseline(model, query: str):
-        """Real single-model completion. Returns (model_name, cost, latency)."""
         adapter = adapter_factory.get_for_model(model)
         messages = build_messages(history=[], query=query, max_tokens=2048, tier=model.tier)
         res = await adapter.generate(model, messages)
         return model.name, _compute_cost(model, res), res.latency_ms
 
     async def _run_smart(query: str):
-        """Real Smart-Router path: analyzer (real call) + routed generation."""
         decision = await run_analyzer(query, [], available, registry_instance=reg)
         if decision.answer_mode == "self" and decision.answer:
-            # Self-mode: the analyzer call IS the final answer (1 call).
             return (
                 decision.analyzer_model.name,
                 _compute_cost(decision.analyzer_model, decision.analyzer_result) or 0.0,
@@ -584,13 +552,9 @@ async def run_benchmark(req: BenchmarkRunRequest, request: Request):
     b1_total = b1_lat_sum = b2_total = b2_lat_sum = smart_total = smart_lat_sum = 0.0
 
     for query in sample_queries:
-        # Baseline 2 static heuristic: coding keywords -> coding tier. This
-        # simple keyword router IS Baseline 2 by definition — now measured
-        # with real calls, not simulated.
         is_code = any(k in query.lower() for k in ("python", "function", "sql", "code", "algorithm"))
         b2_model = (coding_model if is_code else fast_model) or powerful_model
 
-        # Real concurrent execution of all three paths (asyncio.gather).
         b1_r, b2_r, smart_r = await asyncio.gather(
             _run_baseline(powerful_model, query),
             _run_baseline(b2_model, query),
@@ -676,20 +640,17 @@ async def run_benchmark(req: BenchmarkRunRequest, request: Request):
 async def get_settings(request: Request):
     creds, reg = _get_request_context(request)
     return {
-        "analyzer_model": creds.base_model or settings.analyzer_model,
-        "gemini_fast_model": creds.fast_model or settings.gemini_fast_model,
-        "groq_coding_model": creds.coding_model or settings.groq_coding_model,
-        "groq_reasoning_model": creds.reasoning_model or settings.groq_reasoning_model,
-        "openrouter_fast_model": settings.openrouter_fast_model,
-        "openrouter_coding_model": settings.openrouter_coding_model,
-        "openrouter_reasoning_model": settings.openrouter_reasoning_model,
-        "openai_model": settings.openai_model,
-        "custom_model": creds.custom_model or settings.custom_model,
-        "custom_base_url": creds.custom_base_url or settings.custom_base_url,
+        "analyzer_model": creds.gemini_analyzer_model or settings.gemini_analyzer_model,
+        "tier_1_model": creds.gemini_tier1_model or settings.gemini_tier1_model,
+        "tier_2_model": creds.groq_tier2_model or settings.groq_tier2_model,
+        "tier_3_model": creds.gemini_tier3_model or settings.gemini_tier3_model,
+        "tier_4_model": creds.groq_tier4_model or settings.groq_tier4_model,
+        "tier_5_model": creds.groq_tier5_model or settings.groq_tier5_model,
+        "tier_6_model": creds.gemini_tier6_model or settings.gemini_tier6_model,
+        "tier_6_fallback": settings.gemini_tier6_fallback_model,
         "daily_budget_usd": settings.daily_budget_usd,
         "max_cost_per_request": getattr(settings, "max_cost_per_request", 0.0),
         "request_timeout_seconds": settings.request_timeout_seconds,
-        "has_openrouter_key": creds.has_openrouter,
         "has_gemini_key": creds.has_gemini,
         "has_groq_key": creds.has_groq,
         "has_openai_key": creds.has_openai,

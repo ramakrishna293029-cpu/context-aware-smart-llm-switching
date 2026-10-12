@@ -15,6 +15,7 @@ from .config import Settings, settings as default_settings
 class ResolvedCredentials:
     """Request-scoped credentials and model configuration."""
 
+    # Provider fallback keys
     gemini_api_key: Optional[str] = None
     groq_api_key: Optional[str] = None
     openrouter_api_key: Optional[str] = None
@@ -23,7 +24,30 @@ class ResolvedCredentials:
     custom_api_key: Optional[str] = None
     custom_model: Optional[str] = None
 
-    # Tier model overrides
+    # Tier-specific keys and models
+    gemini_analyzer_api_key: Optional[str] = None
+    gemini_analyzer_model: Optional[str] = None
+
+    gemini_tier1_api_key: Optional[str] = None
+    gemini_tier1_model: Optional[str] = None
+
+    groq_tier2_api_key: Optional[str] = None
+    groq_tier2_model: Optional[str] = None
+
+    gemini_tier3_api_key: Optional[str] = None
+    gemini_tier3_model: Optional[str] = None
+
+    groq_tier4_api_key: Optional[str] = None
+    groq_tier4_model: Optional[str] = None
+
+    groq_tier5_api_key: Optional[str] = None
+    groq_tier5_model: Optional[str] = None
+
+    gemini_tier6_api_key: Optional[str] = None
+    gemini_tier6_model: Optional[str] = None
+    gemini_tier6_fallback_model: Optional[str] = None
+
+    # Legacy tier model overrides
     base_model: Optional[str] = None
     fast_model: Optional[str] = None
     coding_model: Optional[str] = None
@@ -32,11 +56,22 @@ class ResolvedCredentials:
 
     @property
     def has_gemini(self) -> bool:
-        return bool(self.gemini_api_key)
+        return bool(
+            self.gemini_analyzer_api_key
+            or self.gemini_tier1_api_key
+            or self.gemini_tier3_api_key
+            or self.gemini_tier6_api_key
+            or self.gemini_api_key
+        )
 
     @property
     def has_groq(self) -> bool:
-        return bool(self.groq_api_key)
+        return bool(
+            self.groq_tier2_api_key
+            or self.groq_tier4_api_key
+            or self.groq_tier5_api_key
+            or self.groq_api_key
+        )
 
     @property
     def has_openrouter(self) -> bool:
@@ -63,9 +98,18 @@ class ResolvedCredentials:
     def get_key_for_provider(self, provider: str) -> Optional[str]:
         p = provider.lower()
         if p in ("gemini", "google"):
-            return self.gemini_api_key
+            return (
+                self.gemini_tier1_api_key
+                or self.gemini_analyzer_api_key
+                or self.gemini_api_key
+            )
         elif p == "groq":
-            return self.groq_api_key
+            return (
+                self.groq_tier2_api_key
+                or self.groq_tier4_api_key
+                or self.groq_tier5_api_key
+                or self.groq_api_key
+            )
         elif p == "openrouter":
             return self.openrouter_api_key
         elif p == "openai":
@@ -94,7 +138,7 @@ def resolve_credentials_from_headers(
     settings: Optional[Settings] = None,
 ) -> ResolvedCredentials:
     """Extract credentials and model overrides from a headers dictionary.
-    
+
     Resolution order:
     1. Header value (if present and non-empty)
     2. Server settings / .env value
@@ -111,6 +155,30 @@ def resolve_credentials_from_headers(
             return h_val
         return server_val if server_val else None
 
+    # Tier-specific keys
+    gemini_analyzer_key = _pick("x-gemini-analyzer-key", cfg.gemini_analyzer_api_key)
+    gemini_analyzer_model = _pick("x-gemini-analyzer-model", cfg.gemini_analyzer_model)
+
+    gemini_tier1_key = _pick("x-gemini-tier1-key", cfg.gemini_tier1_api_key)
+    gemini_tier1_model = _pick("x-gemini-tier1-model", cfg.gemini_tier1_model)
+
+    groq_tier2_key = _pick("x-groq-tier2-key", cfg.groq_tier2_api_key)
+    groq_tier2_model = _pick("x-groq-tier2-model", cfg.groq_tier2_model)
+
+    gemini_tier3_key = _pick("x-gemini-tier3-key", cfg.gemini_tier3_api_key)
+    gemini_tier3_model = _pick("x-gemini-tier3-model", cfg.gemini_tier3_model)
+
+    groq_tier4_key = _pick("x-groq-tier4-key", cfg.groq_tier4_api_key)
+    groq_tier4_model = _pick("x-groq-tier4-model", cfg.groq_tier4_model)
+
+    groq_tier5_key = _pick("x-groq-tier5-key", cfg.groq_tier5_api_key)
+    groq_tier5_model = _pick("x-groq-tier5-model", cfg.groq_tier5_model)
+
+    gemini_tier6_key = _pick("x-gemini-tier6-key", cfg.gemini_tier6_api_key)
+    gemini_tier6_model = _pick("x-gemini-tier6-model", cfg.gemini_tier6_model)
+    gemini_tier6_fallback = _pick("x-gemini-tier6-fallback", cfg.gemini_tier6_fallback_model)
+
+    # General provider keys
     gemini_key = _pick("x-gemini-key", cfg.gemini_api_key)
     groq_key = _pick("x-groq-key", cfg.groq_api_key)
     openrouter_key = _pick("x-openrouter-key", cfg.openrouter_api_key)
@@ -120,6 +188,7 @@ def resolve_credentials_from_headers(
     custom_key = _pick("x-custom-key", cfg.custom_api_key)
     custom_model = _pick("x-custom-model", cfg.custom_model)
 
+    # Legacy tier model overrides
     base_model = _pick("x-base-model", cfg.analyzer_model)
     fast_model = _pick("x-fast-model", cfg.gemini_fast_model)
     coding_model = _pick("x-coding-model", cfg.groq_coding_model)
@@ -134,6 +203,21 @@ def resolve_credentials_from_headers(
         custom_base_url=custom_url,
         custom_api_key=custom_key,
         custom_model=custom_model,
+        gemini_analyzer_api_key=gemini_analyzer_key,
+        gemini_analyzer_model=gemini_analyzer_model,
+        gemini_tier1_api_key=gemini_tier1_key,
+        gemini_tier1_model=gemini_tier1_model,
+        groq_tier2_api_key=groq_tier2_key,
+        groq_tier2_model=groq_tier2_model,
+        gemini_tier3_api_key=gemini_tier3_key,
+        gemini_tier3_model=gemini_tier3_model,
+        groq_tier4_api_key=groq_tier4_key,
+        groq_tier4_model=groq_tier4_model,
+        groq_tier5_api_key=groq_tier5_key,
+        groq_tier5_model=groq_tier5_model,
+        gemini_tier6_api_key=gemini_tier6_key,
+        gemini_tier6_model=gemini_tier6_model,
+        gemini_tier6_fallback_model=gemini_tier6_fallback,
         base_model=base_model,
         fast_model=fast_model,
         coding_model=coding_model,

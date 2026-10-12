@@ -3,71 +3,212 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart LLM Switcher | Context-Aware Cost & Performance Optimization</title>
+  <title>Smart LLM Switcher | Context-Aware Cost &amp; Performance Gateway</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f81f7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='6' r='3'/><circle cx='6' cy='18' r='3'/><circle cx='18' cy='12' r='3'/><path d='M9 6h3a3 3 0 0 1 3 3v0a3 3 0 0 0 3 3'/><path d='M9 18h3a3 3 0 0 0 3-3v0a3 3 0 0 1 3-3'/></svg>" />
   <link rel="stylesheet" href="/static/vendor/katex.min.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+<!-- Global SVG Symbols Defs -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <symbol id="i-bolt" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M13 2 4.5 13.5H11L10 22l9.5-11.5H13z"/></symbol>
-    <symbol id="i-chev-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></symbol>
-    <symbol id="i-chev-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
-    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></symbol>
-    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.7c0 4.3-4 7.8-9 7.8-1 0-2-.1-2.9-.4L4 21l1.4-4C4 15.7 3 13.8 3 11.7 3 7.4 7 4 12 4s9 3.4 9 7.7z"/></symbol>
-    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20v-7M12 20V4M19 20v-11"/></symbol>
-    <symbol id="i-flask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5.2 8.7A2 2 0 0 0 6.5 21h11a2 2 0 0 0 1.7-3.3L14 9V3"/></symbol>
-    <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></symbol>
-    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></symbol>
-    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
-    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6.5 7l.8 13h9.4l.8-13"/></symbol>
-    <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1z"/></symbol>
-    <symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 21h10M5 7h14M5 7l-2.3 5a2.7 2.7 0 0 0 4.6 0L5 7zM19 7l-2.3 5a2.7 2.7 0 0 0 4.6 0L19 7z"/></symbol>
-    <symbol id="i-dollar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v20M17 6.5c0-1.5-2.2-2.5-5-2.5S7 5 7 6.8 8.8 9.3 12 10s5 1.6 5 3.4-2.2 2.6-5 2.6-5-1-5-2.5"/></symbol>
-    <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></symbol>
-    <symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="10" y="10" width="4" height="4"/><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3"/></symbol>
-    <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3.2-3.2M20 16H7l3.2 3.2"/></symbol>
-    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
-    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9.5" rx="2"/><path d="M8 11V7.8A4 4 0 0 1 16 7.8V11"/></symbol>
-    <symbol id="i-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c.8-3.6 3.9-5.5 7.5-5.5s6.7 1.9 7.5 5.5"/></symbol>
-    <symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
-    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4.4h-4.4"/></symbol>
-    <symbol id="i-trend-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l6 6 4-4 8 8M21 12v5h-5"/></symbol>
-    <symbol id="i-hash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 9h14M5 15h14M10 3 8 21M16 3l-2 18"/></symbol>
-    <symbol id="i-bars" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
-    <symbol id="i-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 2.5 20h19z"/><path d="M12 9.5v4.5M12 17.3v.2"/></symbol>
-    <symbol id="i-hash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 9h14M5 15h14M10 3 8 21M16 3l-2 18"/></symbol>
-    <symbol id="i-stop" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="7" y="7" width="10" height="10" rx="1.5"/></symbol>
-    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></symbol>
-    <symbol id="i-thumb-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></symbol>
-    <symbol id="i-thumb-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9a2 2 0 0 0 2 2.3zm7 7h3a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-3"/></symbol>
+    <!-- Smart LLM Router Emblem -->
+    <symbol id="i-router" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="14" width="20" height="8" rx="2"/>
+      <path d="M6 18h.01M10 18h.01"/>
+      <path d="M14 6l-2-4-2 4"/>
+      <path d="M12 2v8"/>
+      <path d="M4 10a8 8 0 0 1 16 0"/>
+    </symbol>
+    <symbol id="i-node-switch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="6" cy="6" r="3"/>
+      <circle cx="6" cy="18" r="3"/>
+      <circle cx="18" cy="12" r="3"/>
+      <path d="M9 6h3a3 3 0 0 1 3 3v0a3 3 0 0 0 3 3"/>
+      <path d="M9 18h3a3 3 0 0 0 3-3v0a3 3 0 0 1 3-3"/>
+    </symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+      <polyline points="2 17 12 22 22 17"/>
+      <polyline points="2 12 12 17 22 12"/>
+    </symbol>
+    <symbol id="i-chev-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 18l-6-6 6-6"/>
+    </symbol>
+    <symbol id="i-chev-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 9l6 6 6-6"/>
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/>
+    </symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+    </symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6" y1="20" x2="6" y2="14"/>
+      <line x1="2" y1="20" x2="22" y2="20"/>
+    </symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 2v7.31L4.1 19.46A2 2 0 0 0 5.8 22h12.4a2 2 0 0 0 1.7-2.54L14 9.31V2"/>
+      <line x1="8" y1="2" x2="16" y2="2"/>
+      <line x1="6.8" y1="15" x2="17.2" y2="15"/>
+    </symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="5"/>
+      <line x1="12" y1="1" x2="12" y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/>
+      <line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    </symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="2"/>
+      <rect x="9" y="9" width="6" height="6"/>
+      <line x1="9" y1="1" x2="9" y2="4"/>
+      <line x1="15" y1="1" x2="15" y2="4"/>
+      <line x1="9" y1="20" x2="9" y2="23"/>
+      <line x1="15" y1="20" x2="15" y2="23"/>
+      <line x1="20" y1="9" x2="23" y2="9"/>
+      <line x1="20" y1="14" x2="23" y2="14"/>
+      <line x1="1" y1="9" x2="4" y2="9"/>
+      <line x1="1" y1="14" x2="4" y2="14"/>
+    </symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="17 1 21 5 17 9"/>
+      <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+      <polyline points="7 23 3 19 7 15"/>
+      <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+    </symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </symbol>
+    <symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="19" x2="12" y2="5"/>
+      <polyline points="5 12 12 5 19 12"/>
+    </symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6" y="6" width="12" height="12" rx="2"/>
+    </symbol>
+    <symbol id="i-bars" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <line x1="3" y1="18" x2="21" y2="18"/>
+    </symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+    </symbol>
+    <symbol id="i-thumb-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+    </symbol>
+    <symbol id="i-thumb-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/>
+    </symbol>
+    <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="16 18 22 12 16 6"/>
+      <polyline points="8 6 2 12 8 18"/>
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v18"/>
+      <path d="M7 21h10"/>
+      <path d="M5 7h14"/>
+      <path d="M5 7l-3 7a3 3 0 0 0 6 0L5 7z"/>
+      <path d="M19 7l-3 7a3 3 0 0 0 6 0L19 7z"/>
+    </symbol>
+    <symbol id="i-trend-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/>
+      <polyline points="17 18 23 18 23 12"/>
+    </symbol>
+    <symbol id="i-dollar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="1" x2="12" y2="23"/>
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+    </symbol>
   </defs>
 </svg>
+
   <div class="app-layout" id="app-layout">
     
     <!-- ============================================================ -->
-    <!-- 1. COLLAPSIBLE LEFT SIDEBAR                                  -->
+    <!-- 1. CLEAN LEFT-HAND SIDEBAR                                   -->
     <!-- ============================================================ -->
     <aside class="sidebar" id="sidebar">
-      <!-- Sidebar Header -->
+      
+      <!-- Brand & Version Header -->
       <div class="sidebar-header">
         <div class="brand">
-          <div class="logo-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-bolt"/></svg></div>
+          <div class="logo-icon">
+            <svg class="icon-sym" aria-hidden="true"><use href="#i-node-switch"/></svg>
+          </div>
           <div class="brand-text">
-            <span class="brand-title">Smart Switcher</span>
-            <span class="brand-tagline">Cost & Latency Router</span>
+            <div class="brand-title-row">
+              <span class="brand-title">Smart LLM Switcher</span>
+            </div>
+            <span class="brand-tagline">Cost &amp; Performance Gateway</span>
           </div>
         </div>
-        <button class="btn-icon sidebar-collapse-btn" id="sidebar-collapse-btn" title="Collapse Sidebar" aria-label="Collapse Sidebar">
+        <button class="btn-icon sidebar-collapse-btn" id="sidebar-collapse-btn" title="Collapse Sidebar [Ctrl+B]" aria-label="Collapse Sidebar">
           <span class="icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chev-left"/></svg></span>
         </button>
       </div>
 
-      <!-- New Chat Button -->
+      <!-- Action: New Conversation CTA -->
       <div class="sidebar-actions">
-        <button class="btn-new-chat" id="new-chat-btn">
+        <button class="btn-new-chat" id="new-chat-btn" title="Start a new chat session [Ctrl+N]">
           <span class="plus-icon">＋</span>
-          <span>New Chat</span>
+          <span>New Conversation</span>
+          <span class="kbd-badge">/</span>
+        </button>
+      </div>
+
+      <!-- Navigation Views -->
+      <div class="sidebar-nav-section">
+        <div class="nav-section-label">WORKSPACE</div>
+        <button class="sidebar-nav-item active" id="nav-chat-btn" data-view="chat">
+          <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chat"/></svg></span>
+          <span class="nav-text">Chat &amp; Router</span>
+          <span class="nav-badge pulse">Live</span>
+        </button>
+        <button class="sidebar-nav-item" id="nav-registry-btn" data-view="registry">
+          <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-layers"/></svg></span>
+          <span class="nav-text">Model Registry &amp; Tiers</span>
+        </button>
+        <button class="sidebar-nav-item" id="nav-dashboard-btn" data-view="dashboard">
+          <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chart"/></svg></span>
+          <span class="nav-text">Telemetry &amp; Metering</span>
+        </button>
+        <button class="sidebar-nav-item" id="nav-benchmark-btn" data-view="benchmark">
+          <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-flask"/></svg></span>
+          <span class="nav-text">Benchmark Lab</span>
         </button>
       </div>
 
@@ -83,7 +224,7 @@
       <!-- Scrollable Conversation Sessions List -->
       <div class="sidebar-sessions-section">
         <div class="sessions-label-row">
-          <span class="sessions-label">Recent Chats</span>
+          <span class="sessions-label">Recent Conversations</span>
           <span class="sessions-count" id="sessions-count-badge">0</span>
         </div>
         <div class="session-list" id="session-list">
@@ -91,37 +232,21 @@
         </div>
       </div>
 
-      <!-- Sidebar Navigation Links -->
-      <div class="sidebar-nav-section">
-        <button class="sidebar-nav-item active" id="nav-chat-btn" data-view="chat">
-          <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chat"/></svg></span>
-          <span class="nav-text">Chat Studio</span>
-        </button>
-        <button class="sidebar-nav-item" id="nav-dashboard-btn" data-view="dashboard">
-          <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chart"/></svg></span>
-          <span class="nav-text">Telemetry & Analytics</span>
-        </button>
-        <button class="sidebar-nav-item" id="nav-benchmark-btn" data-view="benchmark">
-          <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-flask"/></svg></span>
-          <span class="nav-text">Research Benchmark</span>
-        </button>
-      </div>
-
       <!-- Sidebar Footer -->
       <div class="sidebar-footer">
-        <button class="sidebar-footer-btn" id="open-settings-btn" title="Provider Settings & API Keys">
+        <button class="sidebar-footer-btn" id="open-settings-btn" title="Provider Settings &amp; API Keys">
           <div class="footer-btn-left">
             <span class="status-dot-indicator" id="sidebar-provider-dot" title="Checking providers..."></span>
-            <span class="footer-btn-text">Settings & Keys</span>
+            <span class="footer-btn-text">Settings &amp; Keys</span>
           </div>
           <span class="gear-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-gear"/></svg></span>
         </button>
         <div class="sidebar-footer-row">
-          <button class="btn-sidebar-tool" id="theme-toggle-btn" title="Toggle Dark/Light Theme">
+          <button class="btn-sidebar-tool" id="theme-toggle-btn" title="Toggle Theme (Dark / Light)">
             <span class="theme-icon" id="theme-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-moon"/></svg></span>
             <span class="tool-text" id="theme-text">Dark Mode</span>
           </button>
-          <button class="btn-sidebar-tool danger" id="clear-all-sessions-btn" title="Clear all chat history">
+          <button class="btn-sidebar-tool danger" id="clear-all-sessions-btn" title="Clear conversation history">
             <span class="trash-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-trash"/></svg></span>
             <span class="tool-text">Clear All</span>
           </button>
@@ -133,98 +258,161 @@
     <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
     <!-- ============================================================ -->
-    <!-- 2. MAIN CONVERSATIONAL CANVAS                                -->
+    <!-- 2. MAIN CENTER STAGE (CANVAS & PANELS)                       -->
     <!-- ============================================================ -->
     <main class="main-canvas" id="main-canvas">
       
-      <!-- Canvas Top Navigation Bar -->
+      <!-- Top Workspace Header -->
       <header class="canvas-header">
         <div class="header-left">
           <button class="btn-icon sidebar-open-btn" id="sidebar-open-btn" title="Open Sidebar" aria-label="Open Sidebar">
             <span class="icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-bars"/></svg></span>
           </button>
-          <div class="session-info">
-            <h1 class="active-session-title" id="active-session-title" title="Click to rename">New Conversation</h1>
-            <button class="btn-icon-tiny" id="rename-session-btn" title="Rename Session"><svg class="icon-sym" aria-hidden="true"><use href="#i-pencil"/></svg></button>
+          <div class="workspace-crumb">
+            <span class="crumb-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-folder"/></svg></span>
+            <span class="crumb-project">smart-llm-router</span>
+            <span class="crumb-sep">/</span>
+            <span class="crumb-active-title" id="active-session-title">New Conversation</span>
           </div>
         </div>
 
         <div class="header-right">
+          <!-- Strategy Pill Selector -->
           <div class="strategy-badge-pill" id="header-strategy-badge" title="Active Routing Strategy">
             <span class="pill-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-scale"/></svg></span>
             <span class="pill-label">Balanced</span>
           </div>
-          <div class="engine-status-pill" id="engine-status-badge" title="Provider Connectivity">
+          <!-- Real-Time Router Online Status -->
+          <div class="engine-status-pill" id="engine-status-badge" title="Provider Connectivity &amp; Routing Engine">
             <span class="status-pulse-dot"></span>
             <span class="status-text" id="engine-status-text">Router Online</span>
           </div>
-          <button class="btn-icon header-tool-btn" id="header-settings-btn" title="Settings & API Keys"><svg class="icon-sym" aria-hidden="true"><use href="#i-gear"/></svg></button>
+          <!-- Quick Header Tools -->
+          <button class="btn-icon header-tool-btn" id="header-settings-btn" title="Settings &amp; API Keys"><svg class="icon-sym" aria-hidden="true"><use href="#i-gear"/></svg></button>
           <button class="btn-icon header-tool-btn" id="header-theme-btn" title="Toggle Theme"><svg class="icon-sym" aria-hidden="true"><use href="#i-moon"/></svg></button>
         </div>
       </header>
 
-      <!-- View Containers -->
+      <!-- View Containers Wrapper -->
       <div class="views-wrapper">
         
         <!-- ------------------------------------------------------------ -->
-        <!-- VIEW 1: CHAT STUDIO & STREAMING CANVAS                       -->
+        <!-- VIEW 1: CHAT & ROUTING STUDIO                                -->
         <!-- ------------------------------------------------------------ -->
         <section class="view-panel active" id="view-chat">
           <div class="chat-canvas-inner">
             
-            <!-- Live Interactive Routing Pipeline Visualizer -->
-            <div class="pipeline-visualizer hidden" id="pipeline-visualizer">
-              <div class="pipeline-track"></div>
-              <div class="pipeline-nodes">
-                <div class="pipeline-node" id="node-query">
-                  <div class="node-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-person"/></svg></div>
-                  <div class="node-label">User Query</div>
+            <!-- SLEEK COMPACT ROUTING RIBBON -->
+            <div class="architecture-ribbon" id="architecture-pipeline-card">
+              <div class="ribbon-bar">
+                <div class="ribbon-status-group">
+                  <span class="status-indicator-dot" id="pipeline-status-dot"></span>
+                  <span class="ribbon-status-msg" id="pipeline-status-msg">Analyzer Ready · 6 Response Tiers Active</span>
+                  <div class="escalation-indicator-pill hidden" id="pipeline-escalation-pill">
+                    <span class="esc-icon">⚡</span>
+                    <span class="esc-text" id="pipeline-escalation-text">Escalated</span>
+                  </div>
                 </div>
-                <div class="pipeline-node" id="node-analyzer">
-                  <div class="node-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-cpu"/></svg></div>
-                  <div class="node-label">Analyzer LLM</div>
+                <div class="ribbon-actions">
+                  <button type="button" class="btn-ribbon-toggle" id="ribbon-toggle-btn" title="Toggle 6-Tier Architecture Overview">
+                    <span>Architecture Overview</span>
+                    <span class="toggle-arrow" id="ribbon-toggle-arrow">▾</span>
+                  </button>
                 </div>
-                <div class="pipeline-node" id="node-scoreboard">
-                  <div class="node-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-scale"/></svg></div>
-                  <div class="node-label">Scoreboard Multi-Factor Matrix</div>
-                </div>
-                <div class="pipeline-node" id="node-model">
-                  <div class="node-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-target"/></svg></div>
-                  <div class="node-label">Selected Model</div>
-                </div>
-                <div class="pipeline-node" id="node-output">
-                  <div class="node-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chat"/></svg></div>
-                  <div class="node-label">Stream Output</div>
+              </div>
+
+              <!-- Collapsible Tiers Drawer -->
+              <div class="ribbon-drawer collapsed" id="ribbon-drawer">
+                <div class="ribbon-flow-grid">
+                  <!-- Analyzer Node -->
+                  <div class="ribbon-node analyzer" id="pnode-analyzer">
+                    <div class="rnode-tag">ANALYZER</div>
+                    <div class="rnode-title">Gemini 3.1 Flash-Lite</div>
+                    <div class="rnode-sub" id="pnode-analyzer-state">Single-Pass Decision</div>
+                  </div>
+
+                  <div class="ribbon-flow-arrow" id="pipeline-flow-connector">➔</div>
+
+                  <!-- 6 Tiers Grid -->
+                  <div class="ribbon-tiers-grid">
+                    <div class="rnode-tier" id="pnode-tier_1" data-tier="tier_1">
+                      <div class="rnode-tier-head">
+                        <span class="tier-tag t1">T1</span>
+                        <span class="prov-tag gemini">Gemini</span>
+                      </div>
+                      <div class="rnode-tier-name">Gemini 3.5 Flash-Lite</div>
+                      <div class="rnode-tier-role">Fast / Routine</div>
+                    </div>
+                    <div class="rnode-tier" id="pnode-tier_2" data-tier="tier_2">
+                      <div class="rnode-tier-head">
+                        <span class="tier-tag t2">T2</span>
+                        <span class="prov-tag groq">Groq</span>
+                      </div>
+                      <div class="rnode-tier-name">GPT-OSS 20B</div>
+                      <div class="rnode-tier-role">Fast General</div>
+                    </div>
+                    <div class="rnode-tier" id="pnode-tier_3" data-tier="tier_3">
+                      <div class="rnode-tier-head">
+                        <span class="tier-tag t3">T3</span>
+                        <span class="prov-tag gemini">Gemini</span>
+                      </div>
+                      <div class="rnode-tier-name">Gemini 3.6 Flash</div>
+                      <div class="rnode-tier-role">Balanced Workhorse</div>
+                    </div>
+                    <div class="rnode-tier" id="pnode-tier_4" data-tier="tier_4">
+                      <div class="rnode-tier-head">
+                        <span class="tier-tag t4">T4</span>
+                        <span class="prov-tag groq">Groq</span>
+                      </div>
+                      <div class="rnode-tier-name">Qwen3.8 27B</div>
+                      <div class="rnode-tier-role">Coding Specialist</div>
+                    </div>
+                    <div class="rnode-tier" id="pnode-tier_5" data-tier="tier_5">
+                      <div class="rnode-tier-head">
+                        <span class="tier-tag t5">T5</span>
+                        <span class="prov-tag groq">Groq</span>
+                      </div>
+                      <div class="rnode-tier-name">GPT-OSS 120B</div>
+                      <div class="rnode-tier-role">Deep Reasoning</div>
+                    </div>
+                    <div class="rnode-tier" id="pnode-tier_6" data-tier="tier_6">
+                      <div class="rnode-tier-head">
+                        <span class="tier-tag t6">T6</span>
+                        <span class="prov-tag gemini">Gemini</span>
+                      </div>
+                      <div class="rnode-tier-name">Gemini 3.8 Flash</div>
+                      <div class="rnode-tier-role">High Capability</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
             <!-- Chat Messages Container -->
             <div class="chat-messages" id="chat-messages">
-              <!-- Dynamically rendered by app.js (Welcome Hero or Conversation History) -->
+              <!-- Dynamically populated by app.js (Welcome Hero or Conversation turns) -->
             </div>
 
-            <!-- Floating Input Composer -->
+            <!-- Floating Prompt Composer -->
             <div class="composer-container">
-              <!-- Main Composer Form -->
               <form class="composer-card" id="composer-form">
                 
-                <!-- Composer Controls Header -->
+                <!-- Composer Top Bar Controls -->
                 <div class="composer-topbar">
                   <div class="strategy-selector-wrapper">
                     <label for="strategy-select" class="strategy-label">Strategy:</label>
                     <div class="select-styled-wrap">
                       <select id="strategy-select" class="strategy-select">
-                        <option value="balanced" selected>Balanced (Quality & Cost)</option>
+                        <option value="balanced" selected>Balanced (Quality &amp; Cost)</option>
                         <option value="lowest_cost">Lowest Cost (Budget First)</option>
-                        <option value="fastest">Ultra Fast (Lowest Latency)</option>
-                        <option value="highest_quality">Maximum Quality (Strongest)</option>
+                        <option value="fastest">Fastest (Lowest Latency)</option>
+                        <option value="highest_quality">Highest Quality (Frontier)</option>
                       </select>
                     </div>
                   </div>
 
                   <div class="composer-topbar-right">
-                    <div class="context-pill" id="context-pill" title="Conversation Context Window">
+                    <div class="context-pill" id="context-pill" title="Conversation Memory Window">
                       <span class="context-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-cpu"/></svg></span>
                       <span>Memory: <strong id="context-turn-count">0</strong> turns</span>
                       <button type="button" class="btn-clear-context" id="clear-context-btn" title="Reset Conversation Memory">Clear</button>
@@ -232,7 +420,7 @@
                   </div>
                 </div>
 
-                <!-- Composer Input Area -->
+                <!-- Textarea and Action Button Row -->
                 <div class="composer-input-row">
                   <textarea 
                     id="query-input" 
@@ -242,14 +430,14 @@
                     required
                   ></textarea>
 
-                  <!-- Send / Stop Button Morph -->
+                  <!-- Send / Stop Button -->
                   <button type="submit" id="send-stop-btn" class="btn-send-stop" title="Send Message (Enter)">
                     <span class="btn-icon-inner" id="send-btn-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-arrow-up"/></svg></span>
                   </button>
                 </div>
 
                 <div class="composer-bottom-bar">
-                  <span class="composer-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift + Enter</kbd> for new line · Live multi-factor routing & cost optimization</span>
+                  <span class="composer-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift + Enter</kbd> for new line · Live multi-tier switching &amp; adaptive quality check</span>
                 </div>
               </form>
             </div>
@@ -258,63 +446,149 @@
         </section>
 
         <!-- ------------------------------------------------------------ -->
-        <!-- VIEW 2: TELEMETRY & ANALYTICS DASHBOARD                      -->
+        <!-- VIEW 2: MODEL REGISTRY & TIERS (DYNAMIC LIVE CATALOG)        -->
+        <!-- ------------------------------------------------------------ -->
+        <section class="view-panel" id="view-registry">
+          <div class="registry-container">
+            <div class="view-header">
+              <div class="view-title-group">
+                <h2>Model Registry &amp; Architecture Tiers</h2>
+                <p class="subtitle">Live catalog of the Analyzer LLM and the 6 response model tiers dynamically loaded from the backend registry.</p>
+              </div>
+              <button id="refresh-registry-btn" class="btn-secondary">
+                <span>↻</span> Refresh Catalog
+              </button>
+            </div>
+
+            <!-- Registry Overview Summary Cards -->
+            <div class="registry-summary-grid">
+              <div class="summary-card">
+                <span class="card-title">Active Models</span>
+                <span class="big-metric" id="reg-total-models">7</span>
+                <span class="card-desc">1 Analyzer + 6 Calibrated Tiers</span>
+              </div>
+              <div class="summary-card">
+                <span class="card-title">Token Pricing Range</span>
+                <span class="big-metric text-green" id="reg-price-range">$0.05 – $1.20</span>
+                <span class="card-desc">USD per 1M tokens (In / Out)</span>
+              </div>
+              <div class="summary-card">
+                <span class="card-title">Fastest Response</span>
+                <span class="big-metric text-blue" id="reg-min-lat">~200 ms</span>
+                <span class="card-desc">Tier 2 Groq GPT-OSS 20B</span>
+              </div>
+              <div class="summary-card">
+                <span class="card-title">Max Context Window</span>
+                <span class="big-metric" id="reg-max-context">1,000,000</span>
+                <span class="card-desc">Google Gemini Architecture</span>
+              </div>
+            </div>
+
+            <!-- Dynamic Model Registry Table -->
+            <div class="panel-card table-panel">
+              <div class="table-header">
+                <div class="table-title-group">
+                  <h3>Active Multi-Tier Specifications</h3>
+                  <span class="table-hint">Synchronized in real time with <code>app/registry.py</code></span>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table" id="registry-table">
+                  <thead>
+                    <tr>
+                      <th>Tier</th>
+                      <th>Model Name</th>
+                      <th>Provider</th>
+                      <th>Quality</th>
+                      <th>Reasoning</th>
+                      <th>Coding</th>
+                      <th>Price per 1M (In / Out)</th>
+                      <th>Latency</th>
+                      <th>Context Window</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="registry-table-body">
+                    <tr><td colspan="10" class="empty-state">Loading registered models from backend...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Architecture Tier Breakdown Cards Grid -->
+            <div class="panel-card" style="margin-top: 24px;">
+              <div class="table-header">
+                <div class="table-title-group">
+                  <h3>Tier Role &amp; Specialization Guidelines</h3>
+                  <span class="table-hint">How the Analyzer LLM routes incoming queries to optimal tiers</span>
+                </div>
+              </div>
+              <div class="tier-guidelines-grid" id="tier-guidelines-grid">
+                <!-- Dynamically populated or rendered -->
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ------------------------------------------------------------ -->
+        <!-- VIEW 3: TELEMETRY & TRANSACTION METERING DASHBOARD           -->
         <!-- ------------------------------------------------------------ -->
         <section class="view-panel" id="view-dashboard">
           <div class="dashboard-container">
             <div class="view-header">
               <div class="view-title-group">
-                <h2>Real Execution Telemetry & Performance</h2>
-                <p class="subtitle">Live metrics calculated directly from database execution records.</p>
+                <h2>Real-Time Telemetry &amp; Metering</h2>
+                <p class="subtitle">Auditable transaction telemetry and cost optimization metrics recorded in SQLite <code>data/metrics.db</code>.</p>
               </div>
               <button id="refresh-dashboard-btn" class="btn-secondary">
                 <span>↻</span> Refresh Telemetry
               </button>
             </div>
 
-            <!-- KPI Cards Grid -->
+            <!-- Executive KPI Cards Grid -->
             <div class="metrics-grid">
               <div class="metric-card">
                 <span class="metric-label">Total Requests</span>
-                <span class="metric-val" id="stat-total-requests">—</span>
+                <span class="metric-val" id="stat-total-requests">0</span>
                 <span class="metric-sub" id="stat-success-rate">Success: —</span>
               </div>
               <div class="metric-card highlight-savings">
-                <span class="metric-label">Estimated Cost Reduction</span>
-                <span class="metric-val text-green" id="stat-savings-usd">—</span>
-                <span class="metric-sub text-green" id="stat-savings-pct">— savings vs baseline</span>
+                <span class="metric-label">Cumulative Cost Savings</span>
+                <span class="metric-val text-green" id="stat-savings-usd">$0.000000</span>
+                <span class="metric-sub text-green" id="stat-savings-pct">0.0% savings vs Tier 6 baseline</span>
               </div>
               <div class="metric-card">
-                <span class="metric-label">Avg Total Latency</span>
-                <span class="metric-val" id="stat-avg-latency">—</span>
+                <span class="metric-label">Average Total Latency</span>
+                <span class="metric-val" id="stat-avg-latency">0 ms</span>
                 <span class="metric-sub" id="stat-analyzer-latency">Analyzer + Generation</span>
               </div>
               <div class="metric-card">
-                <span class="metric-label">Total Real Cost</span>
-                <span class="metric-val" id="stat-total-cost">—</span>
-                <span class="metric-sub" id="stat-baseline-cost">Baseline: —</span>
+                <span class="metric-label">Total Incurred Cost</span>
+                <span class="metric-val" id="stat-total-cost">$0.000000</span>
+                <span class="metric-sub" id="stat-baseline-cost">Tier 6 Baseline: $0.000000</span>
               </div>
               <div class="metric-card">
-                <span class="metric-label">Tokens Processed</span>
-                <span class="metric-val" id="stat-total-tokens">—</span>
-                <span class="metric-sub">Real provider token counts</span>
+                <span class="metric-label">Tokens Metered</span>
+                <span class="metric-val" id="stat-total-tokens">0</span>
+                <span class="metric-sub">Exact billing token count</span>
               </div>
               <div class="metric-card">
-                <span class="metric-label">Resilient Fallbacks</span>
+                <span class="metric-label">Adaptive Escalations &amp; Fallbacks</span>
                 <span class="metric-val" id="stat-fallbacks">0</span>
-                <span class="metric-sub">Auto-recovered failovers</span>
+                <span class="metric-sub" id="stat-escalations-sub">0 escalations · 0 failovers</span>
               </div>
             </div>
 
-            <!-- Distribution Charts Grid -->
+            <!-- Distribution Visualizers Grid -->
             <div class="dashboard-panels-grid">
               <div class="panel-card">
-                <h3>Provider & Model Distribution</h3>
-                <div id="chart-model-dist" class="bar-chart-container"></div>
+                <h3>6-Tier Architecture Distribution</h3>
+                <div id="chart-tier-dist" class="bar-chart-container"></div>
               </div>
               <div class="panel-card">
-                <h3>Routing Tier Share</h3>
-                <div id="chart-tier-dist" class="bar-chart-container"></div>
+                <h3>Provider &amp; Model Share</h3>
+                <div id="chart-model-dist" class="bar-chart-container"></div>
               </div>
               <div class="panel-card">
                 <h3>Task Type Classification</h3>
@@ -326,12 +600,12 @@
               </div>
             </div>
 
-            <!-- Live Request Stream Table -->
+            <!-- Live Transaction History Table -->
             <div class="panel-card table-panel">
               <div class="table-header">
                 <div class="table-title-group">
-                  <h3>Live Request Stream</h3>
-                  <span class="table-hint">Click any row to inspect complete routing scoreboard & tokens</span>
+                  <h3>Transaction Audit Trail</h3>
+                  <span class="table-hint">Live records from SQLite database. Click any row to inspect complete routing scoreboard &amp; tokens.</span>
                 </div>
               </div>
               <div class="table-responsive">
@@ -342,15 +616,15 @@
                       <th>Query</th>
                       <th>Task Type</th>
                       <th>Complexity</th>
-                      <th>Served Model</th>
+                      <th>Served Model &amp; Tier</th>
                       <th>Latency</th>
-                      <th>Cost</th>
+                      <th>Cost (USD)</th>
                       <th>Fallback</th>
                       <th>Status</th>
                     </tr>
                   </thead>
                   <tbody id="history-tbody">
-                    <tr><td colspan="9" class="empty-state">Loading telemetry records...</td></tr>
+                    <tr><td colspan="9" class="empty-state">Loading transaction audit trail...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -359,14 +633,14 @@
         </section>
 
         <!-- ------------------------------------------------------------ -->
-        <!-- VIEW 3: RESEARCH BENCHMARK LAB                               -->
+        <!-- VIEW 4: RESEARCH BENCHMARK LAB                               -->
         <!-- ------------------------------------------------------------ -->
         <section class="view-panel" id="view-benchmark">
           <div class="benchmark-container">
             <div class="view-header">
               <div class="view-title-group">
-                <h2>Research Objective & Baseline Comparison</h2>
-                <p class="subtitle">Empirical evaluation comparing Baseline 1 (Always Powerful), Baseline 2 (Static Routing), and our Context-Aware Smart Switching Router.</p>
+                <h2>Research Benchmark Lab</h2>
+                <p class="subtitle">Empirical evaluation comparing Baseline 1 (Uniform Tier 6 Gemini 3.8 Flash), Baseline 2 (Static Routing), and our Context-Aware Smart LLM Switcher.</p>
               </div>
               <button id="run-benchmark-btn" class="btn-primary">
                 <span>▶</span> Run Multi-Domain Benchmark
@@ -375,18 +649,18 @@
 
             <!-- Benchmark KPI Summary Cards -->
             <div class="benchmark-summary-grid" id="benchmark-summary-cards" style="display:none;">
-              <div class="summary-card text-center highlight">
+              <div class="summary-card highlight">
                 <span class="card-title">Overall Cost Reduction</span>
                 <span class="big-metric text-green" id="bm-overall-savings">0%</span>
                 <span class="card-desc" id="bm-saved-dollars">$0.00 saved vs Baseline 1</span>
               </div>
-              <div class="summary-card text-center">
+              <div class="summary-card">
                 <span class="card-title">Latency Speedup</span>
                 <span class="big-metric text-blue" id="bm-overall-speedup">0%</span>
-                <span class="card-desc">Faster overall turnaround</span>
+                <span class="card-desc">Turnaround acceleration</span>
               </div>
-              <div class="summary-card text-center">
-                <span class="card-title">Smart Router Total Cost</span>
+              <div class="summary-card">
+                <span class="card-title">Smart Router Cost</span>
                 <span class="big-metric" id="bm-smart-cost">$0.00</span>
                 <span class="card-desc" id="bm-baseline-cost">vs Baseline 1: $0.00</span>
               </div>
@@ -404,12 +678,12 @@
                 <table class="data-table benchmark-table" id="benchmark-table">
                   <thead>
                     <tr>
-                      <th>Query & Category</th>
-                      <th>Baseline 1 (Always Powerful)</th>
+                      <th>Query &amp; Domain</th>
+                      <th>Baseline 1 (Uniform Tier 6)</th>
                       <th>Baseline 2 (Static Routing)</th>
-                      <th>Our Smart Switcher</th>
-                      <th>Cost Savings (Est.)</th>
-                      <th>Speedup (Est.)</th>
+                      <th>Smart LLM Switcher</th>
+                      <th>Cost Savings</th>
+                      <th>Speedup</th>
                     </tr>
                   </thead>
                   <tbody id="benchmark-tbody">
@@ -431,7 +705,7 @@
   </div>
 
   <!-- ============================================================ -->
-  <!-- 3. DYNAMIC SETTINGS & PROVIDER MODAL (R2)                     -->
+  <!-- 3. SETTINGS & PROVIDER CONFIGURATION MODAL                   -->
   <!-- ============================================================ -->
   <div class="modal hidden" id="settings-modal">
     <div class="modal-backdrop" id="settings-backdrop"></div>
@@ -440,8 +714,8 @@
       <!-- Modal Header -->
       <div class="modal-header">
         <div class="modal-title-group">
-          <h3><svg class="icon-sym" aria-hidden="true"><use href="#i-gear"/></svg> Provider Configuration & API Keys</h3>
-          <p class="modal-subtitle">Configure your API credentials, custom endpoints, and model tier overrides.</p>
+          <h3><svg class="icon-sym" aria-hidden="true"><use href="#i-gear"/></svg> Provider Settings &amp; API Keys</h3>
+          <p class="modal-subtitle">Configure provider API credentials and endpoints for the Gemini 3.1 Analyzer and the 6 Model Tiers.</p>
         </div>
         <button class="btn-close" id="close-settings-btn" aria-label="Close Settings">✕</button>
       </div>
@@ -451,12 +725,12 @@
         
         <!-- Provider Navigation Tabs -->
         <div class="settings-nav-tabs">
-          <button class="settings-tab active" data-tab="gemini">Google Gemini</button>
-          <button class="settings-tab" data-tab="groq">Groq LPU</button>
-          <button class="settings-tab" data-tab="openrouter">OpenRouter</button>
-          <button class="settings-tab" data-tab="openai">OpenAI</button>
-          <button class="settings-tab" data-tab="custom">Custom / Local Endpoint</button>
-          <button class="settings-tab" data-tab="tiers">Model Tier Overrides</button>
+          <button class="settings-tab active" data-tab="gemini">Google Gemini (T1, T3, T6, Analyzer)</button>
+          <button class="settings-tab" data-tab="groq">Groq LPU (T2, T4, T5)</button>
+          <button class="settings-tab" data-tab="tiers">6-Tier Mapping</button>
+          <button class="settings-tab" data-tab="openrouter">OpenRouter (Optional)</button>
+          <button class="settings-tab" data-tab="openai">OpenAI (Optional)</button>
+          <button class="settings-tab" data-tab="custom">Custom Endpoint</button>
         </div>
 
         <!-- Provider Tab Panels -->
@@ -465,7 +739,7 @@
           <!-- TAB 1: Google Gemini -->
           <div class="settings-panel active" id="tab-gemini">
             <div class="panel-desc">
-              <strong>Google Gemini</strong> powers the <em>Fast / Low-Cost Tier</em> for factual, general, and low-complexity tasks.
+              <strong>Google Gemini</strong> powers the <strong>Analyzer (Gemini 3.1 Flash-Lite)</strong>, <strong>Tier 1 (Gemini 3.5 Flash-Lite)</strong>, <strong>Tier 3 (Gemini 3.6 Flash)</strong>, and <strong>Tier 6 (Gemini 3.8 Flash)</strong>.
             </div>
             <div class="form-group">
               <label for="key-gemini">Gemini API Key</label>
@@ -475,9 +749,25 @@
               </div>
               <span class="field-hint">Leave blank to use the server-side GEMINI_API_KEY from .env</span>
             </div>
-            <div class="form-group">
-              <label for="model-gemini-fast">Fast Tier Model</label>
-              <input type="text" id="model-gemini-fast" placeholder="gemini-2.5-flash-lite" value="gemini-2.5-flash-lite" />
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="model-gemini-analyzer">Analyzer LLM</label>
+                <input type="text" id="model-gemini-analyzer" value="gemini-3.1-flash-lite" />
+              </div>
+              <div class="form-group">
+                <label for="model-gemini-tier1">Tier 1 Model</label>
+                <input type="text" id="model-gemini-tier1" value="gemini-3.5-flash-lite" />
+              </div>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="model-gemini-tier3">Tier 3 Model</label>
+                <input type="text" id="model-gemini-tier3" value="gemini-3.6-flash" />
+              </div>
+              <div class="form-group">
+                <label for="model-gemini-tier6">Tier 6 Model</label>
+                <input type="text" id="model-gemini-tier6" value="gemini-3.8-flash" />
+              </div>
             </div>
             <div class="test-connection-row">
               <button type="button" class="btn-test-conn" id="test-btn-gemini" data-provider="gemini">
@@ -490,7 +780,7 @@
           <!-- TAB 2: Groq LPU -->
           <div class="settings-panel" id="tab-groq">
             <div class="panel-desc">
-              <strong>Groq LPU</strong> delivers ultra-high token velocity for <em>Specialized Coding</em> and <em>Deep Reasoning</em>.
+              <strong>Groq LPU</strong> delivers ultra-high token velocity for <strong>Tier 2 (GPT-OSS 20B)</strong>, <strong>Tier 4 (Qwen3.8 27B Coding)</strong>, and <strong>Tier 5 (GPT-OSS 120B Reasoning)</strong>.
             </div>
             <div class="form-group">
               <label for="key-groq">Groq API Key</label>
@@ -500,14 +790,18 @@
               </div>
               <span class="field-hint">Leave blank to use server-side GROQ_API_KEY from .env</span>
             </div>
-            <div class="form-row-2">
+            <div class="form-row-3">
               <div class="form-group">
-                <label for="model-groq-coding">Coding Model</label>
-                <input type="text" id="model-groq-coding" placeholder="qwen/qwen3.6-27b" value="qwen/qwen3.6-27b" />
+                <label for="model-groq-tier2">Tier 2 Model</label>
+                <input type="text" id="model-groq-tier2" value="openai/gpt-oss-20b" />
               </div>
               <div class="form-group">
-                <label for="model-groq-reasoning">Reasoning Model</label>
-                <input type="text" id="model-groq-reasoning" placeholder="openai/gpt-oss-120b" value="openai/gpt-oss-120b" />
+                <label for="model-groq-tier4">Tier 4 Model</label>
+                <input type="text" id="model-groq-tier4" value="qwen/qwen3.8-27b" />
+              </div>
+              <div class="form-group">
+                <label for="model-groq-tier5">Tier 5 Model</label>
+                <input type="text" id="model-groq-tier5" value="openai/gpt-oss-120b" />
               </div>
             </div>
             <div class="test-connection-row">
@@ -518,27 +812,49 @@
             </div>
           </div>
 
-          <!-- TAB 3: OpenRouter -->
+          <!-- TAB 3: 6-Tier Architecture Overview -->
+          <div class="settings-panel" id="tab-tiers">
+            <div class="panel-desc">
+              Active configuration for the <strong>6 Model Response Tiers</strong> in the current runtime environment.
+            </div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Tier 1: Lightweight / Fast</label>
+                <input type="text" id="override-tier1" value="gemini-3.5-flash-lite" readonly />
+              </div>
+              <div class="form-group">
+                <label>Tier 2: Fast General Purpose</label>
+                <input type="text" id="override-tier2" value="openai/gpt-oss-20b" readonly />
+              </div>
+              <div class="form-group">
+                <label>Tier 3: Balanced</label>
+                <input type="text" id="override-tier3" value="gemini-3.6-flash" readonly />
+              </div>
+              <div class="form-group">
+                <label>Tier 4: Coding Specialist</label>
+                <input type="text" id="override-tier4" value="qwen/qwen3.8-27b" readonly />
+              </div>
+              <div class="form-group">
+                <label>Tier 5: Advanced Reasoning</label>
+                <input type="text" id="override-tier5" value="openai/gpt-oss-120b" readonly />
+              </div>
+              <div class="form-group">
+                <label>Tier 6: High Capability (Gemini)</label>
+                <input type="text" id="override-tier6" value="gemini-3.8-flash (fallback: gemini-3.5-flash)" readonly />
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: OpenRouter -->
           <div class="settings-panel" id="tab-openrouter">
             <div class="panel-desc">
-              <strong>OpenRouter</strong> acts as the unified gateway hosting the <em>Analyzer LLM</em> and the powerful baseline model.
+              <strong>OpenRouter Gateway</strong> for backup model routing or alternative base models.
             </div>
             <div class="form-group">
               <label for="key-openrouter">OpenRouter API Key</label>
               <div class="input-password-wrap">
                 <input type="password" id="key-openrouter" placeholder="sk-or-v1-..." autocomplete="off" />
                 <button type="button" class="btn-toggle-mask" data-target="key-openrouter" title="Show/Hide Key"><svg class='icon-sym' aria-hidden='true'><use href='#i-eye'/></svg></button>
-              </div>
-              <span class="field-hint">Leave blank to use server-side OPENROUTER_API_KEY from .env</span>
-            </div>
-            <div class="form-row-2">
-              <div class="form-group">
-                <label for="model-openrouter-analyzer">Base / Analyzer Model</label>
-                <input type="text" id="model-openrouter-analyzer" placeholder="meta-llama/llama-3.2-3b-instruct" value="meta-llama/llama-3.2-3b-instruct" />
-              </div>
-              <div class="form-group">
-                <label for="model-openrouter-powerful">Powerful Baseline Model</label>
-                <input type="text" id="model-openrouter-powerful" placeholder="meta-llama/llama-3.1-70b-instruct" value="meta-llama/llama-3.1-70b-instruct" />
               </div>
             </div>
             <div class="test-connection-row">
@@ -549,10 +865,10 @@
             </div>
           </div>
 
-          <!-- TAB 4: OpenAI -->
+          <!-- TAB 5: OpenAI -->
           <div class="settings-panel" id="tab-openai">
             <div class="panel-desc">
-              <strong>OpenAI Direct</strong> integration for official GPT-4o, GPT-4o-mini, and o3-mini models.
+              <strong>OpenAI Direct</strong> gateway for GPT-4o, GPT-4o-mini, and o-series models.
             </div>
             <div class="form-group">
               <label for="key-openai">OpenAI API Key</label>
@@ -560,11 +876,6 @@
                 <input type="password" id="key-openai" placeholder="sk-proj-..." autocomplete="off" />
                 <button type="button" class="btn-toggle-mask" data-target="key-openai" title="Show/Hide Key"><svg class='icon-sym' aria-hidden='true'><use href='#i-eye'/></svg></button>
               </div>
-              <span class="field-hint">Leave blank to use server-side OPENAI_API_KEY from .env</span>
-            </div>
-            <div class="form-group">
-              <label for="model-openai">OpenAI Model</label>
-              <input type="text" id="model-openai" placeholder="gpt-4o-mini" value="gpt-4o-mini" />
             </div>
             <div class="test-connection-row">
               <button type="button" class="btn-test-conn" id="test-btn-openai" data-provider="openai">
@@ -574,7 +885,7 @@
             </div>
           </div>
 
-          <!-- TAB 5: Custom Endpoint -->
+          <!-- TAB 6: Custom Endpoint -->
           <div class="settings-panel" id="tab-custom">
             <div class="panel-desc">
               Connect any <strong>OpenAI-compatible endpoint</strong> (Ollama, vLLM, LMStudio, LocalAI, Azure OpenAI).
@@ -582,11 +893,10 @@
             <div class="form-group">
               <label for="url-custom">Custom Base URL</label>
               <input type="text" id="url-custom" placeholder="http://localhost:11434/v1" />
-              <span class="field-hint">e.g., http://localhost:11434/v1 for Ollama, http://localhost:8000/v1 for vLLM</span>
             </div>
             <div class="form-row-2">
               <div class="form-group">
-                <label for="key-custom">Custom API Key (Optional)</label>
+                <label for="key-custom">Custom API Key</label>
                 <div class="input-password-wrap">
                   <input type="password" id="key-custom" placeholder="sk-custom..." autocomplete="off" />
                   <button type="button" class="btn-toggle-mask" data-target="key-custom" title="Show/Hide Key"><svg class='icon-sym' aria-hidden='true'><use href='#i-eye'/></svg></button>
@@ -605,42 +915,13 @@
             </div>
           </div>
 
-          <!-- TAB 6: Model Tier Overrides -->
-          <div class="settings-panel" id="tab-tiers">
-            <div class="panel-desc">
-              Override dynamic model targets across intelligence tiers for fine-grained routing customization.
-            </div>
-            <div class="form-grid-2">
-              <div class="form-group">
-                <label for="override-analyzer">Base / Analyzer Model</label>
-                <input type="text" id="override-analyzer" placeholder="meta-llama/llama-3.2-3b-instruct" />
-              </div>
-              <div class="form-group">
-                <label for="override-fast">Fast Tier Model</label>
-                <input type="text" id="override-fast" placeholder="gemini-2.5-flash-lite" />
-              </div>
-              <div class="form-group">
-                <label for="override-coding">Coding Tier Model</label>
-                <input type="text" id="override-coding" placeholder="qwen/qwen3.6-27b" />
-              </div>
-              <div class="form-group">
-                <label for="override-reasoning">Reasoning Tier Model</label>
-                <input type="text" id="override-reasoning" placeholder="openai/gpt-oss-120b" />
-              </div>
-              <div class="form-group" style="grid-column:1/-1;">
-                <label for="override-powerful">Powerful Baseline Model</label>
-                <input type="text" id="override-powerful" placeholder="meta-llama/llama-3.1-70b-instruct" />
-              </div>
-            </div>
-          </div>
-
         </div>
 
         <!-- Security Guarantee Notice -->
         <div class="settings-security-box">
           <span class="lock-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-lock"/></svg></span>
           <div class="security-text">
-            <strong>Client-Side Storage Notice:</strong> API keys are stored only in your browser's <code>localStorage</code>. When WebCrypto is available, the app encrypts stored settings at rest before saving. Keys are sent only on request headers (for example, <code>X-Gemini-Key</code>, <code>X-Groq-Key</code>, <code>X-OpenRouter-Key</code>) and are protected in transit by your deployment's HTTPS/TLS transport. If a field is left blank, server-side environment variables are used.
+            <strong>Client-Side Storage:</strong> API keys are encrypted at rest with AES-GCM (WebCrypto) in your browser's <code>localStorage</code>. Keys are passed via secure HTTP request headers and never stored insecurely.
           </div>
         </div>
 
@@ -653,7 +934,7 @@
           <button type="button" class="btn-secondary" id="reset-settings-btn">Reset Defaults</button>
         </div>
         <div class="footer-right-actions">
-          <button type="button" class="btn-primary" id="save-settings-btn">Save & Apply Settings</button>
+          <button type="button" class="btn-primary" id="save-settings-btn">Save &amp; Apply</button>
         </div>
       </div>
 

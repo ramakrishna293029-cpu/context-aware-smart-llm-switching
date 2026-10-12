@@ -1,13 +1,12 @@
-"""Smart Routing Engine: Multi-factor scoring, model resolution, and fallback ordering.
+"""Smart Routing Engine: Multi-factor capability scoring, model resolution, and fallback ordering.
 
-Scores candidate models along:
-- Quality suitability
-- Complexity compatibility
-- Reasoning requirement
-- Coding requirement
-- Cost efficiency
-- Latency efficiency
-- Historical reliability and provider/tier affinity
+Routes requests across the 6 Response Model Tiers:
+  - Tier 1: Gemini 3.5 Flash-Lite (Lightweight / Fast)
+  - Tier 2: Groq GPT-OSS 20B (Fast General Purpose)
+  - Tier 3: Gemini 3.6 Flash (Balanced)
+  - Tier 4: Groq Qwen3.8 27B (Coding Specialist)
+  - Tier 5: Groq GPT-OSS 120B (Advanced Reasoning)
+  - Tier 6: Gemini 3.8 Flash (High-Capability Gemini)
 """
 
 from dataclasses import dataclass
@@ -29,27 +28,27 @@ STRATEGIES: Dict[str, Dict[str, float]] = {
         "latency_efficiency": 1.0,
     },
     "lowest_cost": {
-        "quality_suitability": 0.6,
-        "complexity_compatibility": 0.8,
-        "reasoning_compatibility": 0.7,
+        "quality_suitability": 0.5,
+        "complexity_compatibility": 0.7,
+        "reasoning_compatibility": 0.6,
         "coding_compatibility": 0.8,
         "cost_efficiency": 3.0,
         "latency_efficiency": 1.5,
     },
     "fastest": {
-        "quality_suitability": 0.7,
-        "complexity_compatibility": 0.9,
-        "reasoning_compatibility": 0.8,
+        "quality_suitability": 0.6,
+        "complexity_compatibility": 0.8,
+        "reasoning_compatibility": 0.7,
         "coding_compatibility": 0.8,
         "cost_efficiency": 1.0,
         "latency_efficiency": 3.0,
     },
     "highest_quality": {
         "quality_suitability": 2.5,
-        "complexity_compatibility": 1.2,
+        "complexity_compatibility": 1.5,
         "reasoning_compatibility": 2.0,
         "coding_compatibility": 2.0,
-        "cost_efficiency": 0.3,
+        "cost_efficiency": 0.2,
         "latency_efficiency": 0.5,
     },
 }
@@ -89,7 +88,6 @@ class RoutingResult:
     def candidates(self) -> List[dict]:
         """Returns candidate list formatted as raw dictionary rows."""
         rows = []
-        # Stated token assumption for candidate cost previews: 1K in / 0.5K out.
         PREVIEW_IN_TOKENS, PREVIEW_OUT_TOKENS = 1000, 500
         for s in sorted(self.scores.values(), key=lambda s: -s.total):
             expected_cost = (
@@ -128,7 +126,7 @@ class RoutingResult:
 
 
 class SmartRouter:
-    """Multi-factor scoring and model resolution engine."""
+    """Multi-factor scoring and model resolution engine across 6 model tiers."""
 
     def __init__(self, weights: Optional[Dict[str, float]] = None):
         w = weights or getattr(settings, "routing_weights", {})
@@ -157,10 +155,7 @@ class SmartRouter:
         latency_profile: Optional[Dict[str, float]] = None,
         feedback_modifiers: Optional[Dict[str, float]] = None,
     ) -> RoutingResult:
-        """Evaluates all candidate execution models against analyzer decision and strategy.
-
-        `latency_profile` maps endpoint_model -> EWMA of measured latency (ms).
-        `feedback_modifiers` maps model_id -> user approval multiplier (0.85-1.15)."""
+        """Evaluates all candidate execution models against analyzer decision and strategy."""
         reg = registry or default_registry
         if available is not None:
             candidate_pool = [m for m in available if m.tier != "analyzer" and m.available]
@@ -206,16 +201,26 @@ class SmartRouter:
             # 5. Cost efficiency
             cost_fit = (min_price / m.price_per_1k) if m.price_per_1k > 0 else 1.0
 
-            # 6. Latency efficiency (measured EWMA when available, static prior otherwise)
+            # 6. Latency efficiency
             eff_lat = effective_latency(m)
             lat_fit = (min_latency / eff_lat) if eff_lat > 0 else 1.0
 
-            # Small affinity only — capability + strategy scores pick the primary.
+            # Alignment bonus for exact required capability tier
+            wanted_tier = (decision.required_capability or decision.target_tier or "").lower()
+            tier_match = (
+                m.tier.lower() == wanted_tier
+                or (wanted_tier == "tier_1" and "fast" in m.tier.lower())
+                or (wanted_tier == "tier_4" and "coding" in m.tier.lower())
+                or (wanted_tier == "tier_5" and "reasoning" in m.tier.lower())
+                or (wanted_tier == "tier_6" and "powerful" in m.tier.lower())
+                or (wanted_tier == "tier_3" and "balanced" in m.tier.lower())
+            )
+            tier_bonus = 0.35 if tier_match else 0.0
+
             wanted_provider = (decision.target_provider or "").lower()
             provider_bonus = 0.05 if wanted_provider and m.provider.lower() == wanted_provider else 0.0
-            tier_bonus = 0.12 if decision.target_tier.lower() in m.tier.lower() else 0.0
 
-            # Dynamic feedback modifier (user rating reward/penalty)
+            # Dynamic feedback modifier
             fb_mod = (feedback_modifiers or {}).get(m.endpoint_model) or (feedback_modifiers or {}).get(m.model_id) or 1.0
             feedback_bonus = round((fb_mod - 1.0) * 0.3, 3)
 
@@ -226,8 +231,8 @@ class SmartRouter:
                 + weights["coding_compatibility"] * cd_fit
                 + weights["cost_efficiency"] * cost_fit
                 + weights["latency_efficiency"] * lat_fit
-                + provider_bonus
                 + tier_bonus
+                + provider_bonus
                 + feedback_bonus
             )
 
@@ -242,21 +247,13 @@ class SmartRouter:
                 total=round(total, 3),
             )
 
-        # Primary = highest score among the strategy-filtered, capability-aware pool.
+        # Primary = highest score candidate
         target_model = max(scores.values(), key=lambda s: s.total).model
 
-        # Fallback: same capability / next provider first, then remaining scores. Cap length.
-        same_cap: List[ModelSpec] = []
-        rest: List[ModelSpec] = []
-        for s in sorted(scores.values(), key=lambda s: -s.total):
-            if s.model.model_id == target_model.model_id:
-                continue
-            if self._same_capability(s.model, decision):
-                same_cap.append(s.model)
-            else:
-                rest.append(s.model)
-        fallback_chain = [target_model] + same_cap + rest
-        fallback_chain = fallback_chain[:4]
+        # Fallback chain: order remaining models by suitability
+        remaining = [s.model for s in sorted(scores.values(), key=lambda s: -s.total) if s.model.model_id != target_model.model_id]
+        fallback_chain = [target_model] + remaining
+        fallback_chain = fallback_chain[:6]
 
         return RoutingResult(
             primary_model=target_model,
@@ -267,43 +264,33 @@ class SmartRouter:
         )
 
     @staticmethod
-    def _same_capability(model: ModelSpec, decision: AnalyzerDecision) -> bool:
-        if decision.coding_required:
-            return model.coding >= 0.55 or "coding" in model.tier.lower()
-        if decision.reasoning_required:
-            return model.reasoning >= 0.55 or any(
-                t in model.tier.lower() for t in ("reasoning", "powerful")
-            )
-        return "fast" in model.tier.lower() or model.tier.lower() in ("custom", "balanced")
-
-    @staticmethod
     def _apply_strategy_pool(
         pool: List[ModelSpec],
         decision: AnalyzerDecision,
         strategy: str,
     ) -> List[ModelSpec]:
-        """Strategy must change the candidate *set*, not only score weights."""
+        """Strategy modifies candidate pool selection."""
         key = (strategy or "balanced").lower()
         if key == "lowest_cost":
             if decision.reasoning_required and decision.complexity_score >= 0.85:
                 return pool
-            filtered = [m for m in pool if m.tier not in ("powerful",)]
+            filtered = [m for m in pool if m.tier not in ("tier_6", "powerful")]
             if decision.coding_required:
                 codingish = [
                     m for m in filtered
-                    if m.tier in ("coding", "fast", "fast-backup", "custom") or m.coding >= 0.6
+                    if m.tier in ("tier_4", "tier_1", "tier_2", "coding") or m.coding >= 0.6
                 ]
                 filtered = codingish or filtered
             return filtered or pool
         if key == "fastest":
             if decision.reasoning_required:
                 return pool
-            filtered = [m for m in pool if m.tier not in ("reasoning", "powerful")]
+            filtered = [m for m in pool if m.tier not in ("tier_5", "tier_6", "reasoning", "powerful")]
             return filtered or pool
         if key == "highest_quality":
             strong = [
                 m for m in pool
-                if m.quality >= 0.7 or m.tier in ("reasoning", "powerful", "coding")
+                if m.quality >= 0.8 or m.tier in ("tier_4", "tier_5", "tier_6", "coding", "reasoning", "powerful")
             ]
             return strong or pool
         return pool

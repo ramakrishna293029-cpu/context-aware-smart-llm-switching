@@ -44,7 +44,80 @@ class Settings:
         default_factory=lambda: os.getenv("MOCK_MODELS_ENABLED", "false").strip().lower()
     )
 
-    # OpenRouter (Unified Gateway - Analyzer + Fallbacks)
+    # Provider Base URLs
+    gemini_base_url: str = field(
+        default_factory=lambda: os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta").strip().rstrip("/")
+    )
+    groq_base_url: str = field(
+        default_factory=lambda: os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").strip().rstrip("/")
+    )
+
+    # --- Analyzer LLM (Gemini 3.1 Flash-Lite) ---
+    gemini_analyzer_api_key: str = field(
+        default_factory=lambda: os.getenv("GEMINI_ANALYZER_API_KEY", "").strip()
+    )
+    gemini_analyzer_model: str = field(
+        default_factory=lambda: os.getenv("GEMINI_ANALYZER_MODEL", "gemini-3.1-flash-lite").strip()
+    )
+
+    # --- Tier 1: Lightweight / Fast (Gemini 3.5 Flash-Lite) ---
+    gemini_tier1_api_key: str = field(
+        default_factory=lambda: os.getenv("GEMINI_TIER1_API_KEY", "").strip()
+    )
+    gemini_tier1_model: str = field(
+        default_factory=lambda: os.getenv("GEMINI_TIER1_MODEL", "gemini-3.5-flash-lite").strip()
+    )
+
+    # --- Tier 2: Fast General Purpose (Groq GPT-OSS 20B) ---
+    groq_tier2_api_key: str = field(
+        default_factory=lambda: os.getenv("GROQ_TIER2_API_KEY", "").strip()
+    )
+    groq_tier2_model: str = field(
+        default_factory=lambda: os.getenv("GROQ_TIER2_MODEL", "openai/gpt-oss-20b").strip()
+    )
+
+    # --- Tier 3: Balanced (Gemini 3.6 Flash) ---
+    gemini_tier3_api_key: str = field(
+        default_factory=lambda: os.getenv("GEMINI_TIER3_API_KEY", "").strip()
+    )
+    gemini_tier3_model: str = field(
+        default_factory=lambda: os.getenv("GEMINI_TIER3_MODEL", "gemini-3.6-flash").strip()
+    )
+
+    # --- Tier 4: Coding Specialist (Groq Qwen3.8 27B) ---
+    groq_tier4_api_key: str = field(
+        default_factory=lambda: os.getenv("GROQ_TIER4_API_KEY", "").strip()
+    )
+    groq_tier4_model: str = field(
+        default_factory=lambda: os.getenv("GROQ_TIER4_MODEL", "qwen/qwen3.8-27b").strip()
+    )
+
+    # --- Tier 5: Advanced Reasoning (Groq GPT-OSS 120B) ---
+    groq_tier5_api_key: str = field(
+        default_factory=lambda: os.getenv("GROQ_TIER5_API_KEY", "").strip()
+    )
+    groq_tier5_model: str = field(
+        default_factory=lambda: os.getenv("GROQ_TIER5_MODEL", "openai/gpt-oss-120b").strip()
+    )
+
+    # --- Tier 6: High-Capability Gemini (Gemini 3.8 Flash) ---
+    gemini_tier6_api_key: str = field(
+        default_factory=lambda: os.getenv("GEMINI_TIER6_API_KEY", "").strip()
+    )
+    gemini_tier6_model: str = field(
+        default_factory=lambda: os.getenv("GEMINI_TIER6_MODEL", "gemini-3.8-flash").strip()
+    )
+    gemini_tier6_fallback_model: str = field(
+        default_factory=lambda: os.getenv("GEMINI_TIER6_FALLBACK_MODEL", "gemini-3.5-flash").strip()
+    )
+
+    # --- Legacy & Compatibility Keys ---
+    gemini_api_key: str = field(
+        default_factory=lambda: os.getenv("GEMINI_API_KEY", os.getenv("GEMINI_TIER1_API_KEY", "")).strip()
+    )
+    groq_api_key: str = field(
+        default_factory=lambda: os.getenv("GROQ_API_KEY", os.getenv("GROQ_TIER2_API_KEY", "")).strip()
+    )
     openrouter_api_key: str = field(
         default_factory=lambda: os.getenv("OPENROUTER_API_KEY", "").strip()
     )
@@ -54,33 +127,6 @@ class Settings:
     openrouter_analyzer_model: str = field(
         default_factory=lambda: os.getenv("OPENROUTER_ANALYZER_MODEL", "meta-llama/llama-3.2-3b-instruct").strip()
     )
-
-    # Google Gemini (Fast / Low-Cost Model)
-    gemini_api_key: str = field(
-        default_factory=lambda: os.getenv("GEMINI_API_KEY", "").strip()
-    )
-    gemini_base_url: str = field(
-        default_factory=lambda: os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta").strip().rstrip("/")
-    )
-    gemini_fast_model: str = field(
-        default_factory=lambda: os.getenv("GEMINI_FAST_MODEL", "gemini-2.5-flash-lite").strip()
-    )
-
-    # Groq (Coding + Reasoning Models)
-    groq_api_key: str = field(
-        default_factory=lambda: os.getenv("GROQ_API_KEY", "").strip()
-    )
-    groq_base_url: str = field(
-        default_factory=lambda: os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").strip().rstrip("/")
-    )
-    groq_coding_model: str = field(
-        default_factory=lambda: os.getenv("GROQ_CODING_MODEL", "qwen/qwen3.8-27b").strip()
-    )
-    groq_reasoning_model: str = field(
-        default_factory=lambda: os.getenv("GROQ_REASONING_MODEL", "openai/gpt-oss-120b").strip()
-    )
-
-    # Direct OpenAI Provider
     openai_api_key: str = field(
         default_factory=lambda: os.getenv("OPENAI_API_KEY", "").strip()
     )
@@ -90,8 +136,6 @@ class Settings:
     openai_model: str = field(
         default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
     )
-
-    # Custom OpenAI-Compatible Endpoints (Ollama, LocalAI, vLLM, Azure OpenAI)
     custom_base_url: str = field(
         default_factory=lambda: os.getenv("CUSTOM_BASE_URL", "").strip().rstrip("/")
     )
@@ -102,7 +146,19 @@ class Settings:
         default_factory=lambda: os.getenv("CUSTOM_MODEL", "default").strip()
     )
 
-    # OpenRouter fallback models (backup tiers)
+    # Legacy model aliases
+    analyzer_model: str = field(
+        default_factory=lambda: os.getenv("GEMINI_ANALYZER_MODEL", "gemini-3.1-flash-lite").strip()
+    )
+    gemini_fast_model: str = field(
+        default_factory=lambda: os.getenv("GEMINI_TIER1_MODEL", "gemini-3.5-flash-lite").strip()
+    )
+    groq_coding_model: str = field(
+        default_factory=lambda: os.getenv("GROQ_TIER4_MODEL", "qwen/qwen3.8-27b").strip()
+    )
+    groq_reasoning_model: str = field(
+        default_factory=lambda: os.getenv("GROQ_TIER5_MODEL", "openai/gpt-oss-120b").strip()
+    )
     openrouter_fast_model: str = field(
         default_factory=lambda: os.getenv("OPENROUTER_FAST_MODEL", "meta-llama/llama-3.2-3b-instruct").strip()
     )
@@ -126,18 +182,18 @@ class Settings:
         ).strip()
     )
 
-    # --- Runtime ----------------------------------------------------
+    # --- Runtime & Limits ---
     default_strategy: str = field(
         default_factory=lambda: os.getenv("DEFAULT_STRATEGY", "balanced").strip().lower()
     )
     max_cost_per_request: float = field(
-        default_factory=lambda: _env_float("MAX_COST_PER_REQUEST", 0.10)
+        default_factory=lambda: _env_float("MAX_COST_PER_REQUEST", 0.50)
     )
     daily_budget_usd: float = field(
-        default_factory=lambda: _env_float("DAILY_BUDGET_USD", 10.00)
+        default_factory=lambda: _env_float("DAILY_BUDGET_USD", 50.00)
     )
     monthly_budget_usd: float = field(
-        default_factory=lambda: _env_float("MONTHLY_BUDGET_USD", 100.00)
+        default_factory=lambda: _env_float("MONTHLY_BUDGET_USD", 500.00)
     )
     max_context_tokens: int = field(
         default_factory=lambda: max(256, _env_int("MAX_CONTEXT_TOKENS", 131072))
@@ -153,11 +209,6 @@ class Settings:
     )
     max_history_messages: int = field(
         default_factory=lambda: max(1, _env_int("MAX_HISTORY_MESSAGES", 10))
-    )
-
-    # Analyzer model settings
-    analyzer_model: str = field(
-        default_factory=lambda: os.getenv("OPENROUTER_ANALYZER_MODEL", "meta-llama/llama-3.2-3b-instruct").strip()
     )
     analyzer_max_output_tokens: int = field(
         default_factory=lambda: max(128, _env_int("ANALYZER_MAX_OUTPUT_TOKENS", 1024))
@@ -186,16 +237,31 @@ class Settings:
     })
 
     @property
-    def has_openrouter(self) -> bool:
-        return bool(self.openrouter_api_key)
+    def has_analyzer(self) -> bool:
+        return bool(self.gemini_analyzer_api_key or self.gemini_api_key)
 
     @property
     def has_gemini(self) -> bool:
-        return bool(self.gemini_api_key)
+        return bool(
+            self.gemini_analyzer_api_key
+            or self.gemini_tier1_api_key
+            or self.gemini_tier3_api_key
+            or self.gemini_tier6_api_key
+            or self.gemini_api_key
+        )
 
     @property
     def has_groq(self) -> bool:
-        return bool(self.groq_api_key)
+        return bool(
+            self.groq_tier2_api_key
+            or self.groq_tier4_api_key
+            or self.groq_tier5_api_key
+            or self.groq_api_key
+        )
+
+    @property
+    def has_openrouter(self) -> bool:
+        return bool(self.openrouter_api_key)
 
     @property
     def has_openai(self) -> bool:
@@ -208,9 +274,9 @@ class Settings:
     @property
     def has_real_providers(self) -> bool:
         return (
-            self.has_openrouter
-            or self.has_gemini
+            self.has_gemini
             or self.has_groq
+            or self.has_openrouter
             or self.has_openai
             or self.has_custom
         )

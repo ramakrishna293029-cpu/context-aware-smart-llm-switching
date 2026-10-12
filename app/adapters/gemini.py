@@ -2,6 +2,7 @@
 
 Uses official REST API: https://generativelanguage.googleapis.com/v1beta
 Supports unary generateContent and streaming streamGenerateContent with metadata.
+Includes resilient fallback for Tier 6 (gemini-3.8-flash -> gemini-3.5-flash).
 """
 
 import json
@@ -35,6 +36,8 @@ _STATUS_ERRORS = {
     404: ModelUnavailableError,
     408: ProviderTimeoutError,
     429: RateLimitError,
+    500: ProviderUnavailableError,
+    503: ProviderUnavailableError,
 }
 
 
@@ -51,6 +54,7 @@ def _to_gemini_payload(
     messages: List[ChatMessage],
     max_tokens: Optional[int] = None,
     temperature: float = 0.7,
+    json_mode: bool = False,
 ) -> tuple[dict, str]:
     """Convert ChatMessage list to Gemini contents payload and systemInstruction."""
     gemini_contents: List[Dict[str, Any]] = []
@@ -71,12 +75,16 @@ def _to_gemini_payload(
     if not gemini_contents:
         gemini_contents = [{"role": "user", "parts": [{"text": "Hello"}]}]
 
+    gen_config: Dict[str, Any] = {
+        "maxOutputTokens": max_tokens or settings.default_max_output_tokens,
+        "temperature": 0.2 if json_mode else temperature,
+    }
+    if json_mode:
+        gen_config["responseMimeType"] = "application/json"
+
     payload: Dict[str, Any] = {
         "contents": gemini_contents,
-        "generationConfig": {
-            "maxOutputTokens": max_tokens or settings.default_max_output_tokens,
-            "temperature": temperature,
-        },
+        "generationConfig": gen_config,
     }
     if system_instruction:
         payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
@@ -113,10 +121,11 @@ class GeminiAdapter(LLMAdapter):
         model: "ModelSpec",
         endpoint_model: str,
         messages: List[ChatMessage],
+        json_mode: bool = False,
         **kwargs: Any,
     ) -> LLMResult:
         max_tokens = kwargs.get("max_tokens")
-        payload, _ = _to_gemini_payload(messages, max_tokens=max_tokens)
+        payload, _ = _to_gemini_payload(messages, max_tokens=max_tokens, json_mode=json_mode)
         base = (model.base_url or "").rstrip("/") or "https://generativelanguage.googleapis.com/v1beta"
         url = f"{base}/models/{endpoint_model}:generateContent"
         headers = _build_headers(model)
@@ -180,25 +189,30 @@ class GeminiAdapter(LLMAdapter):
         **kwargs: Any,
     ) -> LLMResult:
         try:
-            return await self._execute_generate(model, model.endpoint_model, messages, **kwargs)
-        except (ProviderUnavailableError, ModelUnavailableError):
-            # If primary model is unavailable (e.g. 503 overloaded), attempt flash-lite fallback
-            if model.endpoint_model != "gemini-2.5-flash-lite":
-                return await self._execute_generate(model, "gemini-2.5-flash-lite", messages, **kwargs)
+            return await self._execute_generate(
+                model, model.endpoint_model, messages, json_mode=json_mode, **kwargs
+            )
+        except (ProviderUnavailableError, ModelUnavailableError, ProviderTimeoutError):
+            fallback = getattr(model, "fallback_model", None)
+            if not fallback and model.endpoint_model == "gemini-3.8-flash":
+                fallback = "gemini-3.5-flash"
+            if fallback and fallback != model.endpoint_model:
+                return await self._execute_generate(
+                    model, fallback, messages, json_mode=json_mode, **kwargs
+                )
             raise
 
-    async def stream_chunks(
+    async def _execute_stream(
         self,
         model: "ModelSpec",
+        endpoint_model: str,
         messages: List[ChatMessage],
         **kwargs: Any,
     ) -> AsyncIterator[StreamChunk]:
-        """Stream chunks via Gemini streamGenerateContent SSE endpoint."""
         max_tokens = kwargs.get("max_tokens")
         payload, _ = _to_gemini_payload(messages, max_tokens=max_tokens)
-        endpoint = model.endpoint_model
         base = (model.base_url or "").rstrip("/") or "https://generativelanguage.googleapis.com/v1beta"
-        url = f"{base}/models/{endpoint}:streamGenerateContent?alt=sse"
+        url = f"{base}/models/{endpoint_model}:streamGenerateContent?alt=sse"
         headers = _build_headers(model)
 
         t0 = time.perf_counter()
@@ -219,9 +233,6 @@ class GeminiAdapter(LLMAdapter):
                             continue
 
                         data_str = line[len("data:"):].strip()
-                        if not data_str or data_str == "[DONE]":
-                            continue
-
                         try:
                             chunk = json.loads(data_str)
                         except json.JSONDecodeError:
@@ -245,7 +256,6 @@ class GeminiAdapter(LLMAdapter):
         except (httpx.HTTPError, ProviderUnavailableError, ProviderTimeoutError):
             if not full_text_parts:
                 raise
-            # Fallback to non-streaming generate if stream fails midway
             res = await self.generate(model, messages, **kwargs)
             if res.content:
                 yield StreamChunk(text=res.content)
@@ -287,6 +297,26 @@ class GeminiAdapter(LLMAdapter):
             usage_source=usage_source,
             ttft_ms=ttft_ms or total_latency_ms,
         )
+
+    async def stream_chunks(
+        self,
+        model: "ModelSpec",
+        messages: List[ChatMessage],
+        **kwargs: Any,
+    ) -> AsyncIterator[StreamChunk]:
+        """Stream chunks via Gemini streamGenerateContent SSE endpoint with resilient fallback."""
+        try:
+            async for chunk in self._execute_stream(model, model.endpoint_model, messages, **kwargs):
+                yield chunk
+        except (ProviderUnavailableError, ModelUnavailableError, ProviderTimeoutError):
+            fallback = getattr(model, "fallback_model", None)
+            if not fallback and model.endpoint_model == "gemini-3.8-flash":
+                fallback = "gemini-3.5-flash"
+            if fallback and fallback != model.endpoint_model:
+                async for chunk in self._execute_stream(model, fallback, messages, **kwargs):
+                    yield chunk
+            else:
+                raise
 
     async def stream(
         self,
