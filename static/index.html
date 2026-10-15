@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Smart LLM Switcher | Context-Aware Cost &amp; Performance Gateway</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232f81f7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='6' r='3'/><circle cx='6' cy='18' r='3'/><circle cx='18' cy='12' r='3'/><path d='M9 6h3a3 3 0 0 1 3 3v0a3 3 0 0 0 3 3'/><path d='M9 18h3a3 3 0 0 0 3-3v0a3 3 0 0 1 3-3'/></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23EDEDEF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='6' r='3'/><circle cx='6' cy='18' r='3'/><circle cx='18' cy='12' r='3'/><path d='M9 6h3a3 3 0 0 1 3 3v0a3 3 0 0 0 3 3'/><path d='M9 18h3a3 3 0 0 0 3-3v0a3 3 0 0 1 3-3'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/vendor/katex.min.css" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
@@ -302,9 +305,47 @@
         <section class="view-panel active" id="view-chat">
           <div class="chat-canvas-inner">
             
-            <!-- SLEEK COMPACT ROUTING RIBBON -->
+            <!-- SLEEK 40px HORIZONTAL LIVE ROUTING TOPOLOGY BAR -->
             <div class="architecture-ribbon" id="architecture-pipeline-card">
               <div class="ribbon-bar">
+                
+                <!-- Topology Flow Nodes -->
+                <div class="topology-nodes-group">
+                  <div class="topology-node analyzer" id="pnode-analyzer" title="Analyzer: Gemini 3.1 Flash-Lite (Single-Pass Decision)">
+                    <span class="top-node-icon">⚡</span>
+                    <span class="top-node-label">Analyzer</span>
+                    <span class="top-node-model" id="pnode-analyzer-state">3.1-Flash-Lite</span>
+                  </div>
+
+                  <div class="topology-connector" id="pipeline-flow-connector" title="Dynamic Routing Pipeline">
+                    <svg class="conn-svg" width="20" height="10" viewBox="0 0 20 10" fill="none">
+                      <path d="M0 5h14m-3-3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </div>
+
+                  <div class="topology-tiers-flow">
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_1" data-tier="tier_1" title="Tier 1: Gemini 3.5 Flash-Lite (Fast / Routine)">
+                      <span class="node-tier-num">T1</span>
+                    </div>
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_2" data-tier="tier_2" title="Tier 2: Groq GPT-OSS 20B (Fast General)">
+                      <span class="node-tier-num">T2</span>
+                    </div>
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_3" data-tier="tier_3" title="Tier 3: Gemini 3.6 Flash (Balanced Workhorse)">
+                      <span class="node-tier-num">T3</span>
+                    </div>
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_4" data-tier="tier_4" title="Tier 4: Groq Qwen3.8 27B (Coding Specialist)">
+                      <span class="node-tier-num">T4</span>
+                    </div>
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_5" data-tier="tier_5" title="Tier 5: Groq GPT-OSS 120B (Deep Reasoning)">
+                      <span class="node-tier-num">T5</span>
+                    </div>
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_6" data-tier="tier_6" title="Tier 6: Gemini 3.8 Flash (High Capability)">
+                      <span class="node-tier-num">T6</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Live Telemetry Status Pill -->
                 <div class="ribbon-status-group">
                   <span class="status-indicator-dot" id="pipeline-status-dot"></span>
                   <span class="ribbon-status-msg" id="pipeline-status-msg">Analyzer Ready · 6 Response Tiers Active</span>
@@ -313,6 +354,8 @@
                     <span class="esc-text" id="pipeline-escalation-text">Escalated</span>
                   </div>
                 </div>
+
+                <!-- Architecture Overview Toggle Button -->
                 <div class="ribbon-actions">
                   <button type="button" class="btn-ribbon-toggle" id="ribbon-toggle-btn" title="Toggle 6-Tier Architecture Overview">
                     <span>Architecture Overview</span>
@@ -323,104 +366,56 @@
 
               <!-- Collapsible Tiers Drawer -->
               <div class="ribbon-drawer collapsed" id="ribbon-drawer">
-                <div class="ribbon-flow-grid">
-                  <!-- Analyzer Node -->
-                  <div class="ribbon-node analyzer" id="pnode-analyzer">
-                    <div class="rnode-tag">ANALYZER</div>
-                    <div class="rnode-title">Gemini 3.1 Flash-Lite</div>
-                    <div class="rnode-sub" id="pnode-analyzer-state">Single-Pass Decision</div>
+                <div class="drawer-detail-grid">
+                  <div class="drawer-tier-spec">
+                    <div class="dts-tag">ANALYZER</div>
+                    <div class="dts-name">Gemini 3.1 Flash-Lite</div>
+                    <div class="dts-desc">Real-time triage, intent detection &amp; single-pass self-answering</div>
                   </div>
-
-                  <div class="ribbon-flow-arrow" id="pipeline-flow-connector">➔</div>
-
-                  <!-- 6 Tiers Grid -->
-                  <div class="ribbon-tiers-grid">
-                    <div class="rnode-tier" id="pnode-tier_1" data-tier="tier_1">
-                      <div class="rnode-tier-head">
-                        <span class="tier-tag t1">T1</span>
-                        <span class="prov-tag gemini">Gemini</span>
-                      </div>
-                      <div class="rnode-tier-name">Gemini 3.5 Flash-Lite</div>
-                      <div class="rnode-tier-role">Fast / Routine</div>
-                    </div>
-                    <div class="rnode-tier" id="pnode-tier_2" data-tier="tier_2">
-                      <div class="rnode-tier-head">
-                        <span class="tier-tag t2">T2</span>
-                        <span class="prov-tag groq">Groq</span>
-                      </div>
-                      <div class="rnode-tier-name">GPT-OSS 20B</div>
-                      <div class="rnode-tier-role">Fast General</div>
-                    </div>
-                    <div class="rnode-tier" id="pnode-tier_3" data-tier="tier_3">
-                      <div class="rnode-tier-head">
-                        <span class="tier-tag t3">T3</span>
-                        <span class="prov-tag gemini">Gemini</span>
-                      </div>
-                      <div class="rnode-tier-name">Gemini 3.6 Flash</div>
-                      <div class="rnode-tier-role">Balanced Workhorse</div>
-                    </div>
-                    <div class="rnode-tier" id="pnode-tier_4" data-tier="tier_4">
-                      <div class="rnode-tier-head">
-                        <span class="tier-tag t4">T4</span>
-                        <span class="prov-tag groq">Groq</span>
-                      </div>
-                      <div class="rnode-tier-name">Qwen3.8 27B</div>
-                      <div class="rnode-tier-role">Coding Specialist</div>
-                    </div>
-                    <div class="rnode-tier" id="pnode-tier_5" data-tier="tier_5">
-                      <div class="rnode-tier-head">
-                        <span class="tier-tag t5">T5</span>
-                        <span class="prov-tag groq">Groq</span>
-                      </div>
-                      <div class="rnode-tier-name">GPT-OSS 120B</div>
-                      <div class="rnode-tier-role">Deep Reasoning</div>
-                    </div>
-                    <div class="rnode-tier" id="pnode-tier_6" data-tier="tier_6">
-                      <div class="rnode-tier-head">
-                        <span class="tier-tag t6">T6</span>
-                        <span class="prov-tag gemini">Gemini</span>
-                      </div>
-                      <div class="rnode-tier-name">Gemini 3.8 Flash</div>
-                      <div class="rnode-tier-role">High Capability</div>
-                    </div>
+                  <div class="drawer-tier-spec">
+                    <div class="dts-tag t1">TIER 1 · ROUTINE</div>
+                    <div class="dts-name">Gemini 3.5 Flash-Lite</div>
+                    <div class="dts-desc">Fast classification, summaries &amp; routine requests</div>
+                  </div>
+                  <div class="drawer-tier-spec">
+                    <div class="dts-tag t2">TIER 2 · GENERAL</div>
+                    <div class="dts-name">Groq GPT-OSS 20B</div>
+                    <div class="dts-desc">High token velocity general chat &amp; low latency tasks</div>
+                  </div>
+                  <div class="drawer-tier-spec">
+                    <div class="dts-tag t3">TIER 3 · BALANCED</div>
+                    <div class="dts-name">Gemini 3.6 Flash</div>
+                    <div class="dts-desc">Balanced performance for multi-domain problem solving</div>
+                  </div>
+                  <div class="drawer-tier-spec">
+                    <div class="dts-tag t4">TIER 4 · CODING</div>
+                    <div class="dts-name">Groq Qwen3.8 27B</div>
+                    <div class="dts-desc">Algorithmic coding, debugging &amp; syntax generation</div>
+                  </div>
+                  <div class="drawer-tier-spec">
+                    <div class="dts-tag t5">TIER 5 · REASONING</div>
+                    <div class="dts-name">Groq GPT-OSS 120B</div>
+                    <div class="dts-desc">Deep chain-of-thought, mathematical proofs &amp; logic</div>
+                  </div>
+                  <div class="drawer-tier-spec">
+                    <div class="dts-tag t6">TIER 6 · HIGH CAPABILITY</div>
+                    <div class="dts-name">Gemini 3.8 Flash</div>
+                    <div class="dts-desc">Frontier-grade synthesis, complex architectural analysis</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Chat Messages Container -->
+            <!-- Chat Messages Container (Only Middle Container Scrolls) -->
             <div class="chat-messages" id="chat-messages">
               <!-- Dynamically populated by app.js (Welcome Hero or Conversation turns) -->
             </div>
 
-            <!-- Floating Prompt Composer -->
+            <!-- Permanently Anchored Monolithic Prompt Composer Dock -->
             <div class="composer-container">
               <form class="composer-card" id="composer-form">
                 
-                <!-- Composer Top Bar Controls -->
-                <div class="composer-topbar">
-                  <div class="strategy-selector-wrapper">
-                    <label for="strategy-select" class="strategy-label">Strategy:</label>
-                    <div class="select-styled-wrap">
-                      <select id="strategy-select" class="strategy-select">
-                        <option value="balanced" selected>Balanced (Quality &amp; Cost)</option>
-                        <option value="lowest_cost">Lowest Cost (Budget First)</option>
-                        <option value="fastest">Fastest (Lowest Latency)</option>
-                        <option value="highest_quality">Highest Quality (Frontier)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="composer-topbar-right">
-                    <div class="context-pill" id="context-pill" title="Conversation Memory Window">
-                      <span class="context-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-cpu"/></svg></span>
-                      <span>Memory: <strong id="context-turn-count">0</strong> turns</span>
-                      <button type="button" class="btn-clear-context" id="clear-context-btn" title="Reset Conversation Memory">Clear</button>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Textarea and Action Button Row -->
+                <!-- Textarea Row at Top of Composer Dock -->
                 <div class="composer-input-row">
                   <textarea 
                     id="query-input" 
@@ -429,16 +424,38 @@
                     placeholder="Ask any question, coding task, or reasoning challenge... (Shift+Enter for newline)"
                     required
                   ></textarea>
-
-                  <!-- Send / Stop Button -->
-                  <button type="submit" id="send-stop-btn" class="btn-send-stop" title="Send Message (Enter)">
-                    <span class="btn-icon-inner" id="send-btn-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-arrow-up"/></svg></span>
-                  </button>
                 </div>
 
-                <div class="composer-bottom-bar">
-                  <span class="composer-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift + Enter</kbd> for new line · Live multi-tier switching &amp; adaptive quality check</span>
+                <!-- Integrated Bottom Action Toolbar Inside Composer Dock -->
+                <div class="composer-action-toolbar">
+                  <div class="composer-toolbar-left">
+                    <div class="strategy-selector-wrapper">
+                      <div class="select-styled-wrap">
+                        <select id="strategy-select" class="strategy-select" title="Active Routing Strategy">
+                          <option value="balanced" selected>⚖️ Balanced</option>
+                          <option value="lowest_cost">🪙 Lowest Cost</option>
+                          <option value="fastest">⚡ Fastest</option>
+                          <option value="highest_quality">✨ Highest Quality</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="context-pill" id="context-pill" title="Conversation Memory Window">
+                      <span class="context-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-cpu"/></svg></span>
+                      <span>Memory: <strong id="context-turn-count">0</strong> turns</span>
+                      <button type="button" class="btn-clear-context" id="clear-context-btn" title="Reset Conversation Memory">Clear</button>
+                    </div>
+                  </div>
+
+                  <div class="composer-toolbar-right">
+                    <span class="kbd-hint"><kbd>⏎</kbd> Send</span>
+                    <!-- Send / Stop Button (High-Contrast 32px x 32px) -->
+                    <button type="submit" id="send-stop-btn" class="btn-send-stop" title="Send Message (Enter)">
+                      <span class="btn-icon-inner" id="send-btn-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-arrow-up"/></svg></span>
+                    </button>
+                  </div>
                 </div>
+
               </form>
             </div>
 

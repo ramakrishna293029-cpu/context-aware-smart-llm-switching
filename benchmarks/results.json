@@ -1,0 +1,62 @@
+{
+  "fixed_tier6": {
+    "total_cost_usd": 0.007848,
+    "avg_latency_ms": 800,
+    "avg_ttft_ms": 544.0,
+    "p95_latency_ms": 800,
+    "deadline_compliance_pct": 37.5,
+    "constraint_adherence_pct": 62.5,
+    "prompt_injection_block_pct": 0.0,
+    "decisions": [
+      "B1_GREETING -> tier_6 (demo-tier_6)",
+      "B2_MATH -> tier_6 (demo-tier_6)",
+      "B3_FACTUAL -> tier_6 (demo-tier_6)",
+      "B4_CODING -> tier_6 (demo-tier_6)",
+      "B5_REASONING -> tier_6 (demo-tier_6)",
+      "B6_UNDERSPECIFIED -> tier_6 (demo-tier_6)",
+      "B7_INJECTION -> tier_6 (demo-tier_6)",
+      "B8_CONSTRAINED_BUDGET -> tier_6 (demo-tier_6)"
+    ],
+    "cost_savings_vs_tier6_pct": 0.0
+  },
+  "static_router": {
+    "total_cost_usd": 0.003886,
+    "avg_latency_ms": 362.5,
+    "avg_ttft_ms": 217.5,
+    "p95_latency_ms": 800,
+    "deadline_compliance_pct": 100.0,
+    "constraint_adherence_pct": 62.5,
+    "prompt_injection_block_pct": 0.0,
+    "decisions": [
+      "B1_GREETING -> tier_1 (demo-tier_1)",
+      "B2_MATH -> tier_1 (demo-tier_1)",
+      "B3_FACTUAL -> tier_3 (demo-tier_3)",
+      "B4_CODING -> tier_4 (demo-tier_4)",
+      "B5_REASONING -> tier_6 (demo-tier_6)",
+      "B6_UNDERSPECIFIED -> tier_1 (demo-tier_1)",
+      "B7_INJECTION -> tier_1 (demo-tier_1)",
+      "B8_CONSTRAINED_BUDGET -> tier_4 (demo-tier_4)"
+    ],
+    "cost_savings_vs_tier6_pct": 50.5
+  },
+  "smart_switching": {
+    "total_cost_usd": 0.001064,
+    "avg_latency_ms": 303.8,
+    "avg_ttft_ms": 175.4,
+    "p95_latency_ms": 500,
+    "deadline_compliance_pct": 100.0,
+    "constraint_adherence_pct": 100.0,
+    "prompt_injection_block_pct": 100.0,
+    "decisions": [
+      "B1_GREETING -> tier_1 (demo-tier_1)",
+      "B2_MATH -> tier_1 (demo-tier_1)",
+      "B3_FACTUAL -> tier_3 (demo-tier_3)",
+      "B4_CODING -> tier_4 (demo-tier_4)",
+      "B5_REASONING -> tier_5 (demo-tier_5)",
+      "B6_UNDERSPECIFIED -> analyzer (Gemini 3.1 Flash-Lite (Self Clarification))",
+      "B7_INJECTION -> tier_1 (demo-tier_1)",
+      "B8_CONSTRAINED_BUDGET -> tier_4 (demo-tier_4)"
+    ],
+    "cost_savings_vs_tier6_pct": 86.4
+  }
+}

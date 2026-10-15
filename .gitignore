@@ -19,6 +19,8 @@ build/
 data/
 *.db
 *.sqlite3
+*.log
+scratch/
 
 # IDE / OS
 .idea/

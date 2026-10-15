@@ -80,12 +80,11 @@ DEMO_REGISTRY = ModelRegistry(_build_demo_models())
 class TestAnalyzerLLM:
     def test_run_analyzer_self_mode(self):
         async def run():
-            dec = await run_analyzer("Hi", registry_instance=DEMO_REGISTRY)
+            dec = await run_analyzer("what is 5 + 7?", registry_instance=DEMO_REGISTRY)
             assert isinstance(dec, AnalyzerDecision)
             assert dec.answer_mode == "self"
             assert dec.switch_required is False
-            assert dec.answer is not None and len(dec.answer) > 0
-            assert dec.target_tier == "fast"
+            assert dec.answer is not None and "12" in dec.answer
             
             info = dec.to_analyzer_info()
             assert info.answer_mode == "self"
@@ -99,7 +98,7 @@ class TestAnalyzerLLM:
             assert dec.answer_mode == "switch"
             assert dec.switch_required is True
             assert dec.answer is None
-            assert dec.target_tier in ("coding", "reasoning")
+            assert dec.target_tier in ("tier_4", "coding", "reasoning")
             assert dec.coding_required is True
         asyncio.run(run())
 
@@ -109,14 +108,15 @@ class TestAnalyzerLLM:
             assert isinstance(dec, AnalyzerDecision)
             assert dec.answer_mode == "switch"
             assert dec.switch_required is True
-            assert dec.target_tier in ("reasoning", "coding", "powerful")
+            assert dec.target_tier in ("tier_5", "tier_6", "reasoning", "coding", "powerful")
             assert dec.reasoning_required is True
         asyncio.run(run())
 
     def test_analyze_and_route_alias(self):
         async def run():
-            dec = await analyze_and_route("Hello!", registry_instance=DEMO_REGISTRY)
+            dec = await analyze_and_route("what is 10 * 20?", registry_instance=DEMO_REGISTRY)
             assert dec.answer_mode == "self"
+            assert "200" in (dec.answer or "")
         asyncio.run(run())
 
 

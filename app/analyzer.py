@@ -79,13 +79,28 @@ TASK_GROUPS: Dict[str, List[str]] = {
 
 # Greetings patterns
 GREETING_PATTERNS = [
-    r"^(?:hi|hello|hey|greetings|howdy|sup|yo|good morning|good afternoon|good evening|good day)(?:[\s!.,?]*)$",
-    r"^(?:hi|hello|hey)\s+(?:there|ai|bot|assistant|friend)(?:[\s!.,?]*)$",
+    r"^(?:hi+|hello+|hey+|heyy+|greetings|howdy|sup|yo+|good\s+morning|good\s+afternoon|good\s+evening|good\s+day|thanks|thank\s+you|thx|ty|bye|goodbye)(?:[\s!.,?]*)$",
+    r"^(?:hi+|hello+|hey+)\s+(?:there|ai|bot|assistant|friend)(?:[\s!.,?]*)$",
     r"^who are you(?:[\s!.,?]*)$",
     r"^what can you do(?:[\s!.,?]*)$",
     r"^how are you(?:[\s!.,?]*)$",
     r"^help(?:[\s!.,?]*)$",
 ]
+
+IDENTITY_PATTERN = re.compile(
+    r"^(?:(?:hi+|hello+|hey+|tell me)\s+)?(?:who are you|whats your name|what is your name|who made you|who created you)(?:[\s?!.]*)$",
+    re.IGNORECASE,
+)
+
+CHECKIN_PATTERN = re.compile(
+    r"^(?:(?:hi+|hello+|hey+|tell me)\s+)?(?:how are you(?:(?:\s+doing)?\s+today)?|how are you doing|how are you feeling|hows it going|how are things|are you feeling\s+(?:good|bad|well|fine))(?:[\s?!.]*)$",
+    re.IGNORECASE,
+)
+
+CAPABILITY_PATTERN = re.compile(
+    r"^(?:(?:hi+|hello+|hey+|tell me)\s+)?(?:what can you do|what are your capabilities|help|help me|how can you help(?: me)?)(?:[\s?!.]*)$",
+    re.IGNORECASE,
+)
 
 # Simple arithmetic regex: e.g. "5 + 5", "what is 2 * 8", "100 / 4"
 ARITHMETIC_PATTERN = re.compile(
@@ -163,19 +178,31 @@ def _try_solve_simple_arithmetic(text: str) -> Optional[str]:
 def _check_greeting(text: str) -> Tuple[bool, Optional[str]]:
     """Checks if the query is a simple greeting, identity question, or check-in and provides a warm, natural answer."""
     clean = text.strip().lower()
-    # Normalize punctuation and whitespace
-    normalized = re.sub(r"[^\w\s\?]", "", clean).strip()
 
-    # Identity inquiries
-    if any(q in normalized for q in ["who are you", "whats your name", "what is your name", "who made you", "who created you"]):
+    # Immediate exclusion if query demands technical, coding, or comparative assistance
+    TECHNICAL_INDICATORS = (
+        "compare", "compared", "versus", "vs", "raft", "consensus", "c++", "python",
+        "algorithm", "queue", "lock-free", "database", "distributed", "dijkstra",
+        "quicksort", "prove", "math", "sql", "postgres", "debug", "valgrind",
+        "memory leak", "select", "join", "architect", "architecture", "design",
+    )
+    if any(ind in clean for ind in TECHNICAL_INDICATORS):
+        return False, None
+
+    words = clean.split()
+    if len(words) > 8:
+        return False, None
+
+    # Identity inquiries (strictly anchored)
+    if IDENTITY_PATTERN.match(clean):
         return True, "I am your AI assistant. I can answer questions, write and debug code, solve complex reasoning problems, and design architectures. How can I help you today?"
 
-    # Check-ins & emotional questions
-    if any(q in normalized for q in ["how are you", "how are you doing", "how are you feeling", "hows it going", "how are things", "are you feeling good", "are you feeling bad"]):
+    # Check-ins & emotional questions (strictly anchored)
+    if CHECKIN_PATTERN.match(clean):
         return True, "I'm doing well, thank you for asking! I'm ready to help you with whatever you'd like to work on today. What's on your mind?"
 
-    # Capabilities & help
-    if normalized in ["what can you do", "what are your capabilities", "help", "help me", "how can you help"]:
+    # Capabilities & help (strictly anchored)
+    if CAPABILITY_PATTERN.match(clean):
         return True, (
             "I can assist you across a wide range of tasks:\n"
             "- 💻 **Coding & Debugging**: Writing, optimizing, and reviewing code in any language\n"
@@ -186,6 +213,7 @@ def _check_greeting(text: str) -> Tuple[bool, Optional[str]]:
         )
 
     # General greetings
+    normalized = re.sub(r"[^\w\s\?]", "", clean).strip()
     for pat in GREETING_PATTERNS:
         if re.match(pat, clean) or re.match(pat, normalized):
             return True, "Hello! How can I help you today?"

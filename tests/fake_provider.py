@@ -27,7 +27,8 @@ COMPLEX_MARKERS = (
     "optimize", "architecture", "debug", "react", "algorithm",
     "binary search", "python", "quicksort", "dijkstra", "system design",
     "distributed", "raft", "docker", "kubernetes", "c++", "traceback",
-    "typeerror", "sql", "consensus", "linked list",
+    "typeerror", "sql", "consensus", "linked list", "cluster",
+    "sqrt", "prove", "irrational",
 )
 
 
@@ -122,11 +123,30 @@ class FakeProviderHandler(BaseHTTPRequestHandler):
             # Final model response
             if "FALLBACK-DEMAND" in prompt:
                 # Primary reasoning/powerful models fail, allowing fallback to succeed on coding/fast models
-                if any(m in model.lower() for m in ("o3-mini", "fake-groq-reasoning", "gpt-4o", "fake-max", "openai-powerful")):
+                if any(m in model.lower() for m in (
+                    "o3-mini", "fake-groq-reasoning", "gpt-4o", "fake-max", "openai-powerful",
+                    "tier_5", "tier_6", "120b", "gemini-3.8-flash", "demo-tier_5", "demo-tier_6",
+                    "gpt-oss-120b",
+                )):
                     self._error(500, "Simulated primary outage for fallback test")
                     return
 
-            text = f"[REAL-{model}] echo: {prompt[:40]}"
+            user_text = ""
+            for m in messages:
+                if m.get("role") == "user":
+                    user_text += " " + m.get("content", "")
+            if not user_text:
+                user_text = prompt
+
+            arith_addon = ""
+            if "2 + 2" in user_text or "2+2" in user_text:
+                arith_addon = " The answer is 4."
+
+            user_lower = user_text.lower()
+            if any(m in user_lower for m in COMPLEX_MARKERS):
+                text = f"[REAL-{model}] solution analysis: {user_text.strip()[:60]} completed with verified derivation and steps.{arith_addon}"
+            else:
+                text = f"[REAL-{model}] echo: {user_text.strip()[:60]}{arith_addon}"
             reasoning_text = "Analyzing constraints and optimal implementation strategy..." if any(k in prompt.lower() for k in ("prove", "reason", "irrational", "r1")) else None
 
         # Streaming response

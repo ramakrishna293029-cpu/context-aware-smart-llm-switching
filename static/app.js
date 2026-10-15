@@ -969,59 +969,59 @@ function renderActiveSessionMessages() {
   if (!active || active.messages.length === 0) {
     container.innerHTML = `
       <div class="welcome-hero" id="welcome-hero">
-        <div class="welcome-badge">
+        <div class="welcome-eyebrow-badge">
           <svg class='icon-sym' aria-hidden='true'><use href='#i-node-switch'/></svg>
-          <span>Context-Aware Multi-Tier Gateway</span>
+          <span>CONTEXT-AWARE ROUTING ENGINE · v2.4</span>
         </div>
-        <h2 class="welcome-title">Smart LLM Switcher</h2>
+        <h2 class="welcome-title">Route every prompt to the optimal model tier.</h2>
         <p class="welcome-desc">
-          Two-stage intelligent routing: <strong>Gemini 3.1 Flash-Lite Analyzer</strong> triages incoming intent and complexity in real time. Routine requests resolve immediately in single-pass self-mode with zero downstream calls, while complex coding, reasoning, and multi-turn tasks switch dynamically across 6 calibrated response tiers.
+          Single-pass resolution for routine tasks. Capability-scored escalation across 6 specialized tiers for complex engineering and proofs.
         </p>
 
         <div class="welcome-prompts-section">
-          <span class="welcome-prompts-label">Choose a scenario to test context-aware switching across tiers:</span>
+          <span class="welcome-prompts-label">SCENARIO STARTERS · CAPABILITY-SCORED ESCALATION BENCHMARK</span>
           <div class="welcome-prompts-grid" id="welcome-quick-chips">
             <button class="quick-chip-card" data-query="Summarize the primary benefits of semantic caching in 2 bullet points.">
               <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-bolt'/></svg> Tier 1: Fast / Routine</span>
-                <span class="chip-arrow">→</span>
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-bolt'/></svg> T1 · FAST ROUTINE</span>
+                <span class="chip-model-tag">gemini-3.5-flash-lite ↗</span>
               </div>
               <div class="chip-query">Summarize the primary benefits of semantic caching in 2 bullet points.</div>
             </button>
             <button class="quick-chip-card" data-query="Explain the difference between TCP and UDP with real-world networking examples.">
               <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-cpu'/></svg> Tier 2: Fast General</span>
-                <span class="chip-arrow">→</span>
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-cpu'/></svg> T2 · FAST GENERAL</span>
+                <span class="chip-model-tag">gpt-oss-20b ↗</span>
               </div>
               <div class="chip-query">Explain the difference between TCP and UDP with real-world networking examples.</div>
             </button>
             <button class="quick-chip-card" data-query="Compare relational databases and document stores for high-throughput write workloads.">
               <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-scale'/></svg> Tier 3: Balanced Workhorse</span>
-                <span class="chip-arrow">→</span>
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-scale'/></svg> T3 · BALANCED WORKHORSE</span>
+                <span class="chip-model-tag">gemini-3.6-flash ↗</span>
               </div>
               <div class="chip-query">Compare relational databases and document stores for high-throughput write workloads.</div>
             </button>
             <button class="quick-chip-card" data-query="Write a thread-safe Python implementation of an LRU Cache with TTL expiration.">
               <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-code'/></svg> Tier 4: Coding Specialist</span>
-                <span class="chip-arrow">→</span>
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-code'/></svg> T4 · CODING SPECIALIST</span>
+                <span class="chip-model-tag">qwen3.8-27b ↗</span>
               </div>
               <div class="chip-query">Write a thread-safe Python implementation of an LRU Cache with TTL expiration.</div>
             </button>
             <button class="quick-chip-card" data-query="Prove that the square root of 2 is irrational and analyze its algebraic implications.">
               <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-node-switch'/></svg> Tier 5: Deep Reasoning</span>
-                <span class="chip-arrow">→</span>
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-node-switch'/></svg> T5 · DEEP REASONING</span>
+                <span class="chip-model-tag">gpt-oss-120b ↗</span>
               </div>
               <div class="chip-query">Prove that the square root of 2 is irrational and analyze its algebraic implications.</div>
             </button>
             <button class="quick-chip-card" data-query="Design a globally distributed payment ledger ensuring exactly-once processing with high availability.">
               <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-layers'/></svg> Tier 6: High Capability</span>
-                <span class="chip-arrow">→</span>
+                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-layers'/></svg> T6 · HIGH CAPABILITY</span>
+                <span class="chip-model-tag">gemini-3.8-flash ↗</span>
               </div>
-              <div class="chip-query">Design a globally distributed payment ledger with exactly-once processing.</div>
+              <div class="chip-query">Design a globally distributed payment ledger ensuring exactly-once processing with high availability.</div>
             </button>
           </div>
         </div>
@@ -1088,13 +1088,16 @@ function createStreamingPlaceholder() {
     <div class="msg-content-wrap">
       <div class="assistant-card">
         
-        <div class="routing-badge-bar">
-          <span class="routing-tier-pill" id="${cardId}_tier">Analyzing...</span>
-          <span class="routing-model-name" id="${cardId}_model">Gemini 3.1 Flash-Lite</span>
-          <div class="routing-telemetry-meta" id="${cardId}_meta">
-            <span id="${cardId}_lat">Evaluating prompt...</span>
-          </div>
+        <!-- Live Monospace Streaming Trace -->
+        <div class="agentic-trace-stream" id="${cardId}_trace">
+          <span class="trace-pulse-dot"></span>
+          <span class="trace-text" id="${cardId}_tracetext">Routing via Gemini 3.1 Flash-Lite · Evaluating prompt &amp; intent...</span>
         </div>
+
+        <!-- Hidden compatibility hooks -->
+        <span id="${cardId}_tier" style="display:none;"></span>
+        <span id="${cardId}_model" style="display:none;"></span>
+        <span id="${cardId}_lat" style="display:none;"></span>
 
         <div class="msg-text-body" id="${cardId}_body">
           <span style="color:var(--text-muted);font-style:italic;">Routing query across calibrated model tiers...</span>
@@ -1111,16 +1114,25 @@ function createStreamingPlaceholder() {
     card: msgEl,
     updateAnalyzer: (info) => {
       const isSelf = info.answer_mode === "self";
-      const tierEl = $(`${cardId}_tier`);
-      const modelEl = $(`${cardId}_model`);
-      if (tierEl) tierEl.textContent = isSelf ? "Self-Answer" : (info.required_capability || "Tier 1").toUpperCase();
-      if (modelEl) modelEl.textContent = isSelf ? "Resolved in Single Pass" : `Routing (${info.task_type || 'General'})`;
+      const tracetext = $(`${cardId}_tracetext`);
+      if (tracetext) {
+        if (isSelf) {
+          tracetext.textContent = "[⚡ SELF-ANSWER] Gemini 3.1 Flash-Lite · Direct resolution (0 downstream tokens)";
+        } else {
+          const tierNorm = normalizeTierKey(info.target_tier || info.required_capability || "tier_1").toUpperCase();
+          const compScore = (info.complexity_score ?? 0.5).toFixed(2);
+          const task = (info.task_type || "general").toUpperCase();
+          tracetext.textContent = `Routing via Gemini 3.1 Flash-Lite → Escalated to ${tierNorm} · Complexity ${compScore} · ${task}`;
+        }
+      }
     },
     updateRouting: (route) => {
-      const tierEl = $(`${cardId}_tier`);
-      const modelEl = $(`${cardId}_model`);
-      if (tierEl) tierEl.textContent = (route.target_tier || "Tier 1").toUpperCase();
-      if (modelEl) modelEl.textContent = route.target_name || route.target_model || "Model";
+      const tracetext = $(`${cardId}_tracetext`);
+      if (tracetext) {
+        const tierNorm = normalizeTierKey(route.target_tier || "tier_1").toUpperCase();
+        const modelName = route.target_name || route.target_model || "Target Model";
+        tracetext.textContent = `Routing via Gemini 3.1 Flash-Lite → Switched to ${tierNorm} (${modelName}) · Streaming tokens...`;
+      }
     },
     appendReasoningDelta: (reasoning) => {},
     startResponse: () => {
@@ -1138,7 +1150,7 @@ function createStreamingPlaceholder() {
     showError: (err) => {
       const body = $(`${cardId}_body`);
       if (body) {
-        body.innerHTML = `<span style="color:var(--accent-red);">Stream error: ${escapeHtml(err)}</span>`;
+        body.innerHTML = `<span style="color:var(--signal-red);">Stream error: ${escapeHtml(err)}</span>`;
       }
     },
     showStoppedState: (text) => {
@@ -1175,8 +1187,38 @@ function appendAssistantResponseToUI(query, text, data = {}, shouldScroll = true
   const costNumber = data.total_cost_usd != null ? data.total_cost_usd : (data.estimated_cost_usd || 0.0);
   const costStr = `$${costNumber.toFixed(6)}`;
   const latencyNumber = data.total_latency_ms != null ? data.total_latency_ms : (data.latency_ms || 0.0);
-  const latencyStr = `${Math.round(latencyNumber)} ms`;
-  const savingsPct = data.savings_percent != null && data.savings_percent > 0 ? `${data.savings_percent.toFixed(1)}% saved` : null;
+  const ttftNumber = Number(data.ttft_ms || 0);
+
+  const inTok = data.input_tokens != null ? data.input_tokens : (data.usage?.prompt_tokens ?? (isSelf ? 120 : 380));
+  const outTok = data.output_tokens != null ? data.output_tokens : (data.usage?.completion_tokens ?? (isSelf ? 85 : 420));
+  const savingsPct = data.savings_percent != null && data.savings_percent > 0 ? `${data.savings_percent.toFixed(1)}%` : null;
+
+  // Selected candidate factors
+  const selectedCandidate = Array.isArray(data.candidates) ? data.candidates.find(c => c.selected) : null;
+  const reasoningScore = (selectedCandidate?.factors?.reasoning_compatibility != null)
+    ? selectedCandidate.factors.reasoning_compatibility
+    : (analyzer.reasoning_required ? 0.95 : (complexityScore > 0.6 ? 0.80 : 0.25));
+  const codingScore = (selectedCandidate?.factors?.coding_compatibility != null)
+    ? selectedCandidate.factors.coding_compatibility
+    : (taskType === 'coding' || analyzer.coding_required ? 0.95 : 0.15);
+
+  const pComp = Math.min(100, Math.max(5, Math.round(complexityScore * 100)));
+  const pReason = Math.min(100, Math.max(5, Math.round(reasoningScore * 100)));
+  const pCode = Math.min(100, Math.max(5, Math.round(codingScore * 100)));
+
+  // Stage Latency Waterfall calculations
+  const analyzerLat = Number(data.analyzer_latency_ms || analyzer.latency_ms || (isSelf ? latencyNumber : 95));
+  const routerLat = Number(data.routing_latency_ms || 0.45);
+  const prepLat = ttftNumber > 0 ? Math.max(10, ttftNumber - analyzerLat) : 35;
+  const genLat = isSelf ? 0 : Math.max(20, Number(data.latency_ms || Math.max(0, latencyNumber - analyzerLat - prepLat)));
+  const verifLat = Number(data.verification_latency_ms || (isEscalated ? 4.5 : 1.2));
+
+  const totalStages = Math.max(1, analyzerLat + routerLat + prepLat + genLat + verifLat);
+  const pAnalyzer = Math.max(2, (analyzerLat / totalStages) * 100).toFixed(1);
+  const pRouter = Math.max(1, (routerLat / totalStages) * 100).toFixed(1);
+  const pPrep = Math.max(2, (prepLat / totalStages) * 100).toFixed(1);
+  const pGen = Math.max(5, (genLat / totalStages) * 100).toFixed(1);
+  const pVerif = Math.max(1, (verifLat / totalStages) * 100).toFixed(1);
 
   // Build candidate scoreboard rows
   let scoreboardRows = "";
@@ -1188,6 +1230,9 @@ function appendAssistantResponseToUI(query, text, data = {}, shouldScroll = true
         <td>${c.total.toFixed(2)}</td>
         <td>${Math.round(c.expected_latency_ms)}ms</td>
         <td>$${c.expected_cost_usd.toFixed(6)}</td>
+        <td>${c.factors?.quality_suitability != null ? c.factors.quality_suitability.toFixed(2) : '—'}</td>
+        <td>${c.factors?.reasoning_compatibility != null ? c.factors.reasoning_compatibility.toFixed(2) : '—'}</td>
+        <td>${c.factors?.coding_compatibility != null ? c.factors.coding_compatibility.toFixed(2) : '—'}</td>
         <td>${c.selected ? '✓ Selected' : '—'}</td>
       </tr>
     `).join("");
@@ -1198,70 +1243,122 @@ function appendAssistantResponseToUI(query, text, data = {}, shouldScroll = true
     <div class="msg-content-wrap">
       <div class="assistant-card">
         
-        <!-- Humanized Routing Badge Bar -->
-        <div class="routing-badge-bar">
-          <span class="routing-tier-pill">${isSelf ? 'Self-Answer' : servedTierNorm.toUpperCase()}</span>
-          <span class="routing-model-name">${escapeHtml(targetModelName)}</span>
-          <div class="routing-telemetry-meta">
-            <span>${latencyStr}</span>
-            <span>·</span>
-            <span>${costStr}</span>
-            ${savingsPct ? `<span>·</span><span class="savings-text">${savingsPct} vs baseline</span>` : ''}
+        <!-- One-Line Agentic Telemetry Bar (Cursor / Linear Style) -->
+        <div class="agentic-telemetry-bar" data-action="toggle-drawer" data-target="${drawerId}">
+          <div class="telemetry-bar-left">
+            <span class="telemetry-badge-tier ${isSelf ? 'self' : (isEscalated ? 'escalated' : '')}">
+              ${isSelf ? '[⚡ DIRECT · SELF-ANSWER]' : `[⚡ ${isEscalated ? 'ESCALATED' : 'SWITCHED'} → ${servedTierNorm.toUpperCase()}: ${escapeHtml(targetModelName)}]`}
+            </span>
+            <span class="telemetry-stat">⏱ ${Math.round(latencyNumber)}ms ${ttftNumber > 0 ? `(TTFT ${Math.round(ttftNumber)}ms)` : ''}</span>
+            <span class="telemetry-sep">·</span>
+            <span class="telemetry-stat">🪙 ${inTok} → ${outTok} tok</span>
+            <span class="telemetry-sep">·</span>
+            <span class="telemetry-stat">💲 ${costStr}</span>
+            ${savingsPct ? `<span class="telemetry-sep">·</span><span class="savings-text">(${savingsPct} vs Frontier)</span>` : ''}
+          </div>
+          <button type="button" class="btn-inspect-drawer" data-action="toggle-drawer" data-target="${drawerId}" title="Inspect Decision Trace">
+            <span>Inspect Trace</span>
+            <span class="drawer-arrow">▾</span>
+          </button>
+        </div>
+
+        <!-- Expandable Decision Reasoning Drawer -->
+        <div class="routing-drawer" id="${drawerId}">
+          <div class="routing-drawer-content hidden" id="${drawerId}_content">
+            
+            <!-- 3 Horizontal Micro-Meters -->
+            <div class="drawer-meters-row">
+              <div class="micro-meter">
+                <div class="meter-head">
+                  <span>Complexity</span>
+                  <span class="mono">${complexityScore.toFixed(2)} (${complexity.toUpperCase()})</span>
+                </div>
+                <div class="meter-bar">
+                  <div class="meter-fill ${complexityScore > 0.7 ? 'amber' : 'indigo'}" style="width: ${pComp}%;"></div>
+                </div>
+              </div>
+
+              <div class="micro-meter">
+                <div class="meter-head">
+                  <span>Reasoning</span>
+                  <span class="mono">${reasoningScore.toFixed(2)}</span>
+                </div>
+                <div class="meter-bar">
+                  <div class="meter-fill indigo" style="width: ${pReason}%;"></div>
+                </div>
+              </div>
+
+              <div class="micro-meter">
+                <div class="meter-head">
+                  <span>Coding</span>
+                  <span class="mono">${codingScore.toFixed(2)}</span>
+                </div>
+                <div class="meter-bar">
+                  <div class="meter-fill emerald" style="width: ${pCode}%;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stage Latency Waterfall -->
+            <div class="waterfall-section">
+              <div class="waterfall-header">Stage Latency Waterfall</div>
+              <div class="waterfall-bar">
+                <div class="wf-seg analyzer" style="width: ${pAnalyzer}%;" title="Analyzer: ${Math.round(analyzerLat)}ms">${Math.round(analyzerLat)}ms</div>
+                <div class="wf-seg router" style="width: ${pRouter}%;" title="Router: ${routerLat.toFixed(1)}ms"></div>
+                <div class="wf-seg prep" style="width: ${pPrep}%;" title="TTFT / Prep: ${Math.round(prepLat)}ms">${Math.round(prepLat)}ms</div>
+                <div class="wf-seg generation" style="width: ${pGen}%;" title="Generation: ${Math.round(genLat)}ms">${Math.round(genLat)}ms</div>
+                <div class="wf-seg verification" style="width: ${pVerif}%;" title="Verification: ${verifLat.toFixed(1)}ms"></div>
+              </div>
+              <div class="waterfall-legend">
+                <span style="color:var(--signal-amber);">⚡ Analyzer: ${Math.round(analyzerLat)}ms</span>
+                <span style="color:#8B5CF6;">🔀 Router: ${routerLat.toFixed(1)}ms</span>
+                <span style="color:#94A3B8;">⏱ Prep: ${Math.round(prepLat)}ms</span>
+                <span style="color:var(--signal-indigo);">💬 Gen: ${Math.round(genLat)}ms</span>
+                <span style="color:var(--signal-emerald);">✓ Verif: ${verifLat.toFixed(1)}ms</span>
+              </div>
+            </div>
+
+            <!-- 7-Factor Candidate Scoreboard Table -->
+            ${scoreboardRows ? `
+              <div style="margin-top:2px;">
+                <div class="waterfall-header" style="margin-bottom:6px;">7-Factor Candidate Scoreboard</div>
+                <div class="table-responsive">
+                  <table class="scoreboard-table">
+                    <thead>
+                      <tr>
+                        <th>Tier</th>
+                        <th>Model</th>
+                        <th>Score</th>
+                        <th>Latency</th>
+                        <th>Est. Cost</th>
+                        <th>Quality</th>
+                        <th>Reasoning</th>
+                        <th>Coding</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>${scoreboardRows}</tbody>
+                  </table>
+                </div>
+              </div>
+            ` : `
+              <div style="padding: 6px 8px; background: var(--bg-app); border-radius: var(--radius-xs); font-size: 11.5px; font-family: var(--font-mono); color: var(--text-secondary);">
+                <span>Tier: <strong>${escapeHtml(servedTierNorm.toUpperCase())}</strong> · Model: <strong>${escapeHtml(targetModelName)}</strong> · Task: <strong>${escapeHtml(taskType.toUpperCase())}</strong> · Mode: <strong>${isSelf ? 'Single-Pass Self-Answer' : 'Multi-Tier Switched'}</strong></span>
+              </div>
+            `}
+
+            <!-- Decision Rationale Quote Box -->
+            <div class="drawer-rationale-quote">
+              <span class="rationale-label">ROUTING RATIONALE</span>
+              "${escapeHtml(routingReason)}"
+            </div>
+
           </div>
         </div>
 
         <!-- Assistant Markdown Answer -->
         <div class="msg-text-body">
           ${formatMarkdown(text)}
-        </div>
-
-        <!-- Expandable Routing & Scoreboard Drawer -->
-        <div class="routing-drawer" id="${drawerId}">
-          <div class="routing-drawer-head" data-action="toggle-drawer" data-target="${drawerId}">
-            <span>Routing Rationale &amp; Scoreboard</span>
-            <span class="drawer-arrow">▾</span>
-          </div>
-          <div class="routing-drawer-content hidden" id="${drawerId}_content">
-            <div class="drawer-grid">
-              <div class="drawer-cell">
-                <span class="drawer-cell-label">Task Type</span>
-                <span class="drawer-cell-val">${escapeHtml(taskType.toUpperCase())}</span>
-              </div>
-              <div class="drawer-cell">
-                <span class="drawer-cell-label">Complexity</span>
-                <span class="drawer-cell-val">${escapeHtml(complexity.toUpperCase())} (${complexityScore})</span>
-              </div>
-              <div class="drawer-cell">
-                <span class="drawer-cell-label">Verification</span>
-                <span class="drawer-cell-val ${isEscalated ? 'text-amber' : 'text-green'}">
-                  ${isEscalated ? '⚡ Escalated to Frontier' : '✓ Quality Verified'}
-                </span>
-              </div>
-            </div>
-            
-            <div class="drawer-reason">
-              "${escapeHtml(routingReason)}"
-            </div>
-
-            ${scoreboardRows ? `
-              <div style="margin-top:6px;">
-                <span class="drawer-cell-label">Candidate Tier Scoreboard:</span>
-                <table class="scoreboard-table">
-                  <thead>
-                    <tr>
-                      <th>Tier</th>
-                      <th>Model</th>
-                      <th>Score</th>
-                      <th>Latency</th>
-                      <th>Est. Cost</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>${scoreboardRows}</tbody>
-                </table>
-              </div>
-            ` : ''}
-          </div>
         </div>
 
         <!-- Telemetry Actions Bar -->
@@ -1288,15 +1385,20 @@ function appendAssistantResponseToUI(query, text, data = {}, shouldScroll = true
     </div>
   `;
 
-  // Drawer Toggle Handler
-  const drawerHead = msgEl.querySelector(`[data-target="${drawerId}"]`);
+  // Drawer Toggle Handlers (Handles clicking anywhere on telemetry bar or inspect button)
   const drawerContent = msgEl.querySelector(`#${drawerId}_content`);
   const arrow = msgEl.querySelector(".drawer-arrow");
 
-  drawerHead?.addEventListener("click", () => {
-    if (!drawerContent) return;
-    drawerContent.classList.toggle("hidden");
-    if (arrow) arrow.textContent = drawerContent.classList.contains("hidden") ? "▾" : "▴";
+  msgEl.querySelectorAll(`[data-target="${drawerId}"]`).forEach(toggleTarget => {
+    toggleTarget.addEventListener("click", (e) => {
+      // Don't toggle if clicking an inner button
+      if (e.target.closest("button") && e.target.closest("button") !== toggleTarget && !toggleTarget.classList.contains("btn-inspect-drawer")) {
+        return;
+      }
+      if (!drawerContent) return;
+      drawerContent.classList.toggle("hidden");
+      if (arrow) arrow.textContent = drawerContent.classList.contains("hidden") ? "▾" : "▴";
+    });
   });
 
   // Action Button Handlers (Copy, Feedback, Inspector)

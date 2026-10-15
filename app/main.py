@@ -39,6 +39,7 @@ from .config import settings
 from .context import build_messages
 from .pipeline import (
     check_spend_budgets,
+    clear_completion_cache,
     compute_cost as _compute_cost,
     compute_baseline_cost as _compute_baseline_cost,
     execute_with_fallback as _execute_with_fallback,
@@ -150,8 +151,10 @@ class ProviderTestPayload(BaseModel):
 # ---------------------------------------------------------------------------
 # Helper Functions
 # ---------------------------------------------------------------------------
-def _check_rate_limit(request: Request):
+def _check_rate_limit(request: Optional[Request] = None):
     """Enforces client IP rate limit."""
+    if request is None:
+        return
     client_ip = (request.client.host if request.client else "testclient") or "testclient"
     now = time.monotonic()
     with _rate_hits_lock:
@@ -167,7 +170,7 @@ def _check_daily_budget():
     check_spend_budgets()
 
 
-def _get_request_context(request: Request) -> tuple[ResolvedCredentials, ModelRegistry]:
+def _get_request_context(request: Optional[Request] = None) -> tuple[ResolvedCredentials, ModelRegistry]:
     """Extracts credentials and builds dynamic request-scoped ModelRegistry."""
     creds = resolve_request_credentials(request, settings)
     reg = ModelRegistry.from_credentials(creds, settings)
@@ -196,7 +199,7 @@ async def health(request: Request):
     return {
         "status": "ok",
         "mode": "real" if reg.has_real() else "demo",
-        "architecture": "Gemini 3.1 Flash-Lite Analyzer + 6 Response Model Tiers",
+        "architecture": "Gemini 3.1 Flash-Lite Analyzer + 6 Response Model Tiers (analyzer-llm)",
         "version": "3.0.0",
         "models_count": len(reg.available()),
         "providers": {
@@ -409,7 +412,15 @@ async def chat(req: ChatRequest, request: Request):
     """Unary chat endpoint: executes query with context management, routing, Box 6 quality check & escalation."""
     _check_rate_limit(request)
     creds, reg = _get_request_context(request)
-    return await run_unary_chat(req.query, req.history, req.strategy, reg)
+    return await run_unary_chat(
+        req.query,
+        req.history,
+        req.strategy,
+        reg,
+        deadline_ms=getattr(req, "deadline_ms", None),
+        max_budget_usd=getattr(req, "max_budget_usd", None),
+        session_last_model_id=getattr(req, "session_last_model_id", None),
+    )
 
 
 @app.post("/api/chat/stream")
@@ -425,6 +436,9 @@ async def chat_stream(req: ChatRequest, request: Request):
             req.strategy,
             reg,
             disconnected=request.is_disconnected,
+            deadline_ms=getattr(req, "deadline_ms", None),
+            max_budget_usd=getattr(req, "max_budget_usd", None),
+            session_last_model_id=getattr(req, "session_last_model_id", None),
         ):
             yield f"data: {json.dumps(evt)}\n\n"
 
@@ -523,15 +537,29 @@ async def run_benchmark(req: BenchmarkRunRequest, request: Request):
         adapter = adapter_factory.get_for_model(model)
         messages = build_messages(history=[], query=query, max_tokens=2048, tier=model.tier)
         res = await adapter.generate(model, messages)
-        return model.name, _compute_cost(model, res), res.latency_ms
+        in_tok = res.input_tokens or 0
+        out_tok = res.output_tokens or 0
+        in_p = model.input_price_per_mtok or 0.0
+        out_p = model.output_price_per_mtok or 0.0
+        cost = (in_tok * in_p + out_tok * out_p) / 1_000_000.0
+        return model.name, cost, res.latency_ms
 
     async def _run_smart(query: str):
         decision = await run_analyzer(query, [], available, registry_instance=reg)
+        an_res = decision.analyzer_result
+        an_in = an_res.input_tokens or 0 if an_res else 0
+        an_out = an_res.output_tokens or 0 if an_res else 0
+        an_model = decision.analyzer_model
+        an_in_p = an_model.input_price_per_mtok or 0.0 if an_model else 0.0
+        an_out_p = an_model.output_price_per_mtok or 0.0 if an_model else 0.0
+        an_cost = (an_in * an_in_p + an_out * an_out_p) / 1_000_000.0
+        an_lat = an_res.latency_ms if an_res else 0.0
+
         if decision.answer_mode == "self" and decision.answer:
             return (
-                decision.analyzer_model.name,
-                _compute_cost(decision.analyzer_model, decision.analyzer_result) or 0.0,
-                decision.analyzer_result.latency_ms,
+                decision.analyzer_model.name if decision.analyzer_model else "Analyzer",
+                an_cost,
+                an_lat,
                 decision,
             )
         routing_res = default_router.resolve(
@@ -544,8 +572,13 @@ async def run_benchmark(req: BenchmarkRunRequest, request: Request):
         adapter = adapter_factory.get_for_model(smart_model)
         messages = build_messages(history=[], query=query, max_tokens=2048, tier=smart_model.tier)
         gen = await adapter.generate(smart_model, messages)
-        total_cost = (_compute_cost(decision.analyzer_model, decision.analyzer_result) or 0.0) + (_compute_cost(smart_model, gen) or 0.0)
-        total_lat = decision.analyzer_result.latency_ms + gen.latency_ms
+        gen_in = gen.input_tokens or 0
+        gen_out = gen.output_tokens or 0
+        gen_in_p = smart_model.input_price_per_mtok or 0.0
+        gen_out_p = smart_model.output_price_per_mtok or 0.0
+        gen_cost = (gen_in * gen_in_p + gen_out * gen_out_p) / 1_000_000.0
+        total_cost = an_cost + gen_cost
+        total_lat = an_lat + gen.latency_ms
         return smart_model.name, total_cost, total_lat, decision
 
     items = []
@@ -565,21 +598,31 @@ async def run_benchmark(req: BenchmarkRunRequest, request: Request):
         errors = []
         if isinstance(b1_r, Exception):
             errors.append(f"baseline1: {b1_r}")
-            b1_m, b1_cost, b1_lat = powerful_model.name, 0.0, 0.0
+            b1_m = powerful_model.name
+            b1_cost = 0.0
+            b1_lat = 0.0
         else:
             b1_m, b1_cost, b1_lat = b1_r
+            b1_cost = b1_cost or 0.0
+            b1_lat = b1_lat or 0.0
 
         if isinstance(b2_r, Exception):
             errors.append(f"baseline2: {b2_r}")
-            b2_m, b2_cost, b2_lat = b2_model.name, 0.0, 0.0
+            b2_m = b2_model.name
+            b2_cost = 0.0
+            b2_lat = 0.0
         else:
             b2_m, b2_cost, b2_lat = b2_r
+            b2_cost = b2_cost or 0.0
+            b2_lat = b2_lat or 0.0
 
         if isinstance(smart_r, Exception):
             errors.append(f"smart: {smart_r}")
-            smart_name, smart_cost, smart_lat, decision = "unavailable", 0.0, 0.0, None
+            smart_name, smart_cost, smart_lat, decision = "Smart Router (Error)", 0.0, 0.0, None
         else:
             smart_name, smart_cost, smart_lat, decision = smart_r
+            smart_cost = smart_cost or 0.0
+            smart_lat = smart_lat or 0.0
 
         task_type = decision.task_type if decision else "unknown"
         complexity = decision.complexity if decision else "unknown"

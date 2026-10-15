@@ -576,9 +576,7 @@ class ModelRegistry:
             if (t in s.tier.lower() or tier_alias in s.tier.lower()) and s.available and s.tier != "analyzer":
                 return s
 
-        # 3. Fallback to any available non-analyzer model
-        candidates = [s for s in self.available() if s.tier != "analyzer"]
-        return candidates[0] if candidates else None
+        return None
 
     def get_analyzer(self) -> ModelSpec:
         for s in self._specs.values():

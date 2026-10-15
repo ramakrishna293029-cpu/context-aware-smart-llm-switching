@@ -16,6 +16,9 @@ class ChatRequest(BaseModel):
     strategy: Literal["balanced", "lowest_cost", "fastest", "highest_quality"] = Field(
         default="balanced", description="Routing strategy"
     )
+    deadline_ms: Optional[float] = Field(default=None, description="Latency deadline in ms for statistical deadline compliance")
+    max_budget_usd: Optional[float] = Field(default=None, description="Maximum budget cap in USD for this query")
+    session_last_model_id: Optional[str] = Field(default=None, description="Previous turn served model ID for hysteresis continuity")
 
 
 # --- Candidate Scoring ---
@@ -75,6 +78,7 @@ class ChatResponse(BaseModel):
     tier: Optional[str] = None            # Box 8 model tier
     usage: Optional[Dict[str, Any]] = None # Box 8 usage object
     answer_mode: Literal["self", "switch"] = "switch"
+    switch_reason: Optional[str] = None
     model: ModelInfo
     analyzer: AnalyzerInfo
     context_relevant: bool = False
@@ -91,6 +95,9 @@ class ChatResponse(BaseModel):
     latency_ms: float                     # generation latency
     analyzer_latency_ms: float            # analyzer latency
     total_latency_ms: float               # total end-to-end latency
+    routing_latency_ms: Optional[float] = None
+    verification_latency_ms: Optional[float] = None
+    retries: int = 0
     ttft_ms: Optional[float] = None       # time-to-first-token
     success: bool = True
     request_id: int

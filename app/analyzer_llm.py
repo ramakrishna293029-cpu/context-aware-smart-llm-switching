@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from .adapters.base import LLMResult, adapter_factory
-from .analyzer import _fallback_heuristics, _try_solve_simple_arithmetic
+from .analyzer import _check_greeting, _fallback_heuristics, _try_solve_simple_arithmetic
 from .registry import ModelRegistry, ModelSpec, registry
 from .schemas import AnalyzerInfo, ChatMessage
 
@@ -300,12 +300,14 @@ async def run_analyzer(
         return cached
 
     # Fast-path for exact arithmetic
+    t_start_fast = time.perf_counter()
     arith_ans = _try_solve_simple_arithmetic(query.strip())
     if arith_ans and not history:
+        lat_ms = (time.perf_counter() - t_start_fast) * 1000.0
         fastpath_result = LLMResult(
-            content="", text="",
+            content=arith_ans, text=arith_ans,
             input_tokens=0, output_tokens=0, tokens_in=0, tokens_out=0,
-            usage_source="fastpath", latency_ms=0.0,
+            usage_source="fastpath", latency_ms=lat_ms,
         )
         decision = AnalyzerDecision(
             task_type="math",
@@ -323,6 +325,39 @@ async def run_analyzer(
             target_model=None,
             answer_mode="self",
             answer=arith_ans,
+            switch_required=False,
+        )
+        _routing_cache_put(cache_key, decision)
+        return decision
+
+    # Fast-path for greetings & conversational pleasantries (Requirement 7)
+    # Eliminates serial 22+ second remote analyzer latency for simple queries
+    t_greet_start = time.perf_counter()
+    is_greet, greet_ans = _check_greeting(query.strip())
+    if is_greet:
+        ans_text = greet_ans or "Hello! How can I help you today?"
+        lat_ms = (time.perf_counter() - t_greet_start) * 1000.0
+        fastpath_result = LLMResult(
+            content=ans_text, text=ans_text,
+            input_tokens=0, output_tokens=0, tokens_in=0, tokens_out=0,
+            usage_source="fastpath", latency_ms=lat_ms,
+        )
+        decision = AnalyzerDecision(
+            task_type="general",
+            complexity="low",
+            required_capability="tier_1",
+            reason="Simple greeting answered directly by base model in self-mode.",
+            analyzer_model=active_analyzer,
+            analyzer_result=fastpath_result,
+            complexity_score=0.08,
+            reasoning_required=False,
+            coding_required=False,
+            context_required=len(history) > 0,
+            target_tier="tier_1",
+            target_provider=active_analyzer.provider if active_analyzer else "gemini",
+            target_model=None,
+            answer_mode="self",
+            answer=ans_text,
             switch_required=False,
         )
         _routing_cache_put(cache_key, decision)
@@ -407,6 +442,8 @@ async def run_analyzer(
     coding_required = task_type == "coding" or required_capability == "tier_4"
     reasoning_required = task_type in ("reasoning", "math") or required_capability in ("tier_5", "tier_6")
     context_required = bool(decision_dict.get("context_required", len(history) > 0))
+    if len(history) > 0 and any(k in q_lower for k in ("history", "above", "earlier", "previous", "context", "before", "last turn", "we discussed", "you said")):
+        context_required = True
 
     # Provider map for the 6 tiers
     provider_map = {

@@ -81,9 +81,13 @@ def client(fake_server):
     object.__setattr__(settings, "groq_coding_model", "fake-groq-coding")
     object.__setattr__(settings, "groq_reasoning_model", "fake-groq-reasoning")
 
-    object.__setattr__(settings, "openrouter_api_key", "")
-    object.__setattr__(settings, "gemini_api_key", "")
-    object.__setattr__(settings, "custom_base_url", "")
+    for key_attr in [
+        "gemini_api_key", "gemini_analyzer_api_key", "gemini_tier1_api_key",
+        "gemini_tier3_api_key", "gemini_tier6_api_key",
+        "groq_tier2_api_key", "groq_tier4_api_key", "groq_tier5_api_key",
+        "openrouter_api_key", "custom_base_url",
+    ]:
+        object.__setattr__(settings, key_attr, "")
     object.__setattr__(settings, "analyzer_model", "auto")
 
     object.__setattr__(settings, "daily_budget_usd", 0.0)
@@ -100,12 +104,13 @@ def client(fake_server):
 
 @pytest.fixture(autouse=True)
 def reset_guards():
-    """Reset rate limiting, budgets, circuits, and caches between individual test runs."""
+    """Reset rate limiting, budgets, circuits, caches, and Bayesian health tracker between tests."""
     from app.config import settings
     import app.main
     import app.circuit
     import app.analyzer_llm
     import app.pipeline
+    import app.bayesian
 
     object.__setattr__(settings, "daily_budget_usd", 0.0)
     object.__setattr__(settings, "max_cost_per_request", 0.0)
@@ -113,6 +118,7 @@ def reset_guards():
     app.circuit.circuits.reset()
     app.analyzer_llm.clear_routing_cache()
     app.pipeline.clear_completion_cache()
+    app.bayesian.global_health_tracker.reset()
     yield
     object.__setattr__(settings, "daily_budget_usd", 0.0)
     object.__setattr__(settings, "max_cost_per_request", 0.0)
@@ -120,3 +126,4 @@ def reset_guards():
     app.circuit.circuits.reset()
     app.analyzer_llm.clear_routing_cache()
     app.pipeline.clear_completion_cache()
+    app.bayesian.global_health_tracker.reset()

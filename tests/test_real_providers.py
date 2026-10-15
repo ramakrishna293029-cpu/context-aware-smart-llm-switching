@@ -33,7 +33,16 @@ os.environ["GROQ_API_KEY"] = "groq-test-key"
 os.environ["GROQ_BASE_URL"] = f"http://127.0.0.1:{PORT}/v1"
 os.environ["GROQ_FAST_MODEL"] = "fake-groq-fast"
 os.environ["GROQ_POWERFUL_MODEL"] = "fake-groq-max"
+os.environ["GROQ_TIER2_MODEL"] = "fake-groq-t2-fail500" if FALLBACK_MODE else "fake-groq-t2"
 os.environ["OPENROUTER_API_KEY"] = ""  # keep .env real providers out of this test
+os.environ["GEMINI_API_KEY"] = ""
+os.environ["GEMINI_ANALYZER_API_KEY"] = ""
+os.environ["GEMINI_TIER1_API_KEY"] = ""
+os.environ["GEMINI_TIER3_API_KEY"] = ""
+os.environ["GEMINI_TIER6_API_KEY"] = ""
+os.environ["GROQ_TIER2_API_KEY"] = ""
+os.environ["GROQ_TIER4_API_KEY"] = ""
+os.environ["GROQ_TIER5_API_KEY"] = ""
 os.environ.pop("ANALYZER_MODEL", None)
 
 COMPLEX_MARKERS = ("distributed database", "re-renders infinitely", "Prove that")
@@ -47,22 +56,35 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(length) or b"{}")
         model = body.get("model", "")
-        prompt = body.get("messages", [{}])[-1].get("content", "")
+        messages = body.get("messages", [])
+        all_content = " ".join(m.get("content", "") for m in messages)
+        prompt = all_content
         usage = {"prompt_tokens": 12, "completion_tokens": 17, "total_tokens": 29}
 
-        if "fail500" in model and "ROUTING ANALYZER" not in prompt:
+        is_analyzer = (
+            any(k in prompt.upper() for k in ("ROUTING ANALYZER", "ANALYZER LLM", "ANALYZER", "DECISION CRITERIA", "BOX 3"))
+            or "analyzer" in model.lower()
+            or body.get("response_format", {}).get("type") == "json_object"
+        )
+
+        if "fail500" in model and not is_analyzer:
             self._error(500, "simulated outage")
             return
 
-        if "ROUTING ANALYZER" in prompt:
-            query = prompt.split("USER MESSAGE: ", 1)[1] if "USER MESSAGE: " in prompt else ""
-            complex_ = any(m in query for m in COMPLEX_MARKERS)
+        if is_analyzer:
+            user_query = ""
+            for m in messages:
+                if m.get("role") == "user":
+                    user_query += " " + m.get("content", "")
+            if not user_query:
+                user_query = prompt
+            complex_ = any(m.lower() in user_query.lower() for m in COMPLEX_MARKERS)
             if complex_:
                 text = json.dumps({
                     "answer_mode": "switch",
                     "context_relevant": False,
                     "reason": "Needs stronger reasoning and coding capability.",
-                    "target_model": "openai-powerful",
+                    "target_model": None,
                     "task_type": "technical",
                     "complexity": 0.85,
                     "answer": None,
@@ -75,10 +97,10 @@ class Handler(BaseHTTPRequestHandler):
                     "target_model": None,
                     "task_type": "factual",
                     "complexity": 0.15,
-                    "answer": f"[REAL-analyzer] echo: {query[:40]}",
+                    "answer": f"[REAL-analyzer] echo: {user_query.strip()[:40]}",
                 })
         else:
-            text = f"[REAL-{model}] echo: {prompt[:40]}"
+            text = f"[REAL-{model}] solution analysis: {prompt[:40]} completed with verified derivation and steps."
 
         payload = {
             "id": "chatcmpl-test",
@@ -115,7 +137,10 @@ async def main():
     simple = "What is HTML?"
     complex = "Debug this: my React component re-renders infinitely"
 
-    r = await chat(ChatRequest(query=simple))
+    from starlette.requests import Request
+    mock_request = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 12345)})
+
+    r = await chat(ChatRequest(query=simple), request=mock_request)
     print(f"  '{simple[:45]}' -> self by {r.model.model_id} cost=${r.estimated_cost_usd:.6f} "
           f"analyzer_tokens={r.analyzer.input_tokens}/{r.analyzer.output_tokens} "
           f"total_tokens={r.total_tokens} lat={r.analyzer_latency_ms:.0f}ms")
@@ -127,21 +152,24 @@ async def main():
     assert r.total_tokens == 29
     assert r.analyzer_cost_usd > 0 and r.estimated_cost_usd == r.analyzer_cost_usd
 
-    r = await chat(ChatRequest(query=complex))
+    r = await chat(ChatRequest(query=complex), request=mock_request)
     print(f"  '{complex[:45]}' -> {r.model.model_id} cost=${r.estimated_cost_usd:.6f} "
           f"tokens={r.input_tokens}/{r.output_tokens} lat={r.latency_ms:.0f}ms "
           f"switch={r.answer_mode} reason={r.switch_reason!r}")
     assert r.answer_mode == "switch", "complex query must switch to the powerful model"
     assert r.switch_reason
+    assert r.analyzer.reason
     if FALLBACK_MODE:
-        assert r.fallback_used, "openai-powerful fails with 500, fallback must kick in"
-        assert r.model.model_id != "openai-powerful"
+        assert r.fallback_used, "primary tier fails with 500, fallback must kick in"
+        assert r.model.tier in ["tier_2", "tier_4", "tier_5"]
+        assert r.model.model_id != "groq-tier_2"
         assert "[REAL-" in r.response and "fail500" not in r.response
         print(f"  fallback verified: '{complex[:40]}' -> served by {r.model.model_id}")
         print("  ALL queries served by a real provider (fallback chain working)")
     else:
-        assert r.model.model_id == "openai-powerful"
-        assert "[REAL-fake-max" in r.response
+        assert r.model.tier in ["tier_2", "tier_4", "tier_5"]
+        assert r.model.model_id == "groq-tier_2"
+        assert "[REAL-" in r.response
         assert r.input_tokens == 12 and r.output_tokens == 17
 
     print("\nALL REAL-PROVIDER TESTS PASSED")

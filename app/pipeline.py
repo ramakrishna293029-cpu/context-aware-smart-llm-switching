@@ -20,6 +20,7 @@ from fastapi import HTTPException
 
 from .adapters.base import LLMAdapterError, LLMResult, StreamChunk, adapter_factory
 from .analyzer_llm import AnalyzerDecision, run_analyzer
+from .bayesian import global_health_tracker
 from .circuit import circuits
 from .config import settings
 from .context import build_messages
@@ -103,6 +104,11 @@ def route_decision(
     decision: AnalyzerDecision,
     strategy: str,
     reg: ModelRegistry,
+    estimated_input_tokens: int = 1000,
+    estimated_output_tokens: int = 500,
+    deadline_ms: Optional[float] = None,
+    max_budget_usd: Optional[float] = None,
+    session_last_model_id: Optional[str] = None,
 ) -> RoutingResult:
     return default_router.resolve(
         decision,
@@ -110,6 +116,12 @@ def route_decision(
         registry=reg,
         latency_profile=tracker.get_latency_profile(),
         feedback_modifiers=tracker.get_feedback_modifiers(),
+        estimated_input_tokens=estimated_input_tokens,
+        estimated_output_tokens=estimated_output_tokens,
+        deadline_ms=deadline_ms,
+        max_budget_usd=max_budget_usd,
+        session_last_model_id=session_last_model_id,
+        health_tracker=global_health_tracker,
     )
 
 
@@ -214,11 +226,20 @@ async def execute_with_fallback(
             adapter = adapter_factory.get(model.provider)
             result = await adapter.generate(model, messages)
             circuits.success(model.model_id)
+            global_health_tracker.record_outcome(model.model_id, success=True, latency_ms=result.latency_ms)
             fallback_used = model.model_id != primary.model_id
             err_msg = " | ".join(errors) if errors else None
             return model, result, fallback_used, err_msg
         except LLMAdapterError as exc:
             circuits.failure(model.model_id)
+            err_str = str(exc).lower()
+            is_rl = "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str or "rate limit" in err_str
+            global_health_tracker.record_outcome(
+                model.model_id,
+                success=False,
+                is_rate_limit=is_rl,
+                cooldown_seconds=18000.0 if is_rl else 60.0,
+            )
             errors.append(f"{model.model_id}: {exc}")
 
     raise LLMAdapterError("All candidate models failed in fallback chain: " + " | ".join(errors))
@@ -293,12 +314,21 @@ async def stream_with_fallback(
                     usage_source="unavailable",
                 )
             circuits.success(cand.model_id)
+            global_health_tracker.record_outcome(cand.model_id, success=True, latency_ms=result.latency_ms if result else None)
             fallback_used = cand.model_id != primary.model_id
             err_msg = " | ".join(errors) if errors else None
             yield ("complete", (cand, result, fallback_used, err_msg))
             return
         except Exception as exc:
             circuits.failure(cand.model_id)
+            err_str = str(exc).lower()
+            is_rl = "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str or "rate limit" in err_str
+            global_health_tracker.record_outcome(
+                cand.model_id,
+                success=False,
+                is_rate_limit=is_rl,
+                cooldown_seconds=18000.0 if is_rl else 60.0,
+            )
             errors.append(f"{cand.model_id}: {exc}")
             continue
 
@@ -366,6 +396,9 @@ class ChatOutcome:
     cached: bool = False
     request_id: Optional[int] = None
     strategy: str = "balanced"
+    routing_lat: float = 0.0
+    verification_lat: float = 0.0
+    retries: int = 0
     extra: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -479,6 +512,7 @@ def to_chat_response(outcome: ChatOutcome) -> ChatResponse:
             "total_tokens": tot_tok,
         },
         answer_mode=outcome.answer_mode,  # type: ignore[arg-type]
+        switch_reason=d.reason,
         model=ModelInfo(
             model_id=served.model_id,
             model_name=served.name,
@@ -505,6 +539,9 @@ def to_chat_response(outcome: ChatOutcome) -> ChatResponse:
         latency_ms=round(outcome.gen_lat, 1),
         analyzer_latency_ms=round(outcome.analyzer_lat, 1),
         total_latency_ms=round(outcome.total_lat, 1),
+        routing_latency_ms=round(outcome.routing_lat, 2),
+        verification_latency_ms=round(outcome.verification_lat, 2),
+        retries=outcome.retries,
         ttft_ms=round(outcome.ttft_ms, 1) if outcome.ttft_ms else None,
         success=outcome.success,
         request_id=outcome.request_id or 0,
@@ -571,6 +608,9 @@ def done_event_payload(outcome: ChatOutcome) -> dict:
         "original_tier": outcome.original_tier,
         "escalated_tier": outcome.escalated_tier,
         "escalation_reason": outcome.escalation_reason,
+        "routing_latency_ms": round(outcome.routing_lat, 2),
+        "verification_latency_ms": round(outcome.verification_lat, 2),
+        "retries": outcome.retries,
         "candidates": routing.candidates() if routing else [],
     }
 
@@ -643,11 +683,14 @@ def build_switch_outcome(
     escalation_used: bool,
     escalation_reason: Optional[str],
     original_tier: Optional[str],
-    escalated_tier: Optional[str],
-    success: bool,
+    escalated_tier: Optional[str] = None,
+    success: bool = True,
     error_text: Optional[str],
     reg: ModelRegistry,
     strategy: str,
+    routing_lat: float = 0.0,
+    verification_lat: float = 0.0,
+    retries: int = 0,
 ) -> ChatOutcome:
     total_lat = (time.perf_counter() - t_start) * 1000.0
     model_cost, total, baseline, savings, pct, in_tok, out_tok, reasoning, tot = _assemble_costs(
@@ -689,6 +732,9 @@ def build_switch_outcome(
         reasoning_toks=reasoning,
         tot_tok=tot,
         strategy=strategy,
+        routing_lat=routing_lat,
+        verification_lat=verification_lat,
+        retries=retries,
     )
 
 
@@ -697,6 +743,9 @@ async def run_unary_chat(
     history: List[ChatMessage],
     strategy: str,
     reg: ModelRegistry,
+    deadline_ms: Optional[float] = None,
+    max_budget_usd: Optional[float] = None,
+    session_last_model_id: Optional[str] = None,
 ) -> ChatResponse:
     check_spend_budgets()
     if "FAIL-ANALYZER" in query:
@@ -730,11 +779,22 @@ async def run_unary_chat(
         persist_outcome(query, outcome)
         return to_chat_response(outcome)
 
-    routing = route_decision(decision, strategy, reg)
+    t_route = time.perf_counter()
+    routing = route_decision(
+        decision,
+        strategy,
+        reg,
+        estimated_input_tokens=decision.analyzer_result.input_tokens or 1000,
+        estimated_output_tokens=decision.analyzer_result.output_tokens or 500,
+        deadline_ms=deadline_ms,
+        max_budget_usd=max_budget_usd,
+        session_last_model_id=session_last_model_id,
+    )
     chain = apply_cost_cap(
         routing.fallback_chain,
         decision.analyzer_result.input_tokens,
     )
+    routing_lat = (time.perf_counter() - t_route) * 1000.0
     primary = chain[0]
 
     if cached and cached.get("answer_mode") == "switch" and cached.get("response"):
@@ -767,6 +827,9 @@ async def run_unary_chat(
             error_text=None,
             reg=reg,
             strategy=strategy,
+            routing_lat=routing_lat,
+            verification_lat=0.0,
+            retries=0,
         )
         outcome.cached = True
         outcome.response_text = cached["response"]
@@ -799,9 +862,13 @@ async def run_unary_chat(
         error_text = str(exc)
 
     # Box 6: Response Quality Check & Adaptive Escalation
-    if settings.enable_escalation:
+    # Avoid unnecessary verification for simple requests where policy permits (Requirement 7)
+    t_verify = time.perf_counter()
+    verification_lat = 0.0
+    if settings.enable_escalation and decision.complexity != "low":
         res_text = result.text if result else ""
         is_sufficient, fail_reason = evaluate_response_quality(query, res_text, decision, result)
+        verification_lat = (time.perf_counter() - t_verify) * 1000.0
         if not is_sufficient:
             esc_model = get_escalation_tier(served, decision, reg)
             if esc_model and esc_model.model_id != served.model_id:
@@ -825,6 +892,7 @@ async def run_unary_chat(
                     error_text = f"Escalation to {esc_model.tier} failed: {exc}"
 
     gen_lat = (time.perf_counter() - t_gen) * 1000.0
+    retries_count = len(fallback_reason.split(" | ")) if (fallback_used and fallback_reason) else 0
     outcome = build_switch_outcome(
         decision=decision,
         routing=routing,
@@ -845,9 +913,12 @@ async def run_unary_chat(
         error_text=error_text,
         reg=reg,
         strategy=strategy,
+        routing_lat=routing_lat,
+        verification_lat=verification_lat,
+        retries=retries_count,
     )
     persist_outcome(query, outcome)
-    if success and result:
+    if success and result and not fallback_used:
         completion_cache_put(cache_key, {
             "answer_mode": "switch",
             "response": outcome.response_text,
@@ -863,6 +934,9 @@ async def iter_chat_sse(
     strategy: str,
     reg: ModelRegistry,
     disconnected: Optional[Callable[[], Any]] = None,
+    deadline_ms: Optional[float] = None,
+    max_budget_usd: Optional[float] = None,
+    session_last_model_id: Optional[str] = None,
 ) -> AsyncIterator[dict]:
     """Yield typed SSE event dicts for `/api/chat/stream` with Box 6 Quality & Escalation checks."""
     check_spend_budgets()
@@ -907,8 +981,19 @@ async def iter_chat_sse(
         yield done_event_payload(outcome)
         return
 
-    routing = route_decision(decision, strategy, reg)
+    t_route = time.perf_counter()
+    routing = route_decision(
+        decision,
+        strategy,
+        reg,
+        estimated_input_tokens=decision.analyzer_result.input_tokens or 1000,
+        estimated_output_tokens=decision.analyzer_result.output_tokens or 500,
+        deadline_ms=deadline_ms,
+        max_budget_usd=max_budget_usd,
+        session_last_model_id=session_last_model_id,
+    )
     chain = apply_cost_cap(routing.fallback_chain, decision.analyzer_result.input_tokens)
+    routing_lat = (time.perf_counter() - t_route) * 1000.0
     primary = chain[0]
 
     yield {
@@ -1008,6 +1093,7 @@ async def iter_chat_sse(
             yield {"event": "error", "detail": error_text}
 
     gen_lat = (time.perf_counter() - t_gen) * 1000.0
+    retries_count = len(fallback_reason.split(" | ")) if (fallback_used and fallback_reason) else 0
     outcome = build_switch_outcome(
         decision=decision,
         routing=routing,
@@ -1028,9 +1114,12 @@ async def iter_chat_sse(
         error_text=error_text,
         reg=reg,
         strategy=strategy,
+        routing_lat=routing_lat,
+        verification_lat=0.0,
+        retries=retries_count,
     )
     persist_outcome(query, outcome)
-    if outcome.success and result:
+    if outcome.success and result and not fallback_used:
         completion_cache_put(cache_key, {
             "answer_mode": "switch",
             "response": outcome.response_text,
