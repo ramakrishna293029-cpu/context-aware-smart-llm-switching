@@ -222,7 +222,7 @@ async def health(request: Request):
     return {
         "status": "ok",
         "mode": "real" if reg.has_real() else "demo",
-        "architecture": "Gemini 3.1 Flash-Lite Analyzer + 6 Response Model Tiers (analyzer-llm upgraded to LinUCB)",
+        "architecture": "Context-Aware Smart LLM Switching (Disjoint LinUCB Contextual Router + 6 Response Model Tiers)",
         "version": "3.0.0",
         "models_count": len([m for m in reg.available() if m.tier != "analyzer"]),
         "providers": {

@@ -8,7 +8,7 @@ Covers:
 5. Budget Hard-Constraint Rejection: 429 when max_cost or daily_budget rejects all models.
 6. Stats & Metrics Bandit Arm Telemetry: /api/stats and /api/metrics include bandit_arms and pull counts.
 7. Closed-Loop Bandit Parameter Learning: Verification that arm pull_count and A, b matrices update.
-8. Semantic Cache Fast-Path: Zero-latency return on identical queries preserving bandit metadata.
+8. Context-Aware Completion Cache Fast-Path: Zero-latency return on identical queries preserving bandit metadata.
 
 Run: python -m pytest tests/test_linucb_e2e.py -v
 """
@@ -192,14 +192,14 @@ class TestClosedLoopLearning:
         assert new_pulls[served_id] == initial_pulls.get(served_id, 0) + 1
 
 
-class TestSemanticCacheLinUCB:
-    def test_semantic_cache_hit_returns_bandit_metadata(self, client: TestClient):
+class TestContextAwareCompletionCacheLinUCB:
+    def test_completion_cache_hit_returns_bandit_metadata(self, client: TestClient):
         query = "What is an abstract syntax tree?"
         r1 = client.post("/api/chat", json={"query": query})
         assert r1.status_code == 200
         d1 = r1.json()
 
-        # Second call with identical query hits semantic cache
+        # Second call with identical query hits context-aware completion cache
         r2 = client.post("/api/chat", json={"query": query})
         assert r2.status_code == 200
         d2 = r2.json()

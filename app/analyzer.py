@@ -102,9 +102,9 @@ CAPABILITY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Simple arithmetic regex: e.g. "5 + 5", "what is 2 * 8", "100 / 4"
+# Simple arithmetic regex: e.g. "5 + 5", "what is 2 * 8", "100 / 4", "15 multiplied by 4"
 ARITHMETIC_PATTERN = re.compile(
-    r"^(?:what is\s+|calculate\s+|solve\s+)?(\d+(?:\.\d+)?)\s*([\+\-\*\/])\s*(\d+(?:\.\d+)?)\s*\??$",
+    r"^(?:what is\s+|calculate\s+|solve\s+)?(\d+(?:\.\d+)?)\s*([\+\-\*\/]|multiplied by|times|plus|minus|divided by)\s*(\d+(?:\.\d+)?)\s*\??$",
     re.IGNORECASE,
 )
 
@@ -150,27 +150,31 @@ def _try_solve_simple_arithmetic(text: str) -> Optional[str]:
         return None
     try:
         a = float(m.group(1))
-        op = m.group(2)
+        op_raw = m.group(2).lower()
         b = float(m.group(3))
-        if op == "+":
+        if op_raw in ("+", "plus"):
             res = a + b
-        elif op == "-":
+            op_sym = "+"
+        elif op_raw in ("-", "minus"):
             res = a - b
-        elif op == "*":
+            op_sym = "-"
+        elif op_raw in ("*", "multiplied by", "times"):
             res = a * b
-        elif op == "/":
+            op_sym = "*"
+        elif op_raw in ("/", "divided by"):
             if b == 0:
                 return "Division by zero is undefined."
             res = a / b
+            op_sym = "/"
         else:
             return None
-        
+
         # Format as int if whole number
         if res.is_integer():
             res_str = str(int(res))
         else:
             res_str = f"{res:.4f}".rstrip("0").rstrip(".")
-        return f"{m.group(1)} {op} {m.group(3)} = {res_str}"
+        return f"{m.group(1)} {op_sym} {m.group(3)} = {res_str}"
     except Exception:
         return None
 

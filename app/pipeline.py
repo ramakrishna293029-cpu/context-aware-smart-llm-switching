@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -214,29 +215,87 @@ def get_escalation_tier(
     return None
 
 
+class FallbackExecutionResult:
+    """Encapsulates fallback execution result alongside per-attempt metrics.
+
+    Supports 4-element unpacking:
+        served, result, fallback_used, fallback_reason = exec_res
+    while allowing attribute access:
+        exec_res.attempts
+    """
+
+    def __init__(
+        self,
+        served: ModelSpec,
+        result: LLMResult,
+        fallback_used: bool,
+        fallback_reason: Optional[str],
+        attempts: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> None:
+        self.served = served
+        self.result = result
+        self.fallback_used = fallback_used
+        self.fallback_reason = fallback_reason
+        self.attempts = attempts or {}
+
+    def __iter__(self):
+        return iter((self.served, self.result, self.fallback_used, self.fallback_reason))
+
+    def __getitem__(self, idx):
+        return (self.served, self.result, self.fallback_used, self.fallback_reason, self.attempts)[idx]
+
+    def __len__(self) -> int:
+        return 4
+
+    def __repr__(self) -> str:
+        return f"FallbackExecutionResult(served={self.served.model_id}, fallback_used={self.fallback_used})"
+
+
 async def execute_with_fallback(
     messages: List[ChatMessage],
     chain: List[ModelSpec],
-) -> Tuple[ModelSpec, LLMResult, bool, Optional[str]]:
+) -> FallbackExecutionResult:
     if not chain:
         raise LLMAdapterError("No candidate models available in fallback chain.")
 
     primary = chain[0]
     errors: List[str] = []
+    attempts: Dict[str, Dict[str, Any]] = {}
 
     for model in chain:
         if not circuits.allow(model.model_id):
             errors.append(f"{model.model_id}: circuit open")
+            attempts[model.model_id] = {
+                "attempted": False,
+                "circuit_open": True,
+                "latency_ms": 0.0,
+                "cost_usd": 0.0,
+                "error": "circuit open",
+            }
             continue
+        t0 = time.perf_counter()
         try:
             adapter = adapter_factory.get(model.provider)
             result = await adapter.generate(model, messages)
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            if result.latency_ms is None or result.latency_ms <= 0:
+                result.latency_ms = elapsed_ms
             circuits.success(model.model_id)
             global_health_tracker.record_outcome(model.model_id, success=True, latency_ms=result.latency_ms)
             fallback_used = model.model_id != primary.model_id
             err_msg = " | ".join(errors) if errors else None
-            return model, result, fallback_used, err_msg
-        except LLMAdapterError as exc:
+            cost = compute_cost(model, result) if result else 0.0
+            attempts[model.model_id] = {
+                "attempted": True,
+                "circuit_open": False,
+                "success": True,
+                "latency_ms": result.latency_ms,
+                "cost_usd": cost or 0.0,
+                "error": None,
+            }
+            return FallbackExecutionResult(model, result, fallback_used, err_msg, attempts)
+        except Exception as exc:
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
             circuits.failure(model.model_id)
             err_str = str(exc).lower()
             is_rl = "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str or "rate limit" in err_str
@@ -244,8 +303,17 @@ async def execute_with_fallback(
                 model.model_id,
                 success=False,
                 is_rate_limit=is_rl,
+                latency_ms=elapsed_ms,
                 cooldown_seconds=18000.0 if is_rl else 60.0,
             )
+            attempts[model.model_id] = {
+                "attempted": True,
+                "circuit_open": False,
+                "success": False,
+                "latency_ms": elapsed_ms,
+                "cost_usd": 0.0,
+                "error": str(exc),
+            }
             errors.append(f"{model.model_id}: {exc}")
 
     raise LLMAdapterError("All candidate models failed in fallback chain: " + " | ".join(errors))
@@ -256,17 +324,26 @@ async def stream_with_fallback(
     chain: List[ModelSpec],
     disconnected: Optional[Callable[[], Any]] = None,
 ) -> AsyncIterator[Tuple[str, Any]]:
-    """Yields ('chunk', StreamChunk) then ('complete', (model, result, fallback, reason))."""
+    """Yields ('chunk', StreamChunk) then ('complete', FallbackExecutionResult)."""
     if not chain:
         raise LLMAdapterError("No candidate models available in fallback chain.")
 
     primary = chain[0]
     errors: List[str] = []
+    attempts: Dict[str, Dict[str, Any]] = {}
 
     for cand in chain:
         if not circuits.allow(cand.model_id):
             errors.append(f"{cand.model_id}: circuit open")
+            attempts[cand.model_id] = {
+                "attempted": False,
+                "circuit_open": True,
+                "latency_ms": 0.0,
+                "cost_usd": 0.0,
+                "error": "circuit open",
+            }
             continue
+        t0 = time.perf_counter()
         adapter = adapter_factory.get(cand.provider)
         full_text: List[str] = []
         full_reasoning: List[str] = []
@@ -313,19 +390,34 @@ async def stream_with_fallback(
                 if result.content:
                     yield ("chunk", StreamChunk(text=result.content))
 
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
             if result is None:
                 result = LLMResult(
                     content="".join(full_text),
                     text="".join(full_text),
                     usage_source="unavailable",
+                    latency_ms=elapsed_ms,
                 )
+            elif result.latency_ms is None or result.latency_ms <= 0:
+                result.latency_ms = elapsed_ms
+
             circuits.success(cand.model_id)
             global_health_tracker.record_outcome(cand.model_id, success=True, latency_ms=result.latency_ms if result else None)
             fallback_used = cand.model_id != primary.model_id
             err_msg = " | ".join(errors) if errors else None
-            yield ("complete", (cand, result, fallback_used, err_msg))
+            cost = compute_cost(cand, result) if result else 0.0
+            attempts[cand.model_id] = {
+                "attempted": True,
+                "circuit_open": False,
+                "success": True,
+                "latency_ms": result.latency_ms,
+                "cost_usd": cost or 0.0,
+                "error": None,
+            }
+            yield ("complete", FallbackExecutionResult(cand, result, fallback_used, err_msg, attempts))
             return
         except Exception as exc:
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
             circuits.failure(cand.model_id)
             err_str = str(exc).lower()
             is_rl = "429" in err_str or "quota" in err_str or "resource_exhausted" in err_str or "rate limit" in err_str
@@ -333,8 +425,17 @@ async def stream_with_fallback(
                 cand.model_id,
                 success=False,
                 is_rate_limit=is_rl,
+                latency_ms=elapsed_ms,
                 cooldown_seconds=18000.0 if is_rl else 60.0,
             )
+            attempts[cand.model_id] = {
+                "attempted": True,
+                "circuit_open": False,
+                "success": False,
+                "latency_ms": elapsed_ms,
+                "cost_usd": 0.0,
+                "error": str(exc),
+            }
             errors.append(f"{cand.model_id}: {exc}")
             continue
 
@@ -904,15 +1005,17 @@ def _get_local_decision(
     word_count = len(words)
     has_history = bool(history and len(history) > 0)
 
-    # Context dependency detection
-    followup_cues = (
-        "it", "that", "this", "these", "those", "same", "now", "again",
-        "previous", "above", "earlier", "before", "last turn", "we discussed",
-        "you said", "what about", "how about", "continue", "instead", "why", "more",
-        "optimize",
+    # Context dependency detection using word-boundary matching and elliptical follow-up patterns
+    followup_patterns = (
+        r"\b(it|its|that|this|these|those|same|now|again)\b",
+        r"\b(previous|above|earlier|before|last turn|we discussed|you said)\b",
+        r"\b(what about|how about|continue|instead|why|more|optimize|refactor)\b",
+        r"\b(example|sample|implementation|show me|give an example|provide an example)\b",
+        r"\b(in java|in python|in c\+\+|in rust|in go|in typescript|in js|in c#)\b",
+        r"\b(time complexity|space complexity|complexity of it|complexity of this)\b",
     )
     context_required = has_history and any(
-        cue in q_lower.split() or cue in q_lower for cue in followup_cues
+        bool(re.search(pat, clean_query, re.IGNORECASE)) for pat in followup_patterns
     )
 
     # Coding classification
@@ -1042,7 +1145,7 @@ async def run_unary_chat(
     available = reg.available()
     t_start = time.perf_counter()
 
-    # Step 1: Semantic Cache check - instant return on cache hit
+    # Step 1: Context-Aware Completion Cache check - instant return on cache hit
     cache_key = _completion_key(query, history, strategy, ",".join(m.model_id for m in available))
     cached = completion_cache_get(cache_key)
     if cached and cached.get("response"):
@@ -1061,7 +1164,7 @@ async def run_unary_chat(
             complexity="low",
             complexity_score=0.1,
             required_capability=cached_model.tier if cached_model else "tier_1",
-            reason="Semantic Cache Hit",
+            reason="Context-Aware Completion Cache Hit",
             answer_mode=cached.get("answer_mode", "switch"),
             analyzer_model=reg.strongest() or (available[0] if available else None),
             analyzer_result=fake_result,
@@ -1221,9 +1324,10 @@ async def run_unary_chat(
     error_text = None
 
     try:
-        served, result, fallback_used, fallback_reason = await execute_with_fallback(
+        exec_res = await execute_with_fallback(
             messages, [primary_model] + fallback_chain
         )
+        served, result, fallback_used, fallback_reason = exec_res
     except LLMAdapterError as exc:
         success = False
         error_text = str(exc)
@@ -1231,17 +1335,24 @@ async def run_unary_chat(
     gen_lat = (time.perf_counter() - t_gen) * 1000.0
 
     # Step 6: Closed-loop learning
-    # Penalize any candidate models that failed in the fallback chain
+    # Penalize candidate models that were actually attempted and failed in the fallback chain.
+    # Models skipped due to open circuit breakers are NOT penalized in LinUCB.
     if fallback_used:
+        attempts_map = getattr(exec_res, "attempts", {}) if "exec_res" in locals() and exec_res else {}
         for failed_cand in [primary_model] + fallback_chain:
             if failed_cand.model_id == served.model_id:
                 break
+            att = attempts_map.get(failed_cand.model_id, {})
+            if att.get("circuit_open") or not att.get("attempted", False):
+                continue
+            failed_lat = att.get("latency_ms", 0.0)
+            failed_cost = att.get("cost_usd", 0.0)
             record_and_update_bandit(
                 router=linucb_router,
                 model_id=failed_cand.model_id,
                 x_t=x_t,
-                cost_usd=0.0,
-                latency_ms=0.0,
+                cost_usd=failed_cost,
+                latency_ms=failed_lat,
                 success=False,
                 response_text="",
                 query=query,
@@ -1332,7 +1443,7 @@ async def iter_chat_sse(
     available = reg.available()
     t_start = time.perf_counter()
 
-    # Step 1: Semantic Cache check - instant return on cache hit
+    # Step 1: Context-Aware Completion Cache check - instant return on cache hit
     cache_key = _completion_key(query, history, strategy, ",".join(m.model_id for m in available))
     cached = completion_cache_get(cache_key)
     if cached and cached.get("response"):
@@ -1354,7 +1465,7 @@ async def iter_chat_sse(
             complexity="low",
             complexity_score=0.1,
             required_capability=cached_model.tier if cached_model else "tier_1",
-            reason="Semantic Cache Hit",
+            reason="Context-Aware Completion Cache Hit",
             answer_mode=cached.get("answer_mode", "switch"),
             analyzer_model=reg.strongest() or (available[0] if available else None),
             analyzer_result=fake_res,
@@ -1543,7 +1654,8 @@ async def iter_chat_sse(
                     yield {"event": "content_delta", "text": chunk.text}
                     yield {"event": "delta", "text": chunk.text}
             elif kind == "complete":
-                served, result, fallback_used, fallback_reason = payload
+                exec_res = payload
+                served, result, fallback_used, fallback_reason = exec_res
                 completed = True
     except LLMAdapterError as exc:
         success = False
@@ -1562,17 +1674,24 @@ async def iter_chat_sse(
     gen_lat = (time.perf_counter() - t_gen) * 1000.0
 
     # Step 6: Closed-loop learning
-    # Penalize any candidate models that failed in the fallback chain
+    # Penalize candidate models that were actually attempted and failed in the fallback chain.
+    # Models skipped due to open circuit breakers are NOT penalized in LinUCB.
     if fallback_used:
+        attempts_map = getattr(exec_res, "attempts", {}) if "exec_res" in locals() and exec_res else {}
         for failed_cand in [primary_model] + fallback_chain:
             if failed_cand.model_id == served.model_id:
                 break
+            att = attempts_map.get(failed_cand.model_id, {})
+            if att.get("circuit_open") or not att.get("attempted", False):
+                continue
+            failed_lat = att.get("latency_ms", 0.0)
+            failed_cost = att.get("cost_usd", 0.0)
             record_and_update_bandit(
                 router=linucb_router,
                 model_id=failed_cand.model_id,
                 x_t=x_t,
-                cost_usd=0.0,
-                latency_ms=0.0,
+                cost_usd=failed_cost,
+                latency_ms=failed_lat,
                 success=False,
                 response_text="",
                 query=query,

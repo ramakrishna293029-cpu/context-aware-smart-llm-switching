@@ -70,7 +70,7 @@ def test_health_endpoint(client):
     data = resp.json()
     assert data["status"] == "ok"
     assert data["mode"] == "real"
-    assert "Gemini 3.1 Flash-Lite" in data["architecture"]
+    assert "LinUCB" in data["architecture"] or "6 Response Model Tiers" in data["architecture"]
 
 
 def test_analyze_endpoint_structured_json(client):

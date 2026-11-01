@@ -214,7 +214,7 @@ class TestHealthAndProviders:
         assert r.status_code == 200
         data = r.json()
         assert data["status"] == "ok"
-        assert "analyzer-llm" in data["architecture"] or data["architecture"] == "analyzer-llm"
+        assert "LinUCB" in data["architecture"] or "Context-Aware" in data["architecture"]
         assert "providers" in data
 
     def test_providers_health(self, client: TestClient):

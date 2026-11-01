@@ -55,10 +55,16 @@ def _safe_numeric(val: Any) -> Optional[float]:
 
 
 class ResponseQualityEvaluator:
-    """Heuristic quality evaluator assessing response fidelity and completeness.
+    """Heuristic quality evaluator assessing response fidelity, structure, and completeness.
 
     Evaluates response strings for code fence balance, code prompt sufficiency,
-    refusal detection, and incorporates explicit user feedback.
+    refusal detection, Python AST syntax validity, deterministic arithmetic checks,
+    and incorporates explicit user feedback.
+
+    Note on semantic correctness:
+    Deterministic AST parsing and arithmetic checks provide structural and numerical
+    sanity guards, but do NOT establish complete semantic correctness or formal
+    verification of arbitrary generative outputs.
     """
 
     DEFAULT_CODE_KEYWORDS: Tuple[str, ...] = (
@@ -82,6 +88,8 @@ class ResponseQualityEvaluator:
         refusal_penalty: float = 0.4,
         positive_feedback_bonus: float = 0.2,
         negative_feedback_penalty: float = 0.4,
+        ast_syntax_penalty: float = 0.35,
+        arithmetic_mismatch_penalty: float = 0.50,
         code_keywords: Optional[Tuple[str, ...]] = None,
         refusal_phrases: Optional[Tuple[str, ...]] = None,
         min_code_words: int = 15,
@@ -92,6 +100,8 @@ class ResponseQualityEvaluator:
         self.refusal_penalty: float = float(refusal_penalty)
         self.positive_feedback_bonus: float = float(positive_feedback_bonus)
         self.negative_feedback_penalty: float = float(negative_feedback_penalty)
+        self.ast_syntax_penalty: float = float(ast_syntax_penalty)
+        self.arithmetic_mismatch_penalty: float = float(arithmetic_mismatch_penalty)
         self.code_keywords: Tuple[str, ...] = (
             code_keywords if code_keywords is not None else self.DEFAULT_CODE_KEYWORDS
         )
@@ -120,7 +130,10 @@ class ResponseQualityEvaluator:
                "I am unable to fulfill" -> deduct 0.4.
             6. Explicit user feedback: strictly +1 awards +0.2 bonus, -1 incurs -0.4 deduction.
                Strings, booleans, neutral (0), or out-of-domain numeric values are ignored.
-            7. Strictly clamped to [0.0, 1.0].
+            7. Python AST syntax validation: if Python code block contains SyntaxError -> deduct 0.35.
+            8. Deterministic arithmetic verification: if query is a simple two-operand arithmetic
+               question and the expected number is missing from response -> deduct 0.50.
+            9. Strictly clamped to [0.0, 1.0].
 
         Args:
             query: User prompt string.
@@ -171,7 +184,46 @@ class ResponseQualityEvaluator:
             elif explicit_feedback == -1:
                 score -= self.negative_feedback_penalty
 
-        # Rule 7: Strictly clamped to [0.0, 1.0]
+        # Rule 7: Python AST syntax validation for python code blocks
+        py_blocks = re.findall(r"```(?:python|py)\b(.*?)```", resp_clean, re.DOTALL | re.IGNORECASE)
+        for block in py_blocks:
+            code_text = block.strip()
+            if code_text:
+                try:
+                    import ast
+                    ast.parse(code_text)
+                except SyntaxError:
+                    score -= self.ast_syntax_penalty
+                    break
+
+        # Rule 8: Deterministic arithmetic check for supported two-operand arithmetic queries
+        arith_match = re.search(
+            r"\b(\d+(?:\.\d+)?)\s*([\+\-\*\/]|multiplied by|times|plus|minus|divided by)\s*(\d+(?:\.\d+)?)\b",
+            query_str,
+            re.IGNORECASE,
+        )
+        if arith_match:
+            try:
+                n1 = float(arith_match.group(1))
+                op_raw = arith_match.group(2).lower()
+                n2 = float(arith_match.group(3))
+                expected = None
+                if op_raw in ("+", "plus"):
+                    expected = n1 + n2
+                elif op_raw in ("-", "minus"):
+                    expected = n1 - n2
+                elif op_raw in ("*", "multiplied by", "times"):
+                    expected = n1 * n2
+                elif op_raw in ("/", "divided by") and n2 != 0:
+                    expected = n1 / n2
+                if expected is not None:
+                    exp_str = str(int(expected)) if expected.is_integer() else f"{expected:.4f}".rstrip("0").rstrip(".")
+                    if not re.search(r"\b" + re.escape(exp_str) + r"\b", resp_clean):
+                        score -= self.arithmetic_mismatch_penalty
+            except Exception:
+                pass
+
+        # Rule 9: Strictly clamped to [0.0, 1.0]
         return float(max(0.0, min(1.0, score)))
 
 
