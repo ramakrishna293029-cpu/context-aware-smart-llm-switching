@@ -30,18 +30,19 @@ FILE_ARCHITECTURE = """
 
   [ BACKEND CORE ] -> app/
     |-- main.py          : FastAPI Application & API Lifecycle
-    |-- pipeline.py      : Dual-Mode Execution & Fallback Orchestrator
-    |-- analyzer_llm.py  : Intelligent Query & Complexity Classifier
-    |-- analyzer.py      : Deterministic Baseline Analyzer
-    |-- router.py        : 7-Factor Capability Scoring Engine
-    |-- circuit.py       : Resilient Provider Circuit Breaker
-    |-- context.py       : Conversation History & Token Budgeting
-    |-- registry.py      : Dynamic Multi-Provider Model Specifications
+    |-- pipeline.py      : Fallback Orchestrator & Completion Cache
+    |-- linucb.py        : Disjoint LinUCB Contextual Bandit Router
+    |-- features.py      : 16-D TF-IDF + TruncatedSVD Feature Extractor
+    |-- eligibility.py   : MCDA Hard Eligibility & SLA Filter
+    |-- circuit.py       : Multi-Tier Resilient Circuit Breakers
+    |-- reward.py        : AST & Arithmetic Verifier + Reward Engine
+    |-- context.py       : Conversation History & Context Trimming
+    |-- registry.py      : 6-Tier Model Specifications & Registry
     |-- schemas.py       : Pydantic Validation & Telemetry Models
     |-- security.py      : Dynamic API Key & Custom Endpoint Resolver
-    |-- tracker.py       : SQLite Telemetry, Budgets & Feedback Storage
+    |-- tracker.py       : SQLite Telemetry, Budgets & Bandit Persistence
     |-- config.py        : Global Environment & Parameter Settings
-    \\-- adapters/        : Native Provider Adapters (OpenAI, Gemini, Groq, Mock)
+    \\-- adapters/        : Native Provider Adapters (Gemini, Groq, OpenAI, Mock)
 
   [ FRONTEND STUDIO ] -> static/
     |-- index.html       : Responsive Single-Page Application (SPA)
@@ -50,14 +51,18 @@ FILE_ARCHITECTURE = """
     \\-- vendor/          : KaTeX Mathematics, Marked Parser, DOMPurify
 
   [ TEST & QA SUITE ] -> tests/
-    |-- test_api.py          : Comprehensive API & Integration Tests (100% Pass)
-    |-- test_adversarial.py  : Adversarial Stress & Edge-Case Resilience (100% Pass)
-    |-- test_routing.py      : Multi-Factor Strategy Routing Tests
-    |-- test_real_providers.py : Live Provider Verification
-    \\-- fake_provider.py    : Deterministic Local Mock Server
+    |-- test_stage2_corrections.py : Regression Tests for Stage-2 Corrections
+    |-- test_6tiers.py             : 6-Tier Model Mapping & Resolution
+    |-- test_linucb.py             : LinUCB Mathematical & Persistence Tests
+    |-- test_linucb_e2e.py         : End-to-End Bandit Routing Tests
+    |-- test_eligibility.py        : MCDA Hard Eligibility Filter Tests
+    |-- test_features.py           : 16-D Feature Extraction Tests
+    |-- test_reward.py             : Quality & Syntax Verification Tests
+    |-- test_circuit.py            : Circuit Breaker State Transition Tests
+    \\-- test_api.py                : Full API & Streaming Endpoint Tests
 
   [ PERSISTENT STORAGE ] -> data/
-    \\-- metrics.db       : Operational Telemetry & Cost Accounting
+    \\-- metrics.db       : Operational Telemetry & LinUCB Parameters
 ================================================================================
 """
 
