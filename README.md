@@ -39,7 +39,7 @@ By characterizing query intent, task complexity, conversation continuity, and SL
              [ Context Dependency Detector ] ─── (Word-boundary regex & elliptical follow-up tracking)
                           │
                           ▼
-           [ 10-Dimensional Feature Extractor ] ──► Context Vector x ∈ [0, 1]¹⁰
+           [ 16-Dimensional Feature Extractor ] ──► Context Vector x ∈ ℝ¹⁶ (||x||₂ = 1.0)
                           │
                           ▼
              [ MCDA Hard Eligibility Filter ] ─── (Filters out tripped circuit breakers, SLA breaches, budget caps)
@@ -131,17 +131,10 @@ Provides sub-millisecond responses for repeated queries:
 - Zero network egress and zero token cost.
 
 ### 2. Feature Extractor (`app/features.py`)
-Converts queries into a 10-dimensional normalized vector $\mathbf{x} \in [0, 1]^{10}$:
-1. $x_0$: Normalized query character length ($\min(1.0, \text{len} / 1000)$).
-2. $x_1$: Coding intent cue (code blocks, keywords: `def`, `class`, `java`, `dijkstra`, `sql`).
-3. $x_2$: Mathematical reasoning cue (`calculate`, `integral`, `matrix`, `probability`).
-4. $x_3$: Deep reasoning cue (`prove`, `trade-off`, `consensus`, `raft`, `architecture`).
-5. $x_4$: Factual definition cue (`what is`, `define`, `capital of`, `who was`).
-6. $x_5$: High complexity indicator (length $\ge 25$ words or architectural terms).
-7. $x_6$: Conversation turn depth ($\min(1.0, \text{turns} / 10)$).
-8. $x_7$: History token volume ($\min(1.0, \text{history\_tokens} / 4000)$).
-9. $x_8$: Context continuity score (coreference cues detected).
-10. $x_9$: Urgency / brevity modifier (conciseness requests).
+Converts the query and conversational context into a 16-dimensional normalized context vector $\mathbf{x} \in \mathbb{R}^{16}$ with unit $L_2$ norm ($||\mathbf{x}||_2 = 1.0$) using **TF-IDF Vectorization** (unigrams & bigrams, sublinear TF) paired with **TruncatedSVD** (Latent Semantic Analysis) fitted on a diverse multi-domain corpus spanning software engineering, systems design, mathematics, and conversational QA:
+- Maps textual cues across coding, mathematics, factual definitions, reasoning, and system architecture.
+- Extracts history text and concatenates it with the current prompt when context dependence is detected.
+- Guarantees bounded numerical stability with deterministic unit-norm fallback vectors for cold-start or empty inputs.
 
 ### 3. MCDA Hard Eligibility Filter (`app/eligibility.py`)
 Prunes unsuitable models before bandit scoring:
@@ -171,7 +164,7 @@ $$R = w_q \cdot Q - w_c \cdot \hat{C} - w_l \cdot \hat{L} + w_f \cdot F$$
 
 The contextual bandit router implements **Disjoint Linear Upper Confidence Bound (LinUCB)**.
 
-Each model tier $a \in \{1, 2, 3, 4, 5, 6\}$ maintains an independent parameter vector $\theta_a \in \mathbb{R}^{d}$ ($d = 10$). The expected reward for arm $a$ given context $\mathbf{x}$ is assumed to be linear:
+Each model tier $a \in \{1, 2, 3, 4, 5, 6\}$ maintains an independent parameter vector $\theta_a \in \mathbb{R}^{d}$ ($d = 16$). The expected reward for arm $a$ given context $\mathbf{x}$ is assumed to be linear:
 $$\mathbb{E}[r_{t, a} \mid \mathbf{x}_t] = \mathbf{x}_t^T \theta_a$$
 
 ### Online Estimation:
@@ -207,7 +200,7 @@ Context-Aware-Smart-LLM-Switching/
 ├── app/                              # Core Backend Application
 │   ├── main.py                       # FastAPI application & lifecycle routes
 │   ├── pipeline.py                   # Contextual routing pipeline & fallback executor
-│   ├── features.py                   # 10-dimensional query feature extractor
+│   ├── features.py                   # 16-dimensional TF-IDF + TruncatedSVD feature extractor
 │   ├── eligibility.py                # MCDA hard eligibility filter
 │   ├── linucb.py                     # Disjoint LinUCB contextual bandit algorithm
 │   ├── circuit.py                    # Multi-tier three-state circuit breakers
