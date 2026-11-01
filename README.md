@@ -74,12 +74,12 @@ The system registers 6 specialized model tiers spanning ultra-low-latency models
 
 | Tier | Default Endpoint Model | Provider | Primary Specialization | Context Window | Target Cost ($/MTok in / out) |
 |---|---|---|---|---|---|
-| **Tier 1** | `gemini-2.5-flash-lite` | Gemini | Greetings, definitions, factual lookup, basic synthesis | 1,000,000 | $0.075 / $0.30 |
-| **Tier 2** | `llama-3.1-8b-instant` | Groq | High-speed structured formatting, brief extraction | 131,072 | $0.050 / $0.08 |
-| **Tier 3** | `gemini-2.5-flash` | Gemini | Balanced general intelligence, summarization, multigen | 1,000,000 | $0.150 / $0.60 |
-| **Tier 4** | `qwen-2.5-coder-32b` | Groq | Code generation, syntax debugging, algorithmic refactoring | 32,768 | $0.200 / $0.20 |
-| **Tier 5** | `llama-3.3-70b-versatile`| Groq | Advanced STEM reasoning, algorithmic proofs, complex systems | 128,000 | $0.590 / $0.79 |
-| **Tier 6** | `gemini-2.5-pro` (fallback: `gemini-2.5-flash`) | Gemini | Architectural design, distributed systems, maximum capability | 2,000,000 | $1.250 / $5.00 |
+| **Tier 1** | `gemini-3.5-flash-lite` | Google Gemini | Greetings, definitions, factual lookup, basic synthesis | 1,000,000 | $0.075 / $0.30 |
+| **Tier 2** | `openai/gpt-oss-20b` | Groq | High-speed structured formatting, brief extraction | 131,072 | $0.050 / $0.08 |
+| **Tier 3** | `gemini-3.6-flash` | Google Gemini | Balanced general intelligence, summarization, multigen | 1,000,000 | $0.150 / $0.60 |
+| **Tier 4** | `qwen/qwen3.8-27b` | Groq | Code generation, syntax debugging, algorithmic refactoring | 32,768 | $0.200 / $0.20 |
+| **Tier 5** | `openai/gpt-oss-120b` | Groq | Advanced STEM reasoning, algorithmic proofs, complex systems | 128,000 | $0.590 / $0.79 |
+| **Tier 6** | `gemini-3.8-flash` (fallback: `gemini-3.5-flash`) | Google Gemini | Architectural design, distributed systems, maximum capability | 2,000,000 | $1.250 / $5.00 |
 
 *Note: Models can run against real provider API keys or in local demonstration/mock mode without third-party dependencies.*
 
@@ -348,7 +348,7 @@ pytest tests/test_circuit.py tests/test_6tiers.py -v
 
 An empirical benchmark comparing **Fixed Tier 6 Routing** (always calling the most capable model) against the **LinUCB Contextual Router** demonstrates substantial latency and cost improvements across diverse query distributions:
 
-| Evaluation Metric | Fixed Tier 6 (Gemini 2.5 Pro) | LinUCB Contextual Router | Empirical Improvement |
+| Evaluation Metric | Fixed Tier 6 (Gemini 3.8 Flash) | LinUCB Contextual Router | Empirical Improvement |
 |---|---|---|---|
 | **Average Latency** | 26,549.9 ms | **898.1 ms** | **96.6% reduction** |
 | **Median Latency (P50)**| 20,447.8 ms | **211.5 ms** | **99.0% reduction** |
