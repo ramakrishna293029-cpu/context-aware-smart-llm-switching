@@ -623,6 +623,7 @@ class ModelRegistry:
                 "fallback_model": s.fallback_model,
             }
             for s in self.all()
+            if s.tier != "analyzer"
         ]
 
 

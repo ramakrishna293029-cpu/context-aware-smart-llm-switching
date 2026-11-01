@@ -79,8 +79,8 @@ TASK_GROUPS: Dict[str, List[str]] = {
 
 # Greetings patterns
 GREETING_PATTERNS = [
-    r"^(?:hi+|hello+|hey+|heyy+|greetings|howdy|sup|yo+|good\s+morning|good\s+afternoon|good\s+evening|good\s+day|thanks|thank\s+you|thx|ty|bye|goodbye)(?:[\s!.,?]*)$",
-    r"^(?:hi+|hello+|hey+)\s+(?:there|ai|bot|assistant|friend)(?:[\s!.,?]*)$",
+    r"^(?:hi+|hello+|hey+|heyy+|high|greetings|howdy|sup|yo+|good\s+morning|good\s+afternoon|good\s+evening|good\s+day|thanks|thank\s+you|thx|ty|bye|goodbye)(?:[\s!.,?]*)$",
+    r"^(?:hi+|hello+|hey+|high)\s+(?:there|ai|bot|assistant|friend)(?:[\s!.,?]*)$",
     r"^who are you(?:[\s!.,?]*)$",
     r"^what can you do(?:[\s!.,?]*)$",
     r"^how are you(?:[\s!.,?]*)$",

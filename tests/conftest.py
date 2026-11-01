@@ -111,6 +111,8 @@ def reset_guards():
     import app.analyzer_llm
     import app.pipeline
     import app.bayesian
+    import app.eligibility
+    import app.linucb
 
     object.__setattr__(settings, "daily_budget_usd", 0.0)
     object.__setattr__(settings, "max_cost_per_request", 0.0)
@@ -119,6 +121,8 @@ def reset_guards():
     app.analyzer_llm.clear_routing_cache()
     app.pipeline.clear_completion_cache()
     app.bayesian.global_health_tracker.reset()
+    app.eligibility.eligibility_filter.invalidate_budget_cache()
+    app.linucb.linucb_router.reset()
     yield
     object.__setattr__(settings, "daily_budget_usd", 0.0)
     object.__setattr__(settings, "max_cost_per_request", 0.0)
@@ -127,3 +131,5 @@ def reset_guards():
     app.analyzer_llm.clear_routing_cache()
     app.pipeline.clear_completion_cache()
     app.bayesian.global_health_tracker.reset()
+    app.eligibility.eligibility_filter.invalidate_budget_cache()
+    app.linucb.linucb_router.reset()

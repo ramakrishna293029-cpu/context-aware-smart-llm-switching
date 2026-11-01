@@ -5,11 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Smart LLM Switcher | Context-Aware Cost &amp; Performance Gateway</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23EDEDEF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='6' r='3'/><circle cx='6' cy='18' r='3'/><circle cx='18' cy='12' r='3'/><path d='M9 6h3a3 3 0 0 1 3 3v0a3 3 0 0 0 3 3'/><path d='M9 18h3a3 3 0 0 0 3-3v0a3 3 0 0 1 3-3'/></svg>" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/vendor/katex.min.css" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=2.7" />
 </head>
 <body>
 <!-- Global SVG Symbols Defs -->
@@ -311,10 +308,10 @@
                 
                 <!-- Topology Flow Nodes -->
                 <div class="topology-nodes-group">
-                  <div class="topology-node analyzer" id="pnode-analyzer" title="Analyzer: Gemini 3.1 Flash-Lite (Single-Pass Decision)">
+                  <div class="topology-node analyzer" id="pnode-analyzer" title="Feature Extractor &amp; LinUCB Contextual Bandit Router">
                     <span class="top-node-icon">⚡</span>
-                    <span class="top-node-label">Analyzer</span>
-                    <span class="top-node-model" id="pnode-analyzer-state">3.1-Flash-Lite</span>
+                    <span class="top-node-label">LinUCB</span>
+                    <span class="top-node-model" id="pnode-analyzer-state">Router</span>
                   </div>
 
                   <div class="topology-connector" id="pipeline-flow-connector" title="Dynamic Routing Pipeline">
@@ -348,7 +345,7 @@
                 <!-- Live Telemetry Status Pill -->
                 <div class="ribbon-status-group">
                   <span class="status-indicator-dot" id="pipeline-status-dot"></span>
-                  <span class="ribbon-status-msg" id="pipeline-status-msg">Analyzer Ready · 6 Response Tiers Active</span>
+                  <span class="ribbon-status-msg" id="pipeline-status-msg">LinUCB Contextual Router Active · 6 Model Arms Online</span>
                   <div class="escalation-indicator-pill hidden" id="pipeline-escalation-pill">
                     <span class="esc-icon">⚡</span>
                     <span class="esc-text" id="pipeline-escalation-text">Escalated</span>
@@ -368,9 +365,9 @@
               <div class="ribbon-drawer collapsed" id="ribbon-drawer">
                 <div class="drawer-detail-grid">
                   <div class="drawer-tier-spec">
-                    <div class="dts-tag">ANALYZER</div>
-                    <div class="dts-name">Gemini 3.1 Flash-Lite</div>
-                    <div class="dts-desc">Real-time triage, intent detection &amp; single-pass self-answering</div>
+                    <div class="dts-tag">LINUCB ROUTER</div>
+                    <div class="dts-name">Contextual Bandit</div>
+                    <div class="dts-desc">Online ridge regression, 8D TF-IDF + SVD features &amp; MCDA eligibility filter</div>
                   </div>
                   <div class="drawer-tier-spec">
                     <div class="dts-tag t1">TIER 1 · ROUTINE</div>
@@ -432,10 +429,10 @@
                     <div class="strategy-selector-wrapper">
                       <div class="select-styled-wrap">
                         <select id="strategy-select" class="strategy-select" title="Active Routing Strategy">
-                          <option value="balanced" selected>⚖️ Balanced</option>
-                          <option value="lowest_cost">🪙 Lowest Cost</option>
-                          <option value="fastest">⚡ Fastest</option>
-                          <option value="highest_quality">✨ Highest Quality</option>
+                          <option value="balanced" selected>Balanced Strategy</option>
+                          <option value="lowest_cost">Lowest Cost</option>
+                          <option value="fastest">Fastest Response</option>
+                          <option value="highest_quality">Highest Quality</option>
                         </select>
                       </div>
                     </div>
@@ -443,12 +440,14 @@
                     <div class="context-pill" id="context-pill" title="Conversation Memory Window">
                       <span class="context-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-cpu"/></svg></span>
                       <span>Memory: <strong id="context-turn-count">0</strong> turns</span>
-                      <button type="button" class="btn-clear-context" id="clear-context-btn" title="Reset Conversation Memory">Clear</button>
+                      <button type="button" class="btn-clear-context" id="clear-context-btn" title="Reset Conversation Memory" aria-label="Clear Memory">
+                        <svg class="icon-sym" aria-hidden="true"><use href="#i-trash"/></svg>
+                      </button>
                     </div>
                   </div>
 
                   <div class="composer-toolbar-right">
-                    <span class="kbd-hint"><kbd>⏎</kbd> Send</span>
+                    <span class="kbd-hint"><kbd>Enter</kbd></span>
                     <!-- Send / Stop Button (High-Contrast 32px x 32px) -->
                     <button type="submit" id="send-stop-btn" class="btn-send-stop" title="Send Message (Enter)">
                       <span class="btn-icon-inner" id="send-btn-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-arrow-up"/></svg></span>
@@ -470,7 +469,7 @@
             <div class="view-header">
               <div class="view-title-group">
                 <h2>Model Registry &amp; Architecture Tiers</h2>
-                <p class="subtitle">Live catalog of the Analyzer LLM and the 6 response model tiers dynamically loaded from the backend registry.</p>
+                <p class="subtitle">Live catalog of the 6 response model tiers and contextual bandit arms dynamically loaded from the backend registry.</p>
               </div>
               <button id="refresh-registry-btn" class="btn-secondary">
                 <span>↻</span> Refresh Catalog
@@ -481,8 +480,8 @@
             <div class="registry-summary-grid">
               <div class="summary-card">
                 <span class="card-title">Active Models</span>
-                <span class="big-metric" id="reg-total-models">7</span>
-                <span class="card-desc">1 Analyzer + 6 Calibrated Tiers</span>
+                <span class="big-metric" id="reg-total-models">6</span>
+                <span class="card-desc">6 Calibrated Model Arms</span>
               </div>
               <div class="summary-card">
                 <span class="card-title">Token Pricing Range</span>
@@ -537,7 +536,7 @@
               <div class="table-header">
                 <div class="table-title-group">
                   <h3>Tier Role &amp; Specialization Guidelines</h3>
-                  <span class="table-hint">How the Analyzer LLM routes incoming queries to optimal tiers</span>
+                  <span class="table-hint">How the LinUCB Contextual Bandit routes incoming queries to optimal model arms</span>
                 </div>
               </div>
               <div class="tier-guidelines-grid" id="tier-guidelines-grid">
@@ -578,7 +577,7 @@
               <div class="metric-card">
                 <span class="metric-label">Average Total Latency</span>
                 <span class="metric-val" id="stat-avg-latency">0 ms</span>
-                <span class="metric-sub" id="stat-analyzer-latency">Analyzer + Generation</span>
+                <span class="metric-sub" id="stat-analyzer-latency">Routing + Generation</span>
               </div>
               <div class="metric-card">
                 <span class="metric-label">Total Incurred Cost</span>
@@ -614,6 +613,34 @@
               <div class="panel-card">
                 <h3>Complexity Breakdown</h3>
                 <div id="chart-complexity-dist" class="bar-chart-container"></div>
+              </div>
+            </div>
+
+            <!-- LinUCB Multi-Armed Bandit Telemetry Panel -->
+            <div class="panel-card table-panel" style="margin-bottom: 24px;">
+              <div class="table-header">
+                <div class="table-title-group">
+                  <h3>LinUCB Contextual Bandit Telemetry &amp; Online Learning</h3>
+                  <span class="table-hint">Upper Confidence Bound (UCB) online ridge regression parameters, arm pull counts, and cumulative reward feedback</span>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="data-table" id="bandit-arms-table">
+                  <thead>
+                    <tr>
+                      <th>Tier Arm</th>
+                      <th>Model ID</th>
+                      <th>Pull Count</th>
+                      <th>Total Reward (Σ R)</th>
+                      <th>Mean Reward (R̄)</th>
+                      <th>Exploration (α)</th>
+                      <th>Learning Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="bandit-arms-tbody">
+                    <tr><td colspan="7" class="empty-state">Loading LinUCB bandit parameters...</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -732,7 +759,7 @@
       <div class="modal-header">
         <div class="modal-title-group">
           <h3><svg class="icon-sym" aria-hidden="true"><use href="#i-gear"/></svg> Provider Settings &amp; API Keys</h3>
-          <p class="modal-subtitle">Configure provider API credentials and endpoints for the Gemini 3.1 Analyzer and the 6 Model Tiers.</p>
+          <p class="modal-subtitle">Configure provider API credentials and endpoints for the 6 Architecture Tiers.</p>
         </div>
         <button class="btn-close" id="close-settings-btn" aria-label="Close Settings">✕</button>
       </div>
@@ -742,7 +769,7 @@
         
         <!-- Provider Navigation Tabs -->
         <div class="settings-nav-tabs">
-          <button class="settings-tab active" data-tab="gemini">Google Gemini (T1, T3, T6, Analyzer)</button>
+          <button class="settings-tab active" data-tab="gemini">Google Gemini (T1, T3, T6)</button>
           <button class="settings-tab" data-tab="groq">Groq LPU (T2, T4, T5)</button>
           <button class="settings-tab" data-tab="tiers">6-Tier Mapping</button>
           <button class="settings-tab" data-tab="openrouter">OpenRouter (Optional)</button>
@@ -756,7 +783,7 @@
           <!-- TAB 1: Google Gemini -->
           <div class="settings-panel active" id="tab-gemini">
             <div class="panel-desc">
-              <strong>Google Gemini</strong> powers the <strong>Analyzer (Gemini 3.1 Flash-Lite)</strong>, <strong>Tier 1 (Gemini 3.5 Flash-Lite)</strong>, <strong>Tier 3 (Gemini 3.6 Flash)</strong>, and <strong>Tier 6 (Gemini 3.8 Flash)</strong>.
+              <strong>Google Gemini</strong> powers <strong>Tier 1 (Gemini 3.5 Flash-Lite)</strong>, <strong>Tier 3 (Gemini 3.6 Flash)</strong>, and <strong>Tier 6 (Gemini 3.8 Flash)</strong>.
             </div>
             <div class="form-group">
               <label for="key-gemini">Gemini API Key</label>
@@ -766,17 +793,11 @@
               </div>
               <span class="field-hint">Leave blank to use the server-side GEMINI_API_KEY from .env</span>
             </div>
-            <div class="form-row-2">
-              <div class="form-group">
-                <label for="model-gemini-analyzer">Analyzer LLM</label>
-                <input type="text" id="model-gemini-analyzer" value="gemini-3.1-flash-lite" />
-              </div>
+            <div class="form-row-3">
               <div class="form-group">
                 <label for="model-gemini-tier1">Tier 1 Model</label>
                 <input type="text" id="model-gemini-tier1" value="gemini-3.5-flash-lite" />
               </div>
-            </div>
-            <div class="form-row-2">
               <div class="form-group">
                 <label for="model-gemini-tier3">Tier 3 Model</label>
                 <input type="text" id="model-gemini-tier3" value="gemini-3.6-flash" />
@@ -989,6 +1010,6 @@
   <script src="/static/vendor/katex-auto-render.min.js"></script>
 
   <!-- Application Script -->
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=2.7"></script>
 </body>
 </html>

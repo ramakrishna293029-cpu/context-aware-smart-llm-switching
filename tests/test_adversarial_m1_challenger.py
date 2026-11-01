@@ -164,7 +164,9 @@ class TestFallbackSimulated500:
         normal_resp = client.post("/api/chat", json={"query": "Design a fault-tolerant distributed database with Raft consensus for high throughput"}).json()
         primary_model = normal_resp["model"]["model_id"]
 
+        from app.linucb import linucb_router
         clear_completion_cache()
+        linucb_router.reset()
         fallback_resp = client.post("/api/chat", json={"query": "FALLBACK-DEMAND Design a fault-tolerant distributed database with Raft consensus for high throughput"}).json()
         fallback_model = fallback_resp["model"]["model_id"]
 

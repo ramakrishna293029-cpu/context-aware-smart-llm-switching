@@ -38,7 +38,6 @@ class SettingsManager {
         custom: "",
       },
       providerModels: {
-        geminiAnalyzer: "gemini-3.1-flash-lite",
         geminiTier1: "gemini-3.5-flash-lite",
         geminiTier3: "gemini-3.6-flash",
         geminiTier6: "gemini-3.8-flash",
@@ -346,6 +345,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupInspectorModal();
   setupBenchmarkView();
   setupModelRegistryView();
+  setupCodeCopyHandler();
 
   // Initial renders
   renderSidebarSessions();
@@ -476,15 +476,43 @@ function setupSidebarControls() {
     renderSidebarSessions();
   });
 
-  // Keyboard shortcut listener
+  // Keyboard shortcut listener (Apple HIG & Power-User Desktop Ergonomics)
   document.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+    // Escape: Close any open modal
+    if (e.key === "Escape") {
+      const settingsModal = $("settings-modal");
+      if (settingsModal && !settingsModal.classList.contains("hidden")) {
+        settingsModal.classList.add("hidden");
+        return;
+      }
+      const inspectorModal = $("inspector-modal");
+      if (inspectorModal && !inspectorModal.classList.contains("hidden")) {
+        inspectorModal.classList.add("hidden");
+        return;
+      }
+    }
+    // Ctrl+B / Cmd+B: Toggle sidebar
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
       e.preventDefault();
       $("sidebar")?.classList.toggle("collapsed");
     }
-    if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+    // Ctrl+N / Cmd+N: New conversation
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
       e.preventDefault();
       $("new-chat-btn")?.click();
+    }
+    // Ctrl+, / Cmd+,: Open Settings (Canonical macOS standard)
+    if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+      e.preventDefault();
+      $("header-settings-btn")?.click();
+    }
+    // Ctrl+K / Cmd+K or '/': Focus composer query input (when not already typing)
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      $("query-input")?.focus();
+    } else if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+      e.preventDefault();
+      $("query-input")?.focus();
     }
   });
 }
@@ -853,7 +881,7 @@ function resetPipelineRibbon() {
   if (an) {
     an.className = "ribbon-node analyzer";
     const stateEl = $("pnode-analyzer-state");
-    if (stateEl) stateEl.textContent = "Single-Pass Decision";
+    if (stateEl) stateEl.textContent = "Online Bandit";
   }
   $$(".rnode-tier").forEach(c => {
     c.classList.remove("active-tier", "escalated-tier");
@@ -861,7 +889,7 @@ function resetPipelineRibbon() {
   const dot = $("pipeline-status-dot");
   if (dot) dot.className = "status-indicator-dot";
   const msg = $("pipeline-status-msg");
-  if (msg) msg.textContent = "Analyzer Ready · 6 Response Tiers Active";
+  if (msg) msg.textContent = "LinUCB Contextual Router Active · 6 Model Arms Online";
   const esc = $("pipeline-escalation-pill");
   if (esc) esc.classList.add("hidden");
 }
@@ -872,12 +900,12 @@ function updatePipelineToAnalyzing() {
   if (an) {
     an.classList.add("analyzing");
     const stateEl = $("pnode-analyzer-state");
-    if (stateEl) stateEl.textContent = "Evaluating intent & complexity...";
+    if (stateEl) stateEl.textContent = "TF-IDF + LinUCB Scoring...";
   }
   const dot = $("pipeline-status-dot");
   if (dot) dot.className = "status-indicator-dot analyzing";
   const msg = $("pipeline-status-msg");
-  if (msg) msg.textContent = "Gemini 3.1 Flash-Lite Analyzer running...";
+  if (msg) msg.textContent = "LinUCB Contextual Bandit evaluating candidate arms...";
 }
 
 function updatePipelineAnalyzerResult(info) {
@@ -888,8 +916,8 @@ function updatePipelineAnalyzerResult(info) {
     const stateEl = $("pnode-analyzer-state");
     if (stateEl) {
       stateEl.textContent = isSelf
-        ? "Direct Self-Answer (0 downstream tokens)"
-        : `Triage: ${(info.task_type || 'General').toUpperCase()} (${info.complexity || 'Medium'})`;
+        ? "Self-Answer"
+        : `${(info.task_type || 'General')} · ${(info.complexity || 'Med')}`;
     }
   }
 
@@ -902,8 +930,8 @@ function updatePipelineAnalyzerResult(info) {
   const msg = $("pipeline-status-msg");
   if (msg) {
     msg.textContent = isSelf
-      ? "Resolved in Single-Pass Self-Answer Mode"
-      : `Analyzer: ${(info.task_type || 'General').toUpperCase()} ➔ ${formatTierDisplay(targetTier)}`;
+      ? "Resolved in Zero-Latency Self-Answer Mode"
+      : `LinUCB Routed: ${(info.task_type || 'General').toUpperCase()} ➔ ${formatTierDisplay(targetTier)}`;
   }
 }
 
@@ -971,57 +999,47 @@ function renderActiveSessionMessages() {
       <div class="welcome-hero" id="welcome-hero">
         <div class="welcome-eyebrow-badge">
           <svg class='icon-sym' aria-hidden='true'><use href='#i-node-switch'/></svg>
-          <span>CONTEXT-AWARE ROUTING ENGINE · v2.4</span>
+          <span>CONTEXT-AWARE ROUTING GATEWAY</span>
         </div>
         <h2 class="welcome-title">Route every prompt to the optimal model tier.</h2>
         <p class="welcome-desc">
-          Single-pass resolution for routine tasks. Capability-scored escalation across 6 specialized tiers for complex engineering and proofs.
+          Single-pass resolution for routine tasks. Dynamic capability escalation across 6 specialized tiers for engineering, logic, and synthesis.
         </p>
 
         <div class="welcome-prompts-section">
-          <span class="welcome-prompts-label">SCENARIO STARTERS · CAPABILITY-SCORED ESCALATION BENCHMARK</span>
+          <span class="welcome-prompts-label">EXPLORE ARCHITECTURAL ROUTING SCENARIOS</span>
           <div class="welcome-prompts-grid" id="welcome-quick-chips">
             <button class="quick-chip-card" data-query="Summarize the primary benefits of semantic caching in 2 bullet points.">
               <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-bolt'/></svg> T1 · FAST ROUTINE</span>
-                <span class="chip-model-tag">gemini-3.5-flash-lite ↗</span>
+                <span class="chip-tier-tag t1">T1 · FAST ROUTINE</span>
+                <span class="chip-model-tag">gemini-3.5-flash-lite</span>
               </div>
+              <div class="chip-title">Semantic Caching Benefits</div>
               <div class="chip-query">Summarize the primary benefits of semantic caching in 2 bullet points.</div>
-            </button>
-            <button class="quick-chip-card" data-query="Explain the difference between TCP and UDP with real-world networking examples.">
-              <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-cpu'/></svg> T2 · FAST GENERAL</span>
-                <span class="chip-model-tag">gpt-oss-20b ↗</span>
-              </div>
-              <div class="chip-query">Explain the difference between TCP and UDP with real-world networking examples.</div>
             </button>
             <button class="quick-chip-card" data-query="Compare relational databases and document stores for high-throughput write workloads.">
               <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-scale'/></svg> T3 · BALANCED WORKHORSE</span>
-                <span class="chip-model-tag">gemini-3.6-flash ↗</span>
+                <span class="chip-tier-tag t3">T3 · BALANCED WORKHORSE</span>
+                <span class="chip-model-tag">gemini-3.6-flash</span>
               </div>
+              <div class="chip-title">Database Workload Tradeoffs</div>
               <div class="chip-query">Compare relational databases and document stores for high-throughput write workloads.</div>
             </button>
             <button class="quick-chip-card" data-query="Write a thread-safe Python implementation of an LRU Cache with TTL expiration.">
               <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-code'/></svg> T4 · CODING SPECIALIST</span>
-                <span class="chip-model-tag">qwen3.8-27b ↗</span>
+                <span class="chip-tier-tag t4">T4 · CODING SPECIALIST</span>
+                <span class="chip-model-tag">qwen3.8-27b</span>
               </div>
+              <div class="chip-title">Thread-Safe LRU Cache</div>
               <div class="chip-query">Write a thread-safe Python implementation of an LRU Cache with TTL expiration.</div>
             </button>
             <button class="quick-chip-card" data-query="Prove that the square root of 2 is irrational and analyze its algebraic implications.">
               <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-node-switch'/></svg> T5 · DEEP REASONING</span>
-                <span class="chip-model-tag">gpt-oss-120b ↗</span>
+                <span class="chip-tier-tag t5">T5 · DEEP REASONING</span>
+                <span class="chip-model-tag">gpt-oss-120b</span>
               </div>
+              <div class="chip-title">Irrationality of √2 Proof</div>
               <div class="chip-query">Prove that the square root of 2 is irrational and analyze its algebraic implications.</div>
-            </button>
-            <button class="quick-chip-card" data-query="Design a globally distributed payment ledger ensuring exactly-once processing with high availability.">
-              <div class="chip-top">
-                <span class="chip-tier-tag"><svg class='icon-sym'><use href='#i-layers'/></svg> T6 · HIGH CAPABILITY</span>
-                <span class="chip-model-tag">gemini-3.8-flash ↗</span>
-              </div>
-              <div class="chip-query">Design a globally distributed payment ledger ensuring exactly-once processing with high availability.</div>
             </button>
           </div>
         </div>
@@ -1180,6 +1198,7 @@ function appendAssistantResponseToUI(query, text, data = {}, shouldScroll = true
   const complexityScore = analyzer.complexity_score ?? data.complexity_score ?? 0.5;
   const servedTierNorm = normalizeTierKey(data.tier || model.tier || analyzer.required_capability || "tier_1");
   const targetModelName = model.model_name || model.model_id || data.selected_model || "Gemini Flash";
+  const shortModel = (targetModelName || "").split(" ")[0].replace(/^[a-z0-9_-]+\//i, "");
   const routingReason = data.routing_reason || analyzer.reason || model.reason || "Cost-optimal model selection";
 
   const isEscalated = Boolean(data.escalation_used || data.escalated);
@@ -1206,36 +1225,43 @@ function appendAssistantResponseToUI(query, text, data = {}, shouldScroll = true
   const pReason = Math.min(100, Math.max(5, Math.round(reasoningScore * 100)));
   const pCode = Math.min(100, Math.max(5, Math.round(codingScore * 100)));
 
-  // Stage Latency Waterfall calculations
-  const analyzerLat = Number(data.analyzer_latency_ms || analyzer.latency_ms || (isSelf ? latencyNumber : 95));
-  const routerLat = Number(data.routing_latency_ms || 0.45);
-  const prepLat = ttftNumber > 0 ? Math.max(10, ttftNumber - analyzerLat) : 35;
-  const genLat = isSelf ? 0 : Math.max(20, Number(data.latency_ms || Math.max(0, latencyNumber - analyzerLat - prepLat)));
-  const verifLat = Number(data.verification_latency_ms || (isEscalated ? 4.5 : 1.2));
+  // Stage Latency Waterfall calculations (LinUCB Architecture: zero analyzer latency)
+  const routerLat = Number(data.routing_latency_ms || 1.2);
+  const prepLat = ttftNumber > 0 ? Math.max(5, ttftNumber - routerLat) : (isSelf ? 0.5 : 25);
+  const genLat = isSelf ? 0 : Math.max(10, Number(data.latency_ms || Math.max(0, latencyNumber - routerLat - prepLat)));
+  const verifLat = Number(data.verification_latency_ms || 0.5);
 
-  const totalStages = Math.max(1, analyzerLat + routerLat + prepLat + genLat + verifLat);
-  const pAnalyzer = Math.max(2, (analyzerLat / totalStages) * 100).toFixed(1);
-  const pRouter = Math.max(1, (routerLat / totalStages) * 100).toFixed(1);
+  const totalStages = Math.max(1, routerLat + prepLat + genLat + verifLat);
+  const pRouter = Math.max(2, (routerLat / totalStages) * 100).toFixed(1);
   const pPrep = Math.max(2, (prepLat / totalStages) * 100).toFixed(1);
   const pGen = Math.max(5, (genLat / totalStages) * 100).toFixed(1);
   const pVerif = Math.max(1, (verifLat / totalStages) * 100).toFixed(1);
 
-  // Build candidate scoreboard rows
-  let scoreboardRows = "";
-  if (Array.isArray(data.candidates) && data.candidates.length > 0) {
-    scoreboardRows = data.candidates.map(c => `
-      <tr class="${c.selected ? 'selected' : ''}">
-        <td><strong>${escapeHtml(c.tier.toUpperCase())}</strong></td>
-        <td>${escapeHtml(c.name)}</td>
-        <td>${c.total.toFixed(2)}</td>
-        <td>${Math.round(c.expected_latency_ms)}ms</td>
-        <td>$${c.expected_cost_usd.toFixed(6)}</td>
-        <td>${c.factors?.quality_suitability != null ? c.factors.quality_suitability.toFixed(2) : '—'}</td>
-        <td>${c.factors?.reasoning_compatibility != null ? c.factors.reasoning_compatibility.toFixed(2) : '—'}</td>
-        <td>${c.factors?.coding_compatibility != null ? c.factors.coding_compatibility.toFixed(2) : '—'}</td>
-        <td>${c.selected ? '✓ Selected' : '—'}</td>
-      </tr>
-    `).join("");
+  // LinUCB Contextual Bandit Telemetry extraction
+  const banditScore = data.bandit_score != null ? data.bandit_score : null;
+  const expReward = data.expected_reward != null ? data.expected_reward : null;
+  const uncertainty = data.uncertainty != null ? data.uncertainty : null;
+  const rewardVal = data.reward != null ? data.reward : null;
+  const scoresObj = data.scores || {};
+  const scoreEntries = Object.entries(scoresObj);
+
+  let linucbScoreboardRows = "";
+  if (scoreEntries.length > 0) {
+    scoreEntries.sort((a, b) => (b[1].ucb_score || 0) - (a[1].ucb_score || 0));
+    const selectedArmId = data.selected_model || data.model?.model_id || "";
+    linucbScoreboardRows = scoreEntries.map(([armId, s]) => {
+      const isWinner = (armId === selectedArmId) || (data.model?.model_id === armId) || (data.model?.endpoint_model === armId);
+      return `
+        <tr class="${isWinner ? 'selected' : ''}">
+          <td><strong>${escapeHtml(armId)}</strong></td>
+          <td style="color:#38BDF8; font-weight:600;">${s.ucb_score != null ? s.ucb_score.toFixed(4) : '—'}</td>
+          <td style="color:#34D399;">${s.expected_reward != null ? s.expected_reward.toFixed(4) : '—'}</td>
+          <td style="color:#FBBF24;">${s.uncertainty != null ? s.uncertainty.toFixed(4) : '—'}</td>
+          <td>${s.pull_count != null ? s.pull_count : 0}</td>
+          <td>${isWinner ? '<span class="status-pill status-pill-active" style="background:rgba(56,189,248,0.2); color:#38BDF8;">✓ Selected</span>' : '<span style="color:var(--text-muted);">—</span>'}</td>
+        </tr>
+      `;
+    }).join("");
   }
 
   msgEl.innerHTML = `
@@ -1243,21 +1269,23 @@ function appendAssistantResponseToUI(query, text, data = {}, shouldScroll = true
     <div class="msg-content-wrap">
       <div class="assistant-card">
         
-        <!-- One-Line Agentic Telemetry Bar (Cursor / Linear Style) -->
+        <!-- One-Line Agentic Telemetry Bar (Steve Jobs Optical Simplicity) -->
         <div class="agentic-telemetry-bar" data-action="toggle-drawer" data-target="${drawerId}">
           <div class="telemetry-bar-left">
             <span class="telemetry-badge-tier ${isSelf ? 'self' : (isEscalated ? 'escalated' : '')}">
-              ${isSelf ? '[⚡ DIRECT · SELF-ANSWER]' : `[⚡ ${isEscalated ? 'ESCALATED' : 'SWITCHED'} → ${servedTierNorm.toUpperCase()}: ${escapeHtml(targetModelName)}]`}
+              ${isSelf ? 'SELF' : servedTierNorm.replace('_', ' ').toUpperCase()}
             </span>
-            <span class="telemetry-stat">⏱ ${Math.round(latencyNumber)}ms ${ttftNumber > 0 ? `(TTFT ${Math.round(ttftNumber)}ms)` : ''}</span>
+            <span class="routing-model-name">${escapeHtml(shortModel)}</span>
             <span class="telemetry-sep">·</span>
-            <span class="telemetry-stat">🪙 ${inTok} → ${outTok} tok</span>
+            <span class="telemetry-stat">${Math.round(latencyNumber)}ms</span>
             <span class="telemetry-sep">·</span>
-            <span class="telemetry-stat">💲 ${costStr}</span>
-            ${savingsPct ? `<span class="telemetry-sep">·</span><span class="savings-text">(${savingsPct} vs Frontier)</span>` : ''}
+            <span class="telemetry-stat">${inTok + outTok} tok</span>
+            <span class="telemetry-sep">·</span>
+            <span class="telemetry-stat">${costStr}</span>
+            ${savingsPct ? `<span class="savings-pill">+${savingsPct}</span>` : ''}
           </div>
           <button type="button" class="btn-inspect-drawer" data-action="toggle-drawer" data-target="${drawerId}" title="Inspect Decision Trace">
-            <span>Inspect Trace</span>
+            <span>Trace</span>
             <span class="drawer-arrow">▾</span>
           </button>
         </div>
@@ -1299,53 +1327,82 @@ function appendAssistantResponseToUI(query, text, data = {}, shouldScroll = true
               </div>
             </div>
 
-            <!-- Stage Latency Waterfall -->
+            <!-- Stage Latency Waterfall (LinUCB Architecture) -->
             <div class="waterfall-section">
               <div class="waterfall-header">Stage Latency Waterfall</div>
               <div class="waterfall-bar">
-                <div class="wf-seg analyzer" style="width: ${pAnalyzer}%;" title="Analyzer: ${Math.round(analyzerLat)}ms">${Math.round(analyzerLat)}ms</div>
-                <div class="wf-seg router" style="width: ${pRouter}%;" title="Router: ${routerLat.toFixed(1)}ms"></div>
+                <div class="wf-seg router" style="width: ${pRouter}%;" title="LinUCB Routing: ${routerLat.toFixed(1)}ms"></div>
                 <div class="wf-seg prep" style="width: ${pPrep}%;" title="TTFT / Prep: ${Math.round(prepLat)}ms">${Math.round(prepLat)}ms</div>
                 <div class="wf-seg generation" style="width: ${pGen}%;" title="Generation: ${Math.round(genLat)}ms">${Math.round(genLat)}ms</div>
                 <div class="wf-seg verification" style="width: ${pVerif}%;" title="Verification: ${verifLat.toFixed(1)}ms"></div>
               </div>
               <div class="waterfall-legend">
-                <span style="color:var(--signal-amber);">⚡ Analyzer: ${Math.round(analyzerLat)}ms</span>
-                <span style="color:#8B5CF6;">🔀 Router: ${routerLat.toFixed(1)}ms</span>
+                <span style="color:#8B5CF6;">⚡ LinUCB Routing: ${routerLat.toFixed(1)}ms</span>
                 <span style="color:#94A3B8;">⏱ Prep: ${Math.round(prepLat)}ms</span>
                 <span style="color:var(--signal-indigo);">💬 Gen: ${Math.round(genLat)}ms</span>
                 <span style="color:var(--signal-emerald);">✓ Verif: ${verifLat.toFixed(1)}ms</span>
               </div>
             </div>
 
-            <!-- 7-Factor Candidate Scoreboard Table -->
-            ${scoreboardRows ? `
-              <div style="margin-top:2px;">
-                <div class="waterfall-header" style="margin-bottom:6px;">7-Factor Candidate Scoreboard</div>
+            <!-- LinUCB Contextual Bandit Telemetry Box -->
+            <div class="linucb-drawer-box" style="margin-top:12px; margin-bottom:10px; padding:10px 12px; background:rgba(30, 27, 75, 0.4); border:1px solid rgba(139, 92, 246, 0.25); border-radius:var(--radius-sm);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <div style="font-size:11px; font-weight:700; letter-spacing:0.04em; color:#C084FC; text-transform:uppercase;">
+                  ⚡ LinUCB Contextual Bandit Routing
+                </div>
+                <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted);">
+                  Selected Arm: <strong style="color:#F8FAFC;">${escapeHtml(data.selected_model || targetModelName)}</strong>
+                </div>
+              </div>
+
+              <!-- 4-Stat Metric Strip -->
+              <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:10px;">
+                <div style="background:rgba(0,0,0,0.3); padding:6px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.05);">
+                  <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase;">UCB Score</div>
+                  <div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#38BDF8;">
+                    ${banditScore != null ? banditScore.toFixed(4) : (selectedCandidate ? selectedCandidate.total.toFixed(4) : '—')}
+                  </div>
+                </div>
+                <div style="background:rgba(0,0,0,0.3); padding:6px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.05);">
+                  <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase;">Exploitation (θ̂ᵀx)</div>
+                  <div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#34D399;">
+                    ${expReward != null ? expReward.toFixed(4) : '—'}
+                  </div>
+                </div>
+                <div style="background:rgba(0,0,0,0.3); padding:6px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.05);">
+                  <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase;">Exploration (α·σ)</div>
+                  <div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FBBF24;">
+                    ${uncertainty != null ? uncertainty.toFixed(4) : '—'}
+                  </div>
+                </div>
+                <div style="background:rgba(0,0,0,0.3); padding:6px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.05);">
+                  <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase;">Reward (R)</div>
+                  <div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:${rewardVal != null && rewardVal >= 0 ? '#4ADE80' : '#F87171'};">
+                    ${rewardVal != null ? (rewardVal >= 0 ? '+' : '') + rewardVal.toFixed(4) : '—'}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Candidate Arm Scoreboard Table -->
+              ${linucbScoreboardRows ? `
+                <div class="waterfall-header" style="margin-bottom:6px; font-size:10.5px;">LinUCB Candidate Arm Scoreboard</div>
                 <div class="table-responsive">
                   <table class="scoreboard-table">
                     <thead>
                       <tr>
-                        <th>Tier</th>
-                        <th>Model</th>
-                        <th>Score</th>
-                        <th>Latency</th>
-                        <th>Est. Cost</th>
-                        <th>Quality</th>
-                        <th>Reasoning</th>
-                        <th>Coding</th>
+                        <th>Arm / Model ID</th>
+                        <th>UCB Score</th>
+                        <th>Exploitation (θ̂ᵀx)</th>
+                        <th>Exploration (α·σ)</th>
+                        <th>Pulls</th>
                         <th>Status</th>
                       </tr>
                     </thead>
-                    <tbody>${scoreboardRows}</tbody>
+                    <tbody>${linucbScoreboardRows}</tbody>
                   </table>
                 </div>
-              </div>
-            ` : `
-              <div style="padding: 6px 8px; background: var(--bg-app); border-radius: var(--radius-xs); font-size: 11.5px; font-family: var(--font-mono); color: var(--text-secondary);">
-                <span>Tier: <strong>${escapeHtml(servedTierNorm.toUpperCase())}</strong> · Model: <strong>${escapeHtml(targetModelName)}</strong> · Task: <strong>${escapeHtml(taskType.toUpperCase())}</strong> · Mode: <strong>${isSelf ? 'Single-Pass Self-Answer' : 'Multi-Tier Switched'}</strong></span>
-              </div>
-            `}
+              ` : ''}
+            </div>
 
             <!-- Decision Rationale Quote Box -->
             <div class="drawer-rationale-quote">
@@ -1675,6 +1732,33 @@ async function loadDashboardStats() {
     renderBarChart("chart-task-dist", s.task_distribution || []);
     renderBarChart("chart-complexity-dist", s.complexity_distribution || []);
 
+    // Render LinUCB Bandit Arms Table
+    const banditBody = $("bandit-arms-tbody");
+    if (banditBody && s.bandit_arms) {
+      const armEntries = Object.entries(s.bandit_arms);
+      if (armEntries.length > 0) {
+        banditBody.innerHTML = armEntries.map(([mid, arm]) => {
+          const pulls = arm.pull_count || 0;
+          const mean = arm.mean_reward != null ? arm.mean_reward.toFixed(4) : "0.0000";
+          const totalR = arm.total_reward != null ? arm.total_reward.toFixed(4) : "0.0000";
+          const alpha = arm.alpha != null ? arm.alpha.toFixed(2) : "1.00";
+          const statusText = pulls > 0 ? (arm.mean_reward > 0 ? "Converged Positive" : "Active Exploration") : "Cold / Unpulled";
+          const statusColor = pulls > 0 ? (arm.mean_reward > 0 ? "#34D399" : "#FBBF24") : "#94A3B8";
+          return `
+            <tr>
+              <td><strong>${escapeHtml(formatTierDisplay(mid))}</strong></td>
+              <td><code>${escapeHtml(mid)}</code></td>
+              <td>${pulls}</td>
+              <td style="color:${arm.total_reward >= 0 ? '#34D399' : '#F87171'};">${totalR}</td>
+              <td style="color:#38BDF8; font-weight:600;">${mean}</td>
+              <td>${alpha}</td>
+              <td><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${statusColor}; margin-right:6px;"></span>${statusText}</td>
+            </tr>
+          `;
+        }).join("");
+      }
+    }
+
     // Render Live History Table
     let requests = s.recent_requests || [];
     try {
@@ -1940,7 +2024,6 @@ function setupSettingsModal() {
 
     settings.customEndpoints.custom = $("url-custom")?.value.trim() || "";
 
-    settings.providerModels.geminiAnalyzer = $("model-gemini-analyzer")?.value.trim() || "gemini-3.1-flash-lite";
     settings.providerModels.geminiTier1 = $("model-gemini-tier1")?.value.trim() || "gemini-3.5-flash-lite";
     settings.providerModels.geminiTier3 = $("model-gemini-tier3")?.value.trim() || "gemini-3.6-flash";
     settings.providerModels.geminiTier6 = $("model-gemini-tier6")?.value.trim() || "gemini-3.8-flash";
@@ -1989,7 +2072,6 @@ async function populateSettingsForm() {
   if ($("url-custom")) $("url-custom").value = settings.customEndpoints.custom || "";
   if ($("model-custom")) $("model-custom").value = settings.providerModels.custom || "";
 
-  if ($("model-gemini-analyzer")) $("model-gemini-analyzer").value = settings.providerModels.geminiAnalyzer || "gemini-3.1-flash-lite";
   if ($("model-gemini-tier1")) $("model-gemini-tier1").value = settings.providerModels.geminiTier1 || "gemini-3.5-flash-lite";
   if ($("model-gemini-tier3")) $("model-gemini-tier3").value = settings.providerModels.geminiTier3 || "gemini-3.6-flash";
   if ($("model-gemini-tier6")) $("model-gemini-tier6").value = settings.providerModels.geminiTier6 || "gemini-3.8-flash";
@@ -2106,13 +2188,32 @@ function formatMarkdown(text) {
   if (!text) return "";
   try {
     if (typeof marked !== "undefined") {
+      const renderer = new marked.Renderer();
+      renderer.code = function(code, lang) {
+        const language = (lang || 'code').trim();
+        return `<div class="code-block-wrap">
+          <div class="code-block-header">
+            <span class="code-lang-tag">${escapeHtml(language)}</span>
+            <button type="button" class="btn-copy-code" title="Copy code">
+              <svg class="icon-sym" aria-hidden="true"><use href="#i-copy"/></svg>
+              <span>Copy</span>
+            </button>
+          </div>
+          <pre class="code-block-pre"><code class="language-${escapeHtml(language)}">${escapeHtml(code)}</code></pre>
+        </div>`;
+      };
+
       marked.setOptions({
+        renderer: renderer,
         gfm: true,
         breaks: true,
       });
       const rawHtml = marked.parse(text);
       if (typeof DOMPurify !== "undefined") {
-        return DOMPurify.sanitize(rawHtml);
+        return DOMPurify.sanitize(rawHtml, {
+          ADD_TAGS: ['use', 'svg'],
+          ADD_ATTR: ['href', 'target']
+        });
       }
       return rawHtml;
     }
@@ -2146,6 +2247,60 @@ function smoothScrollToBottom(container) {
   container.scrollTo({
     top: container.scrollHeight,
     behavior: "smooth",
+  });
+}
+
+function setupCodeCopyHandler() {
+  document.addEventListener("click", (e) => {
+    const copyBtn = e.target.closest(".btn-copy-code");
+    if (!copyBtn) return;
+    const wrap = copyBtn.closest(".code-block-wrap");
+    const codeElem = wrap ? wrap.querySelector("code") : null;
+    const textToCopy = codeElem ? (codeElem.innerText || codeElem.textContent) : "";
+    if (!textToCopy) return;
+
+    const setSuccess = () => {
+      const span = copyBtn.querySelector("span");
+      if (span) span.textContent = "Copied!";
+      copyBtn.classList.add("copied");
+      setTimeout(() => {
+        if (span) span.textContent = "Copy";
+        copyBtn.classList.remove("copied");
+      }, 1800);
+      showToast("Code copied to clipboard", "success");
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy).then(setSuccess).catch(() => {
+        const ta = document.createElement("textarea");
+        ta.value = textToCopy;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand("copy");
+          setSuccess();
+        } catch (_) {
+          showToast("Failed to copy code", "error");
+        }
+        document.body.removeChild(ta);
+      });
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = textToCopy;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        setSuccess();
+      } catch (_) {
+        showToast("Failed to copy code", "error");
+      }
+      document.body.removeChild(ta);
+    }
   });
 }
 

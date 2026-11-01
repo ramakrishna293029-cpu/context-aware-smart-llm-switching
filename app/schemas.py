@@ -109,6 +109,24 @@ class ChatResponse(BaseModel):
     escalated_tier: Optional[str] = None
     escalation_reason: Optional[str] = None
     candidates: List[CandidateInfo] = Field(default_factory=list)
+    # LinUCB Contextual Bandit Telemetry
+    bandit_score: Optional[float] = None
+    expected_reward: Optional[float] = None
+    uncertainty: Optional[float] = None
+    reward: Optional[float] = None
+    scores: Optional[Dict[str, Any]] = None
+    ineligible_models: Optional[Dict[str, str]] = None
+
+
+# --- Route Preview Schemas ---
+class RoutePreviewRequest(BaseModel):
+    query: str = Field(min_length=1, description="User prompt")
+    history: List[ChatMessage] = Field(default_factory=list, description="Prior conversational turns")
+    strategy: Optional[str] = "balanced"
+    max_budget_usd: Optional[float] = Field(default=None, description="Maximum budget cap in USD")
+    estimated_input_tokens: Optional[int] = None
+    estimated_output_tokens: Optional[int] = None
+    alpha: Optional[float] = None
 
 
 # --- Analyze Only Schemas ---

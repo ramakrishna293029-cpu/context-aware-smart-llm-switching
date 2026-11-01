@@ -34,20 +34,25 @@ from .adapters.base import (
 from .adapters.gemini import GeminiAdapter
 from .adapters.mock import MockAdapter
 from .adapters.openai import OpenAICompatibleAdapter
-from .analyzer_llm import AnalyzerDecision, run_analyzer
+from .analyzer_llm import AnalyzerDecision
 from .config import settings
-from .context import build_messages
+from .context import build_messages, estimate_tokens
+from .eligibility import eligibility_filter
+from .features import feature_extractor
+from .linucb import linucb_router
 from .pipeline import (
+    _get_local_decision,
     check_spend_budgets,
     clear_completion_cache,
     compute_cost as _compute_cost,
     compute_baseline_cost as _compute_baseline_cost,
     execute_with_fallback as _execute_with_fallback,
+    expected_request_cost,
     iter_chat_sse,
     run_unary_chat,
 )
 from .registry import ModelRegistry, ModelSpec, registry as default_registry
-from .router import STRATEGIES, RoutingResult, router as default_router
+from .router import STRATEGIES
 from .schemas import (
     AnalyzerInfo,
     AnalyzeRequest,
@@ -55,6 +60,7 @@ from .schemas import (
     BenchmarkComparisonItem,
     BenchmarkResult,
     BenchmarkRunRequest,
+    CandidateInfo,
     ChatMessage,
     ChatRequest,
     ChatResponse,
@@ -64,6 +70,7 @@ from .schemas import (
     ProviderHealthResponse,
     ProviderStatusItem,
     ProviderTestResponse,
+    RoutePreviewRequest,
 )
 from .security import (
     ResolvedCredentials,
@@ -130,6 +137,22 @@ adapter_factory.register(groq_adapter)
 adapter_factory.register(custom_adapter)
 adapter_factory.register(mock_adapter)
 adapter_factory.set_default(gemini_adapter)
+
+# Initialize LinUCB state & warm-start priors
+@app.on_event("startup")
+async def startup_event():
+    try:
+        linucb_router.load_state()
+    except Exception as exc:
+        logger.warning(f"Could not load LinUCB state: {exc}")
+    total_pulls = sum(a.pull_count for a in linucb_router.arms.values())
+    if total_pulls == 0:
+        logger.info("Initializing LinUCB router with warm-start priors across core tiers...")
+        linucb_router.warm_start_defaults()
+        try:
+            linucb_router.save_state()
+        except Exception as exc:
+            logger.warning(f"Could not persist initial warm-start state: {exc}")
 
 # Rate Limiting State
 _rate_hits: Dict[str, List[float]] = defaultdict(list)
@@ -199,9 +222,9 @@ async def health(request: Request):
     return {
         "status": "ok",
         "mode": "real" if reg.has_real() else "demo",
-        "architecture": "Gemini 3.1 Flash-Lite Analyzer + 6 Response Model Tiers (analyzer-llm)",
+        "architecture": "Gemini 3.1 Flash-Lite Analyzer + 6 Response Model Tiers (analyzer-llm upgraded to LinUCB)",
         "version": "3.0.0",
-        "models_count": len(reg.available()),
+        "models_count": len([m for m in reg.available() if m.tier != "analyzer"]),
         "providers": {
             "gemini": creds.has_gemini,
             "groq": creds.has_groq,
@@ -375,6 +398,7 @@ async def list_models(request: Request):
 
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 async def analyze(req: AnalyzeRequest, request: Request):
+    """Analyze query and preview routing candidates using LinUCB & hard constraints."""
     _check_rate_limit(request)
     creds, reg = _get_request_context(request)
     strategy = req.strategy if req.strategy in STRATEGIES else "balanced"
@@ -384,27 +408,196 @@ async def analyze(req: AnalyzeRequest, request: Request):
         raise HTTPException(status_code=502, detail="Analyzer error: simulated outage")
 
     t0 = time.perf_counter()
-    try:
-        decision = await run_analyzer(req.query, req.history[-settings.max_history_messages:], available, strategy=strategy, registry_instance=reg)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Analyzer error: {exc}")
+    decision = _get_local_decision(req.query, history=req.history, available=available)
+    x_t = feature_extractor.extract(req.query, history=req.history if decision.context_required else None)
 
-    analyzer_lat = (time.perf_counter() - t0) * 1000.0
-    analyzer_cost = _compute_cost(decision.analyzer_model, decision.analyzer_result)
-
-    routing_res = default_router.resolve(
-        decision,
-        strategy=strategy,
-        registry=reg,
-        latency_profile=tracker.get_latency_profile(),
-        feedback_modifiers=tracker.get_feedback_modifiers(),
+    in_tok = estimate_tokens(req.query) + (
+        sum(estimate_tokens(m.content if hasattr(m, "content") else str(m)) for m in (req.history or []))
+        if decision.context_required
+        else 0
     )
+    out_tok = min(512, getattr(settings, "default_max_output_tokens", 512))
+    candidate_models = [m for m in available if m.tier != "analyzer"] or available
+    eligible_set = eligibility_filter.filter(
+        models=candidate_models,
+        estimated_input_tokens=in_tok,
+        estimated_output_tokens=out_tok,
+    )
+    if eligible_set.eligible_count == 0:
+        raise HTTPException(status_code=503, detail="No eligible models available.")
+
+    bandit_decision = linucb_router.route(
+        x_t,
+        eligible_set.eligible_models,
+        strategy=strategy,
+        task_type=decision.task_type,
+        complexity=decision.complexity,
+    )
+    primary_model = bandit_decision.selected_model
+    candidates_list = [
+        CandidateInfo(
+            model_id=m.model_id,
+            name=m.name,
+            provider=m.provider,
+            tier=m.tier,
+            total=round(bandit_decision.scores[m.model_id].ucb_score, 4),
+            expected_cost_usd=round(expected_request_cost(m, in_tok), 6),
+            expected_latency_ms=round(m.expected_latency_ms, 1),
+            selected=(m.model_id == primary_model.model_id),
+            factors={
+                "ucb_score": bandit_decision.scores[m.model_id].ucb_score,
+                "expected_reward": bandit_decision.scores[m.model_id].expected_reward,
+                "uncertainty": bandit_decision.scores[m.model_id].uncertainty,
+                "pull_count": float(bandit_decision.scores[m.model_id].pull_count),
+                "quality_suitability": m.quality,
+                "reasoning_compatibility": m.reasoning,
+                "coding_compatibility": m.coding,
+            },
+        )
+        for m in [primary_model] + bandit_decision.fallback_chain
+    ]
+    analyzer_lat = (time.perf_counter() - t0) * 1000.0
 
     return AnalyzeResponse(
-        analyzer=decision.to_analyzer_info(cost_usd=analyzer_cost),
-        candidates=routing_res.to_candidate_infos(),
+        analyzer=decision.to_analyzer_info(cost_usd=0.0),
+        candidates=candidates_list,
         strategy=strategy,
     )
+
+
+@app.post("/api/route/preview")
+@app.get("/api/route/preview")
+async def route_preview(
+    request: Request,
+    req: Optional[RoutePreviewRequest] = None,
+    query: Optional[str] = None,
+    strategy: Optional[str] = "balanced",
+    max_budget_usd: Optional[float] = None,
+    alpha: Optional[float] = None,
+):
+    """LinUCB route preview: evaluates hard constraints and upper confidence bounds without invoking model."""
+    _check_rate_limit(request)
+    creds, reg = _get_request_context(request)
+
+    prompt_query = req.query if (req and req.query) else (query or "")
+    if not prompt_query:
+        raise HTTPException(status_code=422, detail="query parameter is required")
+
+    prompt_history = req.history if req else []
+    budget_cap = req.max_budget_usd if req else max_budget_usd
+    alpha_override = req.alpha if req else alpha
+
+    # 1. Feature extraction
+    x_t = feature_extractor.extract(prompt_query, history=prompt_history)
+
+    # 2. Token estimation
+    in_tok = (
+        req.estimated_input_tokens
+        if (req and req.estimated_input_tokens is not None)
+        else (estimate_tokens(prompt_query) + sum(estimate_tokens(m.content if hasattr(m, "content") else str(m)) for m in prompt_history))
+    )
+    out_tok = (
+        req.estimated_output_tokens
+        if (req and req.estimated_output_tokens is not None)
+        else min(512, getattr(settings, "default_max_output_tokens", 512))
+    )
+
+    # 3. Hard-constraint eligibility filter
+    available = reg.available()
+    candidate_models = [m for m in available if m.tier != "analyzer"] or available
+    eligible_set = eligibility_filter.filter(
+        models=candidate_models,
+        estimated_input_tokens=in_tok,
+        estimated_output_tokens=out_tok,
+        max_budget_usd=budget_cap,
+    )
+
+    if eligible_set.eligible_count == 0:
+        reasons = "; ".join(
+            f"{mid}: {reason}" for mid, reason in eligible_set.ineligible_models.items()
+        ) or "No eligible models available."
+        is_budget = any(
+            "budget" in r.lower() or "cost" in r.lower() or "spend" in r.lower()
+            for r in eligible_set.ineligible_models.values()
+        )
+        status_code = 429 if is_budget else 503
+        raise HTTPException(
+            status_code=status_code,
+            detail={
+                "message": f"No eligible models available: {reasons}",
+                "eligibility": {
+                    "total_evaluated": eligible_set.total_evaluated,
+                    "eligible_count": 0,
+                    "eligible_models": [],
+                    "ineligible_models": eligible_set.ineligible_models,
+                },
+            },
+        )
+
+    # 4. LinUCB Contextual Router
+    decision = linucb_router.route(
+        x_t,
+        eligible_set.eligible_models,
+        alpha=alpha_override,
+        strategy=strategy,
+    )
+
+    scores_dict = {
+        mid: {
+            "model_id": mid,
+            "ucb_score": round(score.ucb_score, 4),
+            "expected_reward": round(score.expected_reward, 4),
+            "uncertainty": round(score.uncertainty, 4),
+            "pull_count": score.pull_count,
+        }
+        for mid, score in decision.scores.items()
+    }
+
+    candidate_arm_scores = [
+        {
+            "model_id": mid,
+            "ucb_score": round(score.ucb_score, 4),
+            "expected_reward": round(score.expected_reward, 4),
+            "uncertainty": round(score.uncertainty, 4),
+            "pull_count": score.pull_count,
+            "selected": mid == decision.selected_model.model_id,
+        }
+        for mid, score in decision.scores.items()
+    ]
+
+    return {
+        "feature_vector": x_t.tolist(),
+        "selected_model": {
+            "model_id": decision.selected_model.model_id,
+            "name": decision.selected_model.name,
+            "provider": decision.selected_model.provider,
+            "tier": decision.selected_model.tier,
+        },
+        "fallback_chain": [
+            {
+                "model_id": m.model_id,
+                "name": m.name,
+                "provider": m.provider,
+                "tier": m.tier,
+            }
+            for m in decision.fallback_chain
+        ],
+        "bandit_score": decision.scores[decision.selected_model.model_id].ucb_score,
+        "expected_reward": decision.scores[decision.selected_model.model_id].expected_reward,
+        "uncertainty": decision.scores[decision.selected_model.model_id].uncertainty,
+        "scores": scores_dict,
+        "candidate_arm_scores": candidate_arm_scores,
+        "eligibility": {
+            "total_evaluated": eligible_set.total_evaluated,
+            "eligible_count": eligible_set.eligible_count,
+            "eligible_models": [m.model_id for m in eligible_set.eligible_models],
+            "ineligible_models": eligible_set.ineligible_models,
+        },
+        "estimated_tokens": {
+            "input_tokens": in_tok,
+            "output_tokens": out_tok,
+        },
+    }
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -460,7 +653,24 @@ async def feedback(req: FeedbackRequest):
 @app.get("/api/stats")
 @app.get("/api/metrics")
 async def stats():
-    return tracker.dashboard_stats()
+    stats_data = tracker.dashboard_stats()
+    bandit_arms = {
+        mid: {
+            "model_id": mid,
+            "pull_count": arm.pull_count,
+            "total_reward": round(arm.total_reward, 4),
+            "mean_reward": round(arm.total_reward / arm.pull_count, 4) if arm.pull_count > 0 else 0.0,
+            "alpha": arm.alpha,
+        }
+        for mid, arm in linucb_router.arms.items()
+    }
+    stats_data["bandit_arms"] = bandit_arms
+    stats_data["bandit"] = {
+        "total_arms": len(bandit_arms),
+        "arms": bandit_arms,
+        "total_pulls": sum(a.pull_count for a in linucb_router.arms.values()),
+    }
+    return stats_data
 
 
 @app.get("/api/requests/{request_id}")
@@ -545,41 +755,14 @@ async def run_benchmark(req: BenchmarkRunRequest, request: Request):
         return model.name, cost, res.latency_ms
 
     async def _run_smart(query: str):
-        decision = await run_analyzer(query, [], available, registry_instance=reg)
-        an_res = decision.analyzer_result
-        an_in = an_res.input_tokens or 0 if an_res else 0
-        an_out = an_res.output_tokens or 0 if an_res else 0
-        an_model = decision.analyzer_model
-        an_in_p = an_model.input_price_per_mtok or 0.0 if an_model else 0.0
-        an_out_p = an_model.output_price_per_mtok or 0.0 if an_model else 0.0
-        an_cost = (an_in * an_in_p + an_out * an_out_p) / 1_000_000.0
-        an_lat = an_res.latency_ms if an_res else 0.0
-
-        if decision.answer_mode == "self" and decision.answer:
-            return (
-                decision.analyzer_model.name if decision.analyzer_model else "Analyzer",
-                an_cost,
-                an_lat,
-                decision,
-            )
-        routing_res = default_router.resolve(
-            decision,
-            registry=reg,
-            latency_profile=tracker.get_latency_profile(),
-            feedback_modifiers=tracker.get_feedback_modifiers(),
+        chat_resp = await run_unary_chat(query, [], "balanced", reg)
+        model_name = (
+            chat_resp.selected_model
+            or (chat_resp.model.model_name if chat_resp.model else "LinUCB Router")
         )
-        smart_model = routing_res.primary_model
-        adapter = adapter_factory.get_for_model(smart_model)
-        messages = build_messages(history=[], query=query, max_tokens=2048, tier=smart_model.tier)
-        gen = await adapter.generate(smart_model, messages)
-        gen_in = gen.input_tokens or 0
-        gen_out = gen.output_tokens or 0
-        gen_in_p = smart_model.input_price_per_mtok or 0.0
-        gen_out_p = smart_model.output_price_per_mtok or 0.0
-        gen_cost = (gen_in * gen_in_p + gen_out * gen_out_p) / 1_000_000.0
-        total_cost = an_cost + gen_cost
-        total_lat = an_lat + gen.latency_ms
-        return smart_model.name, total_cost, total_lat, decision
+        cost = chat_resp.total_cost_usd or 0.0
+        lat = chat_resp.total_latency_ms or 0.0
+        return model_name, cost, lat, chat_resp.analyzer
 
     items = []
     b1_total = b1_lat_sum = b2_total = b2_lat_sum = smart_total = smart_lat_sum = 0.0
