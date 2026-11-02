@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart LLM Switcher — Designer Handover & Design System Guide</title>
+  <link rel="stylesheet" href="/static/style.css?v=2.7" />
+  <style>
+    :root {
+      --ds-bg: #090A0F;
+      --ds-card: #12141C;
+      --ds-elevated: #1A1D28;
+      --ds-border: rgba(255, 255, 255, 0.08);
+      --ds-text: #F8FAFC;
+      --ds-muted: #94A3B8;
+    }
+    body {
+      background-color: var(--ds-bg);
+      color: var(--ds-text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      margin: 0;
+      padding: 0;
+      line-height: 1.6;
+    }
+    .spec-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 40px 24px 100px;
+    }
+    .spec-header {
+      border-bottom: 1px solid var(--ds-border);
+      padding-bottom: 32px;
+      margin-bottom: 48px;
+    }
+    .spec-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(14, 165, 233, 0.12);
+      border: 1px solid rgba(14, 165, 233, 0.25);
+      color: #38BDF8;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .spec-title {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin: 0 0 12px;
+    }
+    .spec-subtitle {
+      font-size: 18px;
+      color: var(--ds-muted);
+      max-width: 800px;
+      margin: 0 0 24px;
+    }
+    .spec-nav-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .spec-nav-link {
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: var(--ds-card);
+      border: 1px solid var(--ds-border);
+      color: var(--ds-text);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+    .spec-nav-link:hover {
+      background: var(--ds-elevated);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .section-title {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 48px 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-desc {
+      color: var(--ds-muted);
+      font-size: 15px;
+      margin-bottom: 24px;
+      max-width: 850px;
+    }
+    
+    /* Tier Color Swatches Grid */
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .color-card {
+      background: var(--ds-card);
+      border: 1px solid var(--ds-border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .color-swatch {
+      height: 80px;
+      padding: 16px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      color: #FFF;
+      font-weight: 700;
+      font-size: 18px;
+    }
+    .color-meta {
+      padding: 16px;
+    }
+    .color-name {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .color-sub {
+      font-size: 12px;
+      color: var(--ds-muted);
+      margin-bottom: 12px;
+    }
+    .color-tokens {
+      display: flex;
+      justify-content: space-between;
+      font-family: monospace;
+      font-size: 12px;
+      color: #94A3B8;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 6px 10px;
+      border-radius: 6px;
+    }
+
+    /* Live Component Preview Sandbox */
+    .preview-box {
+      background: var(--ds-card);
+      border: 1px solid var(--ds-border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 40px;
+    }
+    .preview-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ds-muted);
+      margin-bottom: 16px;
+      display: block;
+      font-weight: 600;
+    }
+
+    /* Architecture Flow Preview */
+    .flow-preview {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 18px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 12px;
+      border: 1px solid var(--ds-border);
+    }
+    .flow-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: var(--ds-elevated);
+      border: 1px solid var(--ds-border);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .flow-arrow {
+      color: var(--ds-muted);
+      font-size: 14px;
+    }
+    .flow-pill.active {
+      border-color: #8B5CF6;
+      background: rgba(139, 92, 246, 0.15);
+      color: #C4B5FD;
+      box-shadow: 0 0 16px rgba(139, 92, 246, 0.25);
+    }
+
+    /* Mock Message Card */
+    .mock-message {
+      background: var(--ds-elevated);
+      border: 1px solid var(--ds-border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    .mock-meta-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+    }
+    .mock-tier-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+    .badge-t4 {
+      background: rgba(139, 92, 246, 0.2);
+      color: #A78BFA;
+      border: 1px solid rgba(139, 92, 246, 0.4);
+    }
+    .mock-stats {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      font-family: monospace;
+      color: var(--ds-muted);
+    }
+    .mock-savings {
+      color: #10B981;
+      font-weight: 600;
+    }
+
+    /* Code Box */
+    pre.code-spec {
+      background: #0D0E14;
+      border: 1px solid var(--ds-border);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: "JetBrains Mono", SFMono-Regular, monospace;
+      font-size: 13px;
+      color: #E2E8F0;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="spec-container">
+    
+    <!-- Top Header -->
+    <header class="spec-header">
+      <div class="spec-eyebrow">🎨 Product Design System &amp; Handover</div>
+      <h1 class="spec-title">Context-Aware Smart LLM Switching UI Redesign</h1>
+      <p class="spec-subtitle">
+        Comprehensive design specification for the UI/UX overhaul. Covers mental models, tier identities, real-time telemetry flows, component states, and interactive wireframes.
+      </p>
+      <div class="spec-nav-links">
+        <a href="#mental-model" class="spec-nav-link">1. Product Mental Model</a>
+        <a href="#tier-system" class="spec-nav-link">2. 6-Tier Color Tokens</a>
+        <a href="#topology-flow" class="spec-nav-link">3. Routing Topology Strip</a>
+        <a href="#message-cards" class="spec-nav-link">4. Message &amp; Telemetry Cards</a>
+        <a href="#inspector-drawer" class="spec-nav-link">5. Decision Inspector Drawer</a>
+        <a href="#dashboard" class="spec-nav-link">6. Observability Dashboard</a>
+        <a href="/" class="spec-nav-link" style="background:#0EA5E9; color:#FFF; font-weight:600;">← Back to Live App</a>
+      </div>
+    </header>
+
+    <!-- SECTION 1: MENTAL MODEL -->
+    <section id="mental-model">
+      <h2 class="section-title">1. Product Mental Model &amp; Core Purpose</h2>
+      <p class="section-desc">
+        The application is an <strong>autonomous AI traffic router</strong>. Instead of sending all queries to slow, expensive frontier models ($1.25/1M) or fragile cheap models ($0.05/1M), the <strong>Disjoint LinUCB Contextual Bandit</strong> reads prompt features in under 0.1ms and switches queries to the optimal tier among 6 calibrated models.
+      </p>
+
+      <div class="preview-box">
+        <span class="preview-label">Core Architectural Pipeline (What the UI Renders)</span>
+        <div class="flow-preview">
+          <div class="flow-pill">User Prompt</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-pill" style="border-color:#10B981; color:#34D399;">Completion Cache (0.01ms)</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-pill">16D Feature Extractor (&lt;0.05ms)</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-pill">MCDA Eligibility Filter</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-pill" style="border-color:#38BDF8; color:#38BDF8;">LinUCB Bandit Scoreboard</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-pill active">Selected Tier (T1 – T6)</div>
+          <span class="flow-arrow">→</span>
+          <div class="flow-pill">AST &amp; Math Quality Verifier</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: 6-TIER COLOR SYSTEM -->
+    <section id="tier-system">
+      <h2 class="section-title">2. 6-Tier Visual Identity &amp; Semantic Colors</h2>
+      <p class="section-desc">
+        Every tier has a dedicated color token. These colors must remain persistent across the chat message badges, the top routing ribbon, the dashboard charts, and the model registry table.
+      </p>
+
+      <div class="color-grid">
+        <!-- Cache -->
+        <div class="color-card">
+          <div class="color-swatch" style="background: #10B981;">
+            <span>CACHE</span>
+            <span>0.01ms</span>
+          </div>
+          <div class="color-meta">
+            <div class="color-name">Completion Cache</div>
+            <div class="color-sub">Exact-match SHA-1 key + context history ($0.00 cost)</div>
+            <div class="color-tokens">
+              <span>HEX: #10B981</span>
+              <span>TOKEN: --tier-cache</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- T1 -->
+        <div class="color-card">
+          <div class="color-swatch" style="background: #06B6D4;">
+            <span>TIER 1</span>
+            <span>~350ms</span>
+          </div>
+          <div class="color-meta">
+            <div class="color-name">Gemini 3.5 Flash-Lite</div>
+            <div class="color-sub">Routine QA, greetings, basic definitions ($0.075/1M)</div>
+            <div class="color-tokens">
+              <span>HEX: #06B6D4</span>
+              <span>TOKEN: --tier-1</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- T2 -->
+        <div class="color-card">
+          <div class="color-swatch" style="background: #F59E0B;">
+            <span>TIER 2</span>
+            <span>~200ms</span>
+          </div>
+          <div class="color-meta">
+            <div class="color-name">Groq GPT-OSS 20B</div>
+            <div class="color-sub">Ultra-high token velocity, structured formatting ($0.05/1M)</div>
+            <div class="color-tokens">
+              <span>HEX: #F59E0B</span>
+              <span>TOKEN: --tier-2</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- T3 -->
+        <div class="color-card">
+          <div class="color-swatch" style="background: #3B82F6;">
+            <span>TIER 3</span>
+            <span>~400ms</span>
+          </div>
+          <div class="color-meta">
+            <div class="color-name">Gemini 3.6 Flash</div>
+            <div class="color-sub">Balanced general intelligence, summarization ($0.15/1M)</div>
+            <div class="color-tokens">
+              <span>HEX: #3B82F6</span>
+              <span>TOKEN: --tier-3</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- T4 -->
+        <div class="color-card">
+          <div class="color-swatch" style="background: #8B5CF6;">
+            <span>TIER 4</span>
+            <span>~350ms</span>
+          </div>
+          <div class="color-meta">
+            <div class="color-name">Groq Qwen3.8 27B</div>
+            <div class="color-sub">Coding specialist, syntax refactoring, algorithms ($0.20/1M)</div>
+            <div class="color-tokens">
+              <span>HEX: #8B5CF6</span>
+              <span>TOKEN: --tier-4</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- T5 -->
+        <div class="color-card">
+          <div class="color-swatch" style="background: #EC4899;">
+            <span>TIER 5</span>
+            <span>~500ms</span>
+          </div>
+          <div class="color-meta">
+            <div class="color-name">Groq GPT-OSS 120B</div>
+            <div class="color-sub">Deep STEM reasoning, algorithmic proofs ($0.59/1M)</div>
+            <div class="color-tokens">
+              <span>HEX: #EC4899</span>
+              <span>TOKEN: --tier-5</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- T6 -->
+        <div class="color-card">
+          <div class="color-swatch" style="background: #6366F1;">
+            <span>TIER 6</span>
+            <span>~800ms</span>
+          </div>
+          <div class="color-meta">
+            <div class="color-name">Gemini 3.8 Flash</div>
+            <div class="color-sub">Frontier systems architecture, resilient fallback ($1.25/1M)</div>
+            <div class="color-tokens">
+              <span>HEX: #6366F1</span>
+              <span>TOKEN: --tier-6</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: MESSAGE CARDS -->
+    <section id="message-cards">
+      <h2 class="section-title">3. Interactive Message Cards &amp; Telemetry Bar</h2>
+      <p class="section-desc">
+        Each assistant response card features an optical metadata bar communicating model identity, latency, token consumption, cost, and savings vs Tier 6.
+      </p>
+
+      <div class="preview-box">
+        <span class="preview-label">Live Card Preview (Assistant Response)</span>
+        
+        <div class="mock-message">
+          <div class="mock-meta-bar">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="mock-tier-badge badge-t4">T4 · CODING</span>
+              <strong style="font-size:13px;">qwen/qwen3.8-27b</strong>
+            </div>
+            <div class="mock-stats">
+              <span>⚡ 312ms</span>
+              <span>·</span>
+              <span>430 tokens</span>
+              <span>·</span>
+              <span>$0.000042</span>
+              <span>·</span>
+              <span class="mock-savings">+86.4% saved vs T6</span>
+            </div>
+          </div>
+
+          <div style="font-size:14px; line-height:1.7;">
+            <p style="margin-top:0;">Here is a thread-safe Python implementation of an LRU cache with TTL expiration using <code>OrderedDict</code> and <code>threading.Lock</code>:</p>
+            
+            <pre class="code-spec">import time
+from collections import OrderedDict
+from threading import Lock
+
+class TTLCache:
+    def __init__(self, maxsize: int = 128, ttl_seconds: float = 300.0):
+        self.maxsize = maxsize
+        self.ttl = ttl_seconds
+        self._cache = OrderedDict()
+        self._lock = Lock()</pre>
+
+            <p style="color:#10B981; font-size:12px; margin-bottom:0;">
+              ✓ Python AST Syntax Validation Passed (ast.parse confirmed valid syntax)
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: CSS DESIGN TOKENS EXPORT -->
+    <section id="css-export">
+      <h2 class="section-title">4. Exportable CSS Design Tokens for Frontend</h2>
+      <p class="section-desc">
+        Copy these exact CSS tokens into your Figma token plugin or stylesheet:
+      </p>
+
+      <pre class="code-spec">:root {
+  /* Surface Tokens */
+  --bg-canvas: #090A0F;
+  --bg-surface: #12141C;
+  --bg-surface-elevated: #1A1D28;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+
+  /* Tier Semantic Accents */
+  --tier-cache: #10B981;
+  --tier-1-routine: #06B6D4;
+  --tier-2-fast: #F59E0B;
+  --tier-3-balanced: #3B82F6;
+  --tier-4-coding: #8B5CF6;
+  --tier-5-reasoning: #EC4899;
+  --tier-6-frontier: #6366F1;
+
+  /* Typography */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  --font-mono: "JetBrains Mono", SFMono-Regular, Consolas, monospace;
+}</pre>
+    </section>
+
+  </div>
+
+</body>
+</html>
