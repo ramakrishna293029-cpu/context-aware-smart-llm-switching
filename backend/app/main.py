@@ -78,8 +78,7 @@ from .security import (
 )
 from .tracker import estimate_cost_usd, tracker
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-STATIC_DIR = BASE_DIR / "static"
+STATIC_DIR = Path(settings.static_dir)
 
 app = FastAPI(
     title="Context-Aware Smart LLM Router",
@@ -884,6 +883,7 @@ async def get_settings(request: Request):
     }
 
 
-# Mount Static Files directory if it exists
+# Mount Frontend / Static Files directory if it exists
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.mount("/frontend", StaticFiles(directory=STATIC_DIR), name="frontend")

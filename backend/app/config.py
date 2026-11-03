@@ -6,8 +6,23 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
+_CURRENT_FILE = Path(__file__).resolve()
+if _CURRENT_FILE.parent.parent.name == "backend":
+    PROJECT_ROOT = _CURRENT_FILE.parent.parent.parent
+    BACKEND_DIR = _CURRENT_FILE.parent.parent
+else:
+    PROJECT_ROOT = _CURRENT_FILE.parent.parent
+    BACKEND_DIR = PROJECT_ROOT
+
+BASE_DIR = PROJECT_ROOT
+
+# Load environment configuration (.env) from project root or backend directory
+if (PROJECT_ROOT / ".env").exists():
+    load_dotenv(PROJECT_ROOT / ".env")
+elif (BACKEND_DIR / ".env").exists():
+    load_dotenv(BACKEND_DIR / ".env")
+else:
+    load_dotenv()
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -36,9 +51,21 @@ class Settings:
     """Typed access to configuration. Loaded once at startup or reloaded on changes."""
 
     database_path: Path = field(
-        default_factory=lambda: Path(os.getenv("DATABASE_PATH", str(BASE_DIR / "data" / "metrics.db")))
+        default_factory=lambda: Path(
+            os.getenv("DATABASE_PATH", str(PROJECT_ROOT / "data" / "metrics.db"))
+        )
     )
-    static_dir: Path = field(default_factory=lambda: BASE_DIR / "static")
+    static_dir: Path = field(
+        default_factory=lambda: (
+            PROJECT_ROOT / "frontend"
+            if (PROJECT_ROOT / "frontend").exists()
+            else (
+                PROJECT_ROOT / "static"
+                if (PROJECT_ROOT / "static").exists()
+                else (BACKEND_DIR / "static")
+            )
+        )
+    )
 
     mock_models_mode: str = field(
         default_factory=lambda: os.getenv("MOCK_MODELS_ENABLED", "false").strip().lower()

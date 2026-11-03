@@ -197,48 +197,67 @@ $$b_a \leftarrow b_a + r \mathbf{x}_t$$
 ```text
 Context-Aware-Smart-LLM-Switching/
 │
-├── app/                              # Core Backend Application
-│   ├── main.py                       # FastAPI application & lifecycle routes
-│   ├── pipeline.py                   # Contextual routing pipeline & fallback executor
-│   ├── features.py                   # 16-dimensional TF-IDF + TruncatedSVD feature extractor
-│   ├── eligibility.py                # MCDA hard eligibility filter
-│   ├── linucb.py                     # Disjoint LinUCB contextual bandit algorithm
-│   ├── circuit.py                    # Multi-tier three-state circuit breakers
-│   ├── reward.py                     # Reward calculator, AST validator & quality engine
-│   ├── context.py                    # Context budgeting, history trimming & prompts
-│   ├── registry.py                   # 6-tier model specifications & metadata
-│   ├── tracker.py                    # SQLite telemetry persistence & budget accounting
-│   ├── config.py                     # Global application settings & env variables
-│   ├── schemas.py                    # Pydantic schemas & telemetry models
-│   ├── security.py                   # Dynamic credential resolver
-│   └── adapters/                     # LLM Provider Adapters
-│       ├── base.py                   # LLMAdapter abstract base class & factory
-│       ├── gemini.py                 # Google Gemini native adapter
-│       ├── openai.py                 # OpenAI / Groq / OpenAI-compatible adapter
-│       └── mock.py                   # Deterministic offline mock adapter
+├── backend/                          # FastAPI Backend & Multi-Armed Bandit Service
+│   ├── app/                          # Core Application Package
+│   │   ├── main.py                   # FastAPI application & lifecycle routes
+│   │   ├── pipeline.py               # Contextual routing pipeline & fallback executor
+│   │   ├── features.py               # 16-dimensional TF-IDF + TruncatedSVD feature extractor
+│   │   ├── eligibility.py            # MCDA hard eligibility filter
+│   │   ├── linucb.py                 # Disjoint LinUCB contextual bandit algorithm
+│   │   ├── circuit.py                # Multi-tier three-state circuit breakers
+│   │   ├── reward.py                 # Reward calculator, AST validator & quality engine
+│   │   ├── context.py                # Context budgeting, history trimming & prompts
+│   │   ├── registry.py               # 6-tier model specifications & metadata
+│   │   ├── tracker.py                # SQLite telemetry persistence & budget accounting
+│   │   ├── config.py                 # Global application settings & env variables
+│   │   ├── schemas.py                # Pydantic schemas & telemetry models
+│   │   ├── security.py               # Dynamic credential resolver
+│   │   └── adapters/                 # LLM Provider Adapters (Gemini, Groq, Mock)
+│   │
+│   ├── tests/                        # Comprehensive Automated Test Suite (308 tests)
+│   │   ├── test_stage2_corrections.py# Regression tests for stage-2 corrections
+│   │   ├── test_6tiers.py            # 6-tier model mapping & tier resolution tests
+│   │   ├── test_linucb.py            # LinUCB mathematical & update tests
+│   │   ├── test_linucb_e2e.py        # End-to-end bandit routing & cache tests
+│   │   ├── test_eligibility.py       # MCDA filter criteria tests
+│   │   ├── test_features.py          # Feature extraction vector tests
+│   │   ├── test_reward.py            # AST & arithmetic quality scoring tests
+│   │   ├── test_circuit.py           # Circuit breaker state transition tests
+│   │   └── test_api.py               # FastAPI integration & stream endpoint tests
+│   │
+│   ├── requirements.txt              # Backend dependencies
+│   └── run.py                        # Backend launcher script
 │
-├── static/                           # Modern Glassmorphic Frontend
+├── frontend/                         # Modern Glassmorphic SPA Frontend
 │   ├── index.html                    # Single-page application UI
 │   ├── style.css                     # Obsidian theme & responsive layouts
 │   ├── app.js                        # SSE chat streaming, telemetry badges & dashboard
 │   └── vendor/                       # Bundled offline assets (KaTeX, Marked, DOMPurify)
 │
-├── tests/                            # Comprehensive Test Suite (305+ tests)
-│   ├── test_stage2_corrections.py    # Regression tests for 5 second-stage corrections
-│   ├── test_6tiers.py                # 6-tier model mapping & tier resolution tests
-│   ├── test_linucb.py                # LinUCB mathematical & update tests
-│   ├── test_linucb_e2e.py            # End-to-end bandit routing & cache tests
-│   ├── test_eligibility.py           # MCDA filter criteria tests
-│   ├── test_features.py              # Feature extraction vector tests
-│   ├── test_reward.py                # AST & arithmetic quality scoring tests
-│   ├── test_circuit.py               # Circuit breaker state transition tests
-│   └── test_api.py                   # FastAPI integration & stream endpoint tests
-│
-├── data/                             # SQLite persistence directory (git-ignored)
+├── data/                             # SQLite Persistence Directory
+│   ├── .gitkeep                      # Git directory placeholder
 │   └── metrics.db                    # Database for requests, bandit arms & telemetry
 │
-├── requirements.txt                  # Python dependencies
-└── README.md                         # Comprehensive documentation
+├── docs/                             # Academic & Architectural Documentation
+│   ├── PROJECT_OVERVIEW.md           # Executive summary & objectives
+│   ├── ARCHITECTURE.md               # Detailed system design & formulas
+│   ├── INSTALLATION.md               # Step-by-step setup guide
+│   ├── API_DOCUMENTATION.md          # REST & SSE endpoint reference
+│   ├── TESTING.md                    # Test infrastructure & QA guide
+│   └── assets/                       # Architectural diagrams & logos
+│
+├── benchmarks/                       # Empirical Evaluation Suite
+│   ├── run_3way_benchmark.py         # 3-way baseline benchmark runner
+│   ├── run_comparison_benchmark.py   # Latency & Pareto efficiency runner
+│   └── results.json                  # Output metrics & decision log
+│
+├── .env.example                      # Safe sample environment configuration
+├── .gitignore                        # Git exclusion rules
+├── Dockerfile                        # Container deployment specification
+├── pytest.ini                        # Pytest configuration linking backend
+├── requirements.txt                  # Root convenience package manifest
+├── run.py                            # Root convenience launcher
+└── README.md                         # Project overview and university documentation
 ```
 
 ---
@@ -300,6 +319,16 @@ DAILY_BUDGET_USD=10.0
 *Note: If no API keys are provided, the system automatically runs in local **DEMO Mode** using simulated adapters.*
 
 ### 5. Launch the Server
+
+Run from the root directory:
+```bash
+python run.py
+```
+Or run directly from the backend package:
+```bash
+python backend/run.py
+```
+Or via uvicorn:
 ```bash
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
@@ -326,20 +355,20 @@ Navigate to `http://127.0.0.1:8000` in your web browser.
 
 ## Testing & Quality Assurance
 
-The codebase includes an extensive suite of **305 passing tests** verifying all system capabilities:
+The codebase includes an extensive suite of **308 tests (305 passed, 3 skipped)** verifying all system capabilities:
 
 ```bash
 # Run the entire test suite
 pytest -v
 
 # Run second-stage technical regression tests
-pytest tests/test_stage2_corrections.py -v
+pytest backend/tests/test_stage2_corrections.py -v
 
 # Run LinUCB mathematical and persistence tests
-pytest tests/test_linucb.py tests/test_linucb_e2e.py -v
+pytest backend/tests/test_linucb.py backend/tests/test_linucb_e2e.py -v
 
 # Run circuit breaker & multi-tier resilience tests
-pytest tests/test_circuit.py tests/test_6tiers.py -v
+pytest backend/tests/test_circuit.py backend/tests/test_6tiers.py -v
 ```
 
 ---

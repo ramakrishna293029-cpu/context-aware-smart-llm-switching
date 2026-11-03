@@ -9,8 +9,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT_DIR))
+TESTS_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = TESTS_DIR.parent
+if BACKEND_DIR.name == "backend":
+    PROJECT_ROOT = BACKEND_DIR.parent
+else:
+    PROJECT_ROOT = BACKEND_DIR
+
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(BACKEND_DIR))
 
 from tests.fake_provider import FakeProviderHandler
 
@@ -36,7 +43,7 @@ def isolate_database():
     app.analyzer_llm.clear_routing_cache()
     yield
     # Post-session check: ensure data/metrics.db has no test leakage
-    live_db = ROOT_DIR / "data" / "metrics.db"
+    live_db = PROJECT_ROOT / "data" / "metrics.db"
     if live_db.exists():
         import sqlite3
         with sqlite3.connect(str(live_db)) as conn:

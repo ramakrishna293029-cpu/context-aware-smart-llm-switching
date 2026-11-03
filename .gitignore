@@ -21,6 +21,9 @@ data/
 *.sqlite3
 *.log
 scratch/
+_backup_pre_reorg/
+*.pptx
+*.pdf
 
 # IDE / OS
 .idea/

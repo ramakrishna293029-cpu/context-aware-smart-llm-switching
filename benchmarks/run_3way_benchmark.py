@@ -35,8 +35,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-# Ensure project root is in sys.path for standalone CLI invocation
+# Ensure project root and backend are in sys.path for standalone CLI invocation
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+BACKEND_DIR = PROJECT_ROOT / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
