@@ -104,11 +104,38 @@ def _error_from_response(model: "ModelSpec", resp: httpx.Response) -> LLMAdapter
 
 
 class GeminiAdapter(LLMAdapter):
-    """Adapter for Google Gemini models via Generative Language v1beta REST API."""
+    """Adapter for Google Gemini models via Generative Language v1beta REST API with persistent connection pooling."""
     provider = "gemini"
 
-    def __init__(self):
+    def __init__(self, client: Optional[httpx.AsyncClient] = None):
         self._last_result: Optional[LLMResult] = None
+        self._client: Optional[httpx.AsyncClient] = client
+        self._owns_client: bool = client is None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return the reusable httpx.AsyncClient with keep-alive and connection pooling."""
+        if self._client is None or self._client.is_closed:
+            limits = httpx.Limits(
+                max_connections=100,
+                max_keepalive_connections=20,
+                keepalive_expiry=30.0,
+            )
+            timeout = httpx.Timeout(
+                timeout=settings.request_timeout_seconds,
+                connect=10.0,
+                read=settings.request_timeout_seconds,
+                write=10.0,
+                pool=10.0,
+            )
+            self._client = httpx.AsyncClient(limits=limits, timeout=timeout)
+            self._owns_client = True
+        return self._client
+
+    async def aclose(self) -> None:
+        """Gracefully close the pooled HTTP client."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     def last_result(self) -> Optional[LLMResult]:
         return self._last_result
@@ -130,10 +157,10 @@ class GeminiAdapter(LLMAdapter):
         url = f"{base}/models/{endpoint_model}:generateContent"
         headers = _build_headers(model)
 
+        client = self._get_client()
         t0 = time.perf_counter()
         try:
-            async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
-                resp = await client.post(url, headers=headers, json=payload)
+            resp = await client.post(url, headers=headers, json=payload)
         except httpx.TimeoutException as exc:
             raise ProviderTimeoutError(f"Gemini timed out: {exc}") from exc
         except httpx.ConnectError as exc:
@@ -220,9 +247,9 @@ class GeminiAdapter(LLMAdapter):
         full_text_parts: List[str] = []
         usage: Dict[str, Any] = {}
 
+        client = self._get_client()
         try:
-            async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
-                async with client.stream("POST", url, headers=headers, json=payload) as resp:
+            async with client.stream("POST", url, headers=headers, json=payload) as resp:
                     if resp.status_code != 200:
                         await resp.aread()
                         raise _error_from_response(model, resp)

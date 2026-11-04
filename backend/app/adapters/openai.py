@@ -110,12 +110,39 @@ def _extract_reasoning_and_content(raw_text: str) -> tuple[str, Optional[str]]:
 
 
 class OpenAICompatibleAdapter(LLMAdapter):
-    """Unified adapter for all OpenAI-compatible /chat/completions APIs."""
+    """Unified adapter for all OpenAI-compatible /chat/completions APIs with persistent connection pooling."""
     provider = "openai"
 
-    def __init__(self, provider_name: str = "openai"):
+    def __init__(self, provider_name: str = "openai", client: Optional[httpx.AsyncClient] = None):
         self.provider = provider_name
         self._last_result: Optional[LLMResult] = None
+        self._client: Optional[httpx.AsyncClient] = client
+        self._owns_client: bool = client is None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return the reusable httpx.AsyncClient with keep-alive and connection pooling."""
+        if self._client is None or self._client.is_closed:
+            limits = httpx.Limits(
+                max_connections=100,
+                max_keepalive_connections=20,
+                keepalive_expiry=30.0,
+            )
+            timeout = httpx.Timeout(
+                timeout=settings.request_timeout_seconds,
+                connect=10.0,
+                read=settings.request_timeout_seconds,
+                write=10.0,
+                pool=10.0,
+            )
+            self._client = httpx.AsyncClient(limits=limits, timeout=timeout)
+            self._owns_client = True
+        return self._client
+
+    async def aclose(self) -> None:
+        """Gracefully close the pooled HTTP client."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     def last_result(self) -> Optional[LLMResult]:
         """Usage from the most recent call."""
@@ -135,11 +162,12 @@ class OpenAICompatibleAdapter(LLMAdapter):
         headers = _build_headers(model)
         max_tokens = kwargs.get("max_tokens")
         payload = _payload(model, messages, stream=False, json_mode=json_mode, max_tokens=max_tokens)
+
+        client = self._get_client()
         t0 = time.perf_counter()
 
         try:
-            async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
-                resp = await client.post(url, headers=headers, json=payload)
+            resp = await client.post(url, headers=headers, json=payload)
         except httpx.TimeoutException as exc:
             raise ProviderTimeoutError(f"Provider '{model.provider}' timed out: {exc}") from exc
         except httpx.ConnectError as exc:
@@ -213,9 +241,9 @@ class OpenAICompatibleAdapter(LLMAdapter):
 
         in_think_block = False
 
+        client = self._get_client()
         try:
-            async with httpx.AsyncClient(timeout=settings.request_timeout_seconds) as client:
-                async with client.stream("POST", url, headers=headers, json=payload) as resp:
+            async with client.stream("POST", url, headers=headers, json=payload) as resp:
                     if resp.status_code != 200:
                         await resp.aread()
                         raise _error_from_response(model, resp)

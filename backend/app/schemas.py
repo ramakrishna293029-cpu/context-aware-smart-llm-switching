@@ -1,7 +1,7 @@
 """Pydantic schemas shared between API layer, engine, and frontend."""
 
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # --- Core Chat Messages ---
@@ -13,12 +13,25 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     query: str = Field(min_length=1, max_length=20000, description="User prompt")
     history: List[ChatMessage] = Field(default_factory=list, description="Prior conversational turns")
+    messages: Optional[List[ChatMessage]] = Field(default=None, description="Alias for history")
     strategy: Literal["balanced", "lowest_cost", "fastest", "highest_quality"] = Field(
         default="balanced", description="Routing strategy"
     )
     deadline_ms: Optional[float] = Field(default=None, description="Latency deadline in ms for statistical deadline compliance")
     max_budget_usd: Optional[float] = Field(default=None, description="Maximum budget cap in USD for this query")
     session_last_model_id: Optional[str] = Field(default=None, description="Previous turn served model ID for hysteresis continuity")
+
+    @model_validator(mode="before")
+    @classmethod
+    def reconcile_history_and_messages(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            hist = data.get("history")
+            msgs = data.get("messages")
+            if not hist and msgs:
+                data["history"] = msgs
+            elif not msgs and hist:
+                data["messages"] = hist
+        return data
 
 
 # --- Candidate Scoring ---

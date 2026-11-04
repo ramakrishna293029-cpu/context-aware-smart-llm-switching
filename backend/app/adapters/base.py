@@ -171,6 +171,10 @@ class LLMAdapter(ABC):
         except Exception:
             return False
 
+    async def aclose(self) -> None:
+        """Close any persistent network resources or connection pools."""
+        pass
+
 
 # Re-export factory symbols for backwards compatibility
 from .factory import AdapterFactory, adapter_factory

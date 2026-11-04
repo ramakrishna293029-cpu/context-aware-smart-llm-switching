@@ -30,43 +30,67 @@ UNIFIED_ASSISTANT_CORE = (
     "- Formatting & Length: Structure responses with clean bullet bunches and clear sections where appropriate. Keep responses medium-to-short in length, crisp, high-signal, and free of unnecessary disclaimers or filler."
 )
 
+PERSONA_ANALYZER = (
+    f"{UNIFIED_ASSISTANT_CORE}\n\n"
+    "Role: Instant First-Line Assistant. Provide immediate, accurate, and crisp answers. "
+    "Use clean bullet-bunched points where appropriate. Keep answers concise, helpful, and medium-to-short in length."
+)
+
+PERSONA_FAST = (
+    f"{UNIFIED_ASSISTANT_CORE}\n\n"
+    "Role: Fast Factual & General Assistant. Deliver clear, well-structured, and concise information. "
+    "Group key takeaways into clean bullet bunches. Keep responses focused, informative, and medium-to-short in length."
+)
+
+PERSONA_CODING = (
+    f"{UNIFIED_ASSISTANT_CORE}\n\n"
+    "Role: Principal Software Engineer. Provide clean, production-grade, bug-free code with syntax highlighting. "
+    "Structure explanations with concise bullet bunches covering key design choices, time/space complexity, and edge cases. "
+    "Keep non-code explanations concise and tightly focused."
+)
+
+PERSONA_REASONING = (
+    f"{UNIFIED_ASSISTANT_CORE}\n\n"
+    "Role: Analytical Reasoning & Architecture Specialist. Break down complex problems, proofs, logic, and trade-offs into structured steps. "
+    "Organize deductions and conclusions into clean, bullet-bunched sections. Deliver sharp, rigorous, medium-to-short explanations."
+)
+
+PERSONA_POWERFUL = (
+    f"{UNIFIED_ASSISTANT_CORE}\n\n"
+    "Role: Comprehensive Multi-Domain Problem Solver. Synthesize high-depth answers with structured clarity. "
+    "Use bullet bunches for key concepts, actionable steps, and trade-offs. Maintain an authoritative, elegant, and concise tone."
+)
+
+PERSONA_BALANCED = (
+    f"{UNIFIED_ASSISTANT_CORE}\n\n"
+    "Role: Versatile AI Assistant. Provide clear, accurate, and structured responses with bullet-bunched key points. "
+    "Keep answers medium-to-short, highly informative, and easy to read."
+)
+
+PERSONA_CUSTOM = (
+    f"{UNIFIED_ASSISTANT_CORE}\n\n"
+    "Role: Expert AI Assistant. Provide direct, well-structured responses formatted with clean bullet bunches. "
+    "Keep response length medium-to-short with high information density."
+)
+
 MODEL_TIER_PERSONAS: Dict[str, str] = {
-    "analyzer": (
-        f"{UNIFIED_ASSISTANT_CORE}\n\n"
-        "Role: Instant First-Line Assistant. Provide immediate, accurate, and crisp answers. "
-        "Use clean bullet-bunched points where appropriate. Keep answers concise, helpful, and medium-to-short in length."
-    ),
-    "fast": (
-        f"{UNIFIED_ASSISTANT_CORE}\n\n"
-        "Role: Fast Factual & General Assistant. Deliver clear, well-structured, and concise information. "
-        "Group key takeaways into clean bullet bunches. Keep responses focused, informative, and medium-to-short in length."
-    ),
-    "coding": (
-        f"{UNIFIED_ASSISTANT_CORE}\n\n"
-        "Role: Principal Software Engineer. Provide clean, production-grade, bug-free code with syntax highlighting. "
-        "Structure explanations with concise bullet bunches covering key design choices, time/space complexity, and edge cases. "
-        "Keep non-code explanations concise and tightly focused."
-    ),
-    "reasoning": (
-        f"{UNIFIED_ASSISTANT_CORE}\n\n"
-        "Role: Analytical Reasoning & Architecture Specialist. Break down complex problems, proofs, logic, and trade-offs into structured steps. "
-        "Organize deductions and conclusions into clean, bullet-bunched sections. Deliver sharp, rigorous, medium-to-short explanations."
-    ),
-    "powerful": (
-        f"{UNIFIED_ASSISTANT_CORE}\n\n"
-        "Role: Comprehensive Multi-Domain Problem Solver. Synthesize high-depth answers with structured clarity. "
-        "Use bullet bunches for key concepts, actionable steps, and trade-offs. Maintain an authoritative, elegant, and concise tone."
-    ),
-    "balanced": (
-        f"{UNIFIED_ASSISTANT_CORE}\n\n"
-        "Role: Versatile AI Assistant. Provide clear, accurate, and structured responses with bullet-bunched key points. "
-        "Keep answers medium-to-short, highly informative, and easy to read."
-    ),
-    "custom": (
-        f"{UNIFIED_ASSISTANT_CORE}\n\n"
-        "Role: Expert AI Assistant. Provide direct, well-structured responses formatted with clean bullet bunches. "
-        "Keep response length medium-to-short with high information density."
-    ),
+    # 6 Core Architecture Tiers + Analyzer
+    "analyzer": PERSONA_ANALYZER,
+    "tier_analyzer": PERSONA_ANALYZER,
+    "tier_1": PERSONA_FAST,       # Tier 1: Gemini 3.5 Flash-Lite (Lightweight / Fast)
+    "tier_2": PERSONA_FAST,       # Tier 2: Groq GPT-OSS 20B (Fast General Purpose)
+    "tier_3": PERSONA_BALANCED,   # Tier 3: Gemini 3.6 Flash (Balanced)
+    "tier_4": PERSONA_CODING,     # Tier 4: Groq Qwen3.8 27B (Coding Specialist)
+    "tier_5": PERSONA_REASONING,  # Tier 5: Groq GPT-OSS 120B (Advanced Reasoning)
+    "tier_6": PERSONA_POWERFUL,   # Tier 6: Gemini 3.8 Flash (High-Capability Multi-Domain)
+
+    # Legacy Semantic Aliases for backwards compatibility
+    "fast": PERSONA_FAST,
+    "coding": PERSONA_CODING,
+    "reasoning": PERSONA_REASONING,
+    "powerful": PERSONA_POWERFUL,
+    "balanced": PERSONA_BALANCED,
+    "custom": PERSONA_CUSTOM,
 }
 
 DEFAULT_SYSTEM_PERSONA = (
@@ -81,6 +105,7 @@ def get_tier_persona(tier: str, custom_system_prompt: Optional[str] = None) -> s
     """Returns the production persona tailored to the model's tier.
 
     If a custom_system_prompt is provided by the user/session, appends formatting guidelines.
+    Falls back gracefully to DEFAULT_SYSTEM_PERSONA for any unrecognized tier.
     """
     if custom_system_prompt and custom_system_prompt.strip():
         base = custom_system_prompt.strip()
@@ -92,7 +117,11 @@ def get_tier_persona(tier: str, custom_system_prompt: Optional[str] = None) -> s
         )
         return base + formatting
 
-    return MODEL_TIER_PERSONAS.get(tier.lower(), DEFAULT_SYSTEM_PERSONA)
+    if not tier:
+        return DEFAULT_SYSTEM_PERSONA
+
+    norm_tier = str(tier).lower().strip().replace("-", "_")
+    return MODEL_TIER_PERSONAS.get(norm_tier, DEFAULT_SYSTEM_PERSONA)
 
 
 def estimate_tokens(text: str) -> int:

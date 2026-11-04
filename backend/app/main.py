@@ -153,6 +153,11 @@ async def startup_event():
         except Exception as exc:
             logger.warning(f"Could not persist initial warm-start state: {exc}")
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down adapters and releasing HTTP connection pools...")
+    await adapter_factory.aclose()
+
 # Rate Limiting State
 _rate_hits: Dict[str, List[float]] = defaultdict(list)
 _rate_hits_lock = threading.Lock()

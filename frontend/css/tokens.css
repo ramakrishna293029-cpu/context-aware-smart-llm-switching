@@ -1,0 +1,255 @@
+/**
+ * ============================================================================
+ * J.A.R.V.I.S. HUD & Sci-Fi Cybernetic Interface Design Tokens
+ * Cinematic Holographic HUD Architecture (Iron Man / Tony Stark System)
+ *
+ * Design Pillars:
+ * 1. Deep Obsidian Monochromatic Canvas (#030508) with micro scanline grid.
+ * 2. High-Energy Holographic Cyan (#00f0ff) & Electric Blue (#00a2ff) core.
+ * 3. Tactical Neon Emerald (#00ff66) for positive telemetry & low-cost tiers.
+ * 4. High-Warning Amber/Orange (#ff9900 / #ffaa00) for escalations and alarms.
+ * 5. Intricate cyber brackets, crosshair grids, and laser-thin neon edges.
+ * 6. Precision telemetry monospace font stack with zero visual fluff.
+ * ============================================================================
+ */
+
+:root,
+[data-theme="dark"] {
+  /* --------------------------------------------------------------------------
+   * 1. J.A.R.V.I.S. Obsidian & Holographic Glass Surfaces
+   * -------------------------------------------------------------------------- */
+  --bg-app: #030508;                              /* Monochromatic Deep Obsidian */
+  --bg-sidebar: #050a12;                          /* Dark Cyber Command Rail */
+  --bg-surface: rgba(4, 16, 28, 0.68);            /* Holographic Glass Panel */
+  --bg-surface-solid: #06121e;                    /* Solid Fallback Surface */
+  --bg-surface-hover: rgba(0, 240, 255, 0.08);    /* Cyan Laser Hover Wash */
+  --bg-surface-active: rgba(0, 240, 255, 0.16);   /* Active Cyber Trigger */
+  --bg-surface-elevated: rgba(6, 20, 34, 0.88);   /* Elevated Hologram Sheet */
+  --bg-glass: rgba(3, 12, 22, 0.82);              /* Topbar & HUD Floating Glass */
+  --bg-dock: rgba(4, 14, 26, 0.86);               /* Floating Cybernetic Input Dock */
+  --bg-overlay: rgba(2, 6, 12, 0.78);             /* Dimming HUD Matrix Backdrop */
+
+  /* Glass Blur Filters */
+  --backdrop-glass: blur(18px) saturate(220%);
+  --backdrop-subtle: blur(12px) saturate(180%);
+  --backdrop-heavy: blur(28px) saturate(240%);
+
+  /* --------------------------------------------------------------------------
+   * 2. Holographic Laser Borders & Corner Bracket Accents
+   * -------------------------------------------------------------------------- */
+  --border-subtle: rgba(0, 240, 255, 0.16);       /* Subtle Cyber Boundary */
+  --border-mid: rgba(0, 240, 255, 0.32);          /* Interactive Control Border */
+  --border-specular: rgba(0, 240, 255, 0.24);     /* Holographic Glass Seam */
+  --border-specular-hi: rgba(0, 240, 255, 0.60);  /* Illuminated Laser Edge */
+  --border-focus: #00f0ff;                        /* Direct Cyan Target Lock */
+  --border-active: #00f0ff;                       /* Active State Bracket */
+
+  /* Cyber Edge & Glow Highlights */
+  --hairline-top: inset 0 1px 0 rgba(0, 240, 255, 0.35);
+  --hairline-bottom: inset 0 -1px 0 rgba(0, 0, 0, 0.70);
+  --hud-cyan-glow: 0 0 12px rgba(0, 240, 255, 0.55), 0 0 28px rgba(0, 240, 255, 0.22);
+  --hud-cyan-glow-sm: 0 0 8px rgba(0, 240, 255, 0.45);
+  --hud-emerald-glow: 0 0 12px rgba(0, 255, 102, 0.55);
+  --hud-amber-glow: 0 0 12px rgba(255, 170, 0, 0.55);
+
+  /* --------------------------------------------------------------------------
+   * 3. Holographic Telemetry Typography
+   * -------------------------------------------------------------------------- */
+  --text-primary: #e6f6ff;                        /* High-Voltage Cyan-Tinted White */
+  --text-secondary: rgba(185, 225, 250, 0.75);    /* Holographic Secondary Blue */
+  --text-muted: rgba(140, 195, 230, 0.48);        /* Sub-telemetry Metadata */
+  --text-tertiary: rgba(100, 160, 200, 0.32);     /* Inactive Data Feed */
+  --text-code: #00f0ff;                           /* Terminal Command Green/Cyan */
+  --text-cyan: #00f0ff;
+  --text-emerald: #00ff66;
+  --text-amber: #ffaa00;
+
+  /* High-Contrast Interactive Buttons */
+  --accent-primary: #00f0ff;
+  --accent-primary-text: #02070c;
+  --accent-primary-hover: #52f6ff;
+
+  /* --------------------------------------------------------------------------
+   * 4. J.A.R.V.I.S. High-Energy Semantic HUD Signals
+   * -------------------------------------------------------------------------- */
+  /* Neon Emerald: Cost Optimization, Healthy Status, Routine Fastpass */
+  --signal-emerald: #00ff66;
+  --signal-emerald-bg: rgba(0, 255, 102, 0.12);
+  --signal-emerald-border: rgba(0, 255, 102, 0.35);
+  --signal-emerald-text: #00ff66;
+  --signal-emerald-glow: rgba(0, 255, 102, 0.45);
+
+  /* Core HUD Cyan: Intelligence Core, LinUCB Matrix, Active Telemetry */
+  --signal-cyan: #00f0ff;
+  --signal-cyan-bg: rgba(0, 240, 255, 0.12);
+  --signal-cyan-border: rgba(0, 240, 255, 0.35);
+  --signal-cyan-text: #00f0ff;
+  --signal-cyan-glow: rgba(0, 240, 255, 0.45);
+
+  /* Electric Blue: General Balanced Workhorse */
+  --signal-indigo: #00a2ff;
+  --signal-indigo-bg: rgba(0, 162, 255, 0.12);
+  --signal-indigo-border: rgba(0, 162, 255, 0.35);
+  --signal-indigo-text: #38bdf8;
+  --signal-indigo-glow: rgba(0, 162, 255, 0.45);
+
+  /* High-Warning Amber/Orange: Capability Escalations, Rate Thresholds */
+  --signal-amber: #ffaa00;
+  --signal-amber-bg: rgba(255, 170, 0, 0.12);
+  --signal-amber-border: rgba(255, 170, 0, 0.35);
+  --signal-amber-text: #ffbb22;
+  --signal-amber-glow: rgba(255, 170, 0, 0.45);
+
+  /* Tactical Crimson: Errors, Policy Violations, High Cost Warnings */
+  --signal-red: #ff3366;
+  --signal-red-bg: rgba(255, 51, 102, 0.12);
+  --signal-red-border: rgba(255, 51, 102, 0.35);
+  --signal-red-text: #ff5577;
+  --signal-red-glow: rgba(255, 51, 102, 0.45);
+
+  /* Arc Purple: Deep Reasoning, Complex Syntheses */
+  --signal-purple: #bd00ff;
+  --signal-purple-bg: rgba(189, 0, 255, 0.12);
+  --signal-purple-border: rgba(189, 0, 255, 0.35);
+  --signal-purple-text: #d84eff;
+
+  /* Backward Compatibility Aliases */
+  --accent-green: var(--signal-emerald);
+  --accent-green-bright: var(--signal-emerald);
+  --accent-blue: var(--signal-cyan);
+  --accent-amber: var(--signal-amber);
+  --accent-red: var(--signal-red);
+  --bg-card: var(--bg-surface);
+  --bg-card-alt: rgba(0, 240, 255, 0.03);
+  --bg-card-hover: var(--bg-surface-hover);
+
+  /* --------------------------------------------------------------------------
+   * 5. Cybernetic Typography Font Stacks
+   * -------------------------------------------------------------------------- */
+  --font-sans: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", Menlo, Monaco, Consolas, monospace;
+
+  /* Precise Scale Floors */
+  --font-size-display: 26px;
+  --font-size-title-1: 22px;
+  --font-size-title-2: 18px;
+  --font-size-title-3: 15px;
+  --font-size-headline: 14px;
+  --font-size-body: 13px;
+  --font-size-callout: 12px;
+  --font-size-subhead: 11px;
+  --font-size-caption-1: 11px;
+  --font-size-caption-2: 10px;
+  --font-size-micro: 9px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --tracking-tight: -0.015em;
+  --tracking-normal: 0.01em;
+  --tracking-wide: 0.06em;
+  --tracking-wider: 0.12em;
+  --tracking-hud: 0.18em;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.45;
+  --leading-relaxed: 1.6;
+
+  --font-features-tabular: "tnum", "zero", "ss01", "ss02";
+
+  /* --------------------------------------------------------------------------
+   * 6. Precision System Dimensions
+   * -------------------------------------------------------------------------- */
+  --sidebar-width: 256px;
+  --sidebar-collapsed-width: 0px;
+  --header-height: 46px;
+  --topology-height: 42px;
+  --composer-max-width: 820px;
+
+  /* Spacing Rhythm */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+
+  /* Precision HUD Radii (Crisp, Angular, Sci-Fi) */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* --------------------------------------------------------------------------
+   * 7. Holographic Shadowing & Ambient Glow
+   * -------------------------------------------------------------------------- */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.70), inset 0 1px 0 rgba(0, 240, 255, 0.15);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(0, 240, 255, 0.20), 0 0 12px rgba(0, 240, 255, 0.08);
+  --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.90), inset 0 1px 0 rgba(0, 240, 255, 0.25), 0 0 24px rgba(0, 240, 255, 0.12);
+  --shadow-dock: 0 18px 48px rgba(0, 0, 0, 0.95), 0 0 28px rgba(0, 240, 255, 0.20), inset 0 1px 0 rgba(0, 240, 255, 0.30);
+
+  /* --------------------------------------------------------------------------
+   * 8. Snappy Cyber Dynamic Transitions
+   * -------------------------------------------------------------------------- */
+  --ease-spring: cubic-bezier(0.12, 0.95, 0.25, 1);
+  --ease-spring-snappy: cubic-bezier(0.18, 0.89, 0.32, 1.15);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --transition-instant: 0.06s var(--ease-spring);
+  --transition-fast: 0.12s var(--ease-spring);
+  --transition-normal: 0.20s var(--ease-spring);
+  --transition-smooth: 0.32s var(--ease-spring);
+
+  /* --------------------------------------------------------------------------
+   * 9. Layer Order
+   * -------------------------------------------------------------------------- */
+  --z-canvas: 1;
+  --z-ribbon: 15;
+  --z-header: 25;
+  --z-sidebar: 40;
+  --z-dock: 50;
+  --z-modal-backdrop: 90;
+  --z-modal: 100;
+  --z-toast: 110;
+}
+
+/* ============================================================================
+ * Light Theme — High-Visibility Tactical Blueprint HUD Mode
+ * ============================================================================ */
+[data-theme="light"] {
+  --bg-app: #06111e;
+  --bg-sidebar: #081628;
+  --bg-surface: rgba(10, 26, 44, 0.78);
+  --bg-surface-solid: #0d2036;
+  --bg-surface-hover: rgba(0, 240, 255, 0.12);
+  --bg-surface-active: rgba(0, 240, 255, 0.20);
+  --bg-surface-elevated: #0f243c;
+  --bg-glass: rgba(8, 22, 38, 0.86);
+  --bg-dock: rgba(10, 26, 46, 0.90);
+  --bg-overlay: rgba(3, 8, 14, 0.80);
+
+  --backdrop-glass: blur(20px) saturate(200%);
+  --backdrop-subtle: blur(14px) saturate(170%);
+
+  --border-subtle: rgba(0, 240, 255, 0.22);
+  --border-mid: rgba(0, 240, 255, 0.38);
+  --border-specular: rgba(0, 240, 255, 0.30);
+  --border-specular-hi: rgba(0, 240, 255, 0.70);
+  --border-focus: #00f0ff;
+  --border-active: #00f0ff;
+
+  --hairline-top: inset 0 1px 0 rgba(0, 240, 255, 0.45);
+  --hairline-bottom: inset 0 -1px 0 rgba(0, 0, 0, 0.60);
+
+  --text-primary: #e6f6ff;
+  --text-secondary: rgba(185, 225, 250, 0.80);
+  --text-muted: rgba(140, 195, 230, 0.55);
+  --text-tertiary: rgba(100, 160, 200, 0.38);
+  --text-code: #00f0ff;
+}

@@ -6,7 +6,17 @@
   <title>Smart LLM Switcher | Context-Aware Cost &amp; Performance Gateway</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23EDEDEF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='6' r='3'/><circle cx='6' cy='18' r='3'/><circle cx='18' cy='12' r='3'/><path d='M9 6h3a3 3 0 0 1 3 3v0a3 3 0 0 0 3 3'/><path d='M9 18h3a3 3 0 0 0 3-3v0a3 3 0 0 1 3-3'/></svg>" />
   <link rel="stylesheet" href="/static/vendor/katex.min.css" />
-  <link rel="stylesheet" href="/static/style.css?v=2.7" />
+  <!-- Modular Design System Chunks (Cybernetic HUD Architecture) -->
+  <link rel="stylesheet" href="/static/css/tokens.css?v=3.3" />
+  <link rel="stylesheet" href="/static/css/base.css?v=3.3" />
+  <link rel="stylesheet" href="/static/css/sidebar.css?v=3.3" />
+  <link rel="stylesheet" href="/static/css/chat.css?v=3.3" />
+  <link rel="stylesheet" href="/static/css/composer.css?v=3.3" />
+  <link rel="stylesheet" href="/static/css/dashboard.css?v=3.3" />
+  <link rel="stylesheet" href="/static/css/benchmark.css?v=3.3" />
+  <link rel="stylesheet" href="/static/css/registry.css?v=3.3" />
+  <link rel="stylesheet" href="/static/css/topology.css?v=3.3" />
+  <link rel="stylesheet" href="/static/css/modals.css?v=3.3" />
 </head>
 <body>
 <!-- Global SVG Symbols Defs -->
@@ -159,21 +169,26 @@
   <div class="app-layout" id="app-layout">
     
     <!-- ============================================================ -->
-    <!-- 1. CLEAN LEFT-HAND SIDEBAR                                   -->
+    <!-- 1. J.A.R.V.I.S. CYBER-ENHANCED HUD SIDEBAR                    -->
     <!-- ============================================================ -->
-    <aside class="sidebar" id="sidebar">
+    <aside class="sidebar hud-panel" id="sidebar">
       
-      <!-- Brand & Version Header -->
+      <!-- Brand & Version Header with Animated Arc Reactor -->
       <div class="sidebar-header">
         <div class="brand">
-          <div class="logo-icon">
-            <svg class="icon-sym" aria-hidden="true"><use href="#i-node-switch"/></svg>
+          <div class="logo-icon arc-reactor-badge" title="Smart LLM Switcher Core">
+            <svg class="arc-reactor-svg" viewBox="0 0 36 36" fill="none">
+              <circle cx="18" cy="18" r="16" stroke="rgba(0, 240, 255, 0.25)" stroke-width="1.2" stroke-dasharray="4 2"/>
+              <circle cx="18" cy="18" r="12" stroke="#00f0ff" stroke-width="1.5" class="arc-spin-ring"/>
+              <circle cx="18" cy="18" r="7" stroke="#00ff66" stroke-width="1" stroke-dasharray="3 1.5" class="arc-spin-inner"/>
+              <circle cx="18" cy="18" r="3.5" fill="#00f0ff" class="arc-core-pulse"/>
+            </svg>
           </div>
           <div class="brand-text">
             <div class="brand-title-row">
               <span class="brand-title">Smart LLM Switcher</span>
             </div>
-            <span class="brand-tagline">Cost &amp; Performance Gateway</span>
+            <span class="brand-tagline">COST &amp; PERFORMANCE GATEWAY</span>
           </div>
         </div>
         <button class="btn-icon sidebar-collapse-btn" id="sidebar-collapse-btn" title="Collapse Sidebar [Ctrl+B]" aria-label="Collapse Sidebar">
@@ -181,34 +196,47 @@
         </button>
       </div>
 
-      <!-- Action: New Conversation CTA -->
+      <!-- Action: New Conversation High-Tech Cyber Badge -->
       <div class="sidebar-actions">
-        <button class="btn-new-chat" id="new-chat-btn" title="Start a new chat session [Ctrl+N]">
+        <button class="btn-new-chat hud-action-badge" id="new-chat-btn" title="Start a new chat session [Ctrl+N]">
+          <span class="cyber-bracket">[</span>
           <span class="plus-icon">＋</span>
-          <span>New Conversation</span>
+          <span class="btn-text">NEW CONVERSATION</span>
           <span class="kbd-badge">/</span>
+          <span class="cyber-bracket">]</span>
         </button>
       </div>
 
-      <!-- Navigation Views -->
+      <!-- Navigation Views with Live Virtual Scanning Waveform -->
       <div class="sidebar-nav-section">
-        <div class="nav-section-label">WORKSPACE</div>
+        <div class="nav-section-label">WORKSPACE TELEMETRY</div>
         <button class="sidebar-nav-item active" id="nav-chat-btn" data-view="chat">
           <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chat"/></svg></span>
           <span class="nav-text">Chat &amp; Router</span>
-          <span class="nav-badge pulse">Live</span>
+          <!-- Live Animated Audio / Voice Scanning Waveform -->
+          <div class="hud-audio-waveform" title="Neural Interface Online">
+            <span class="wf-bar bar-1"></span>
+            <span class="wf-bar bar-2"></span>
+            <span class="wf-bar bar-3"></span>
+            <span class="wf-bar bar-4"></span>
+            <span class="wf-bar bar-5"></span>
+          </div>
+          <span class="nav-badge pulse">LIVE</span>
         </button>
         <button class="sidebar-nav-item" id="nav-registry-btn" data-view="registry">
           <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-layers"/></svg></span>
           <span class="nav-text">Model Registry &amp; Tiers</span>
+          <span class="nav-subtag">6 ARMS</span>
         </button>
         <button class="sidebar-nav-item" id="nav-dashboard-btn" data-view="dashboard">
           <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-chart"/></svg></span>
           <span class="nav-text">Telemetry &amp; Metering</span>
+          <span class="nav-subtag">SQLITE</span>
         </button>
         <button class="sidebar-nav-item" id="nav-benchmark-btn" data-view="benchmark">
           <span class="nav-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-flask"/></svg></span>
           <span class="nav-text">Benchmark Lab</span>
+          <span class="nav-subtag">EVAL</span>
         </button>
       </div>
 
@@ -216,7 +244,7 @@
       <div class="sidebar-search">
         <div class="search-input-wrap">
           <span class="search-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-search"/></svg></span>
-          <input type="text" id="session-search-input" placeholder="Search conversations..." autocomplete="off" />
+          <input type="text" id="session-search-input" placeholder="SEARCH DIRECTIVES..." autocomplete="off" />
           <button class="btn-clear-search hidden" id="clear-search-btn" title="Clear search">✕</button>
         </div>
       </div>
@@ -224,7 +252,7 @@
       <!-- Scrollable Conversation Sessions List -->
       <div class="sidebar-sessions-section">
         <div class="sessions-label-row">
-          <span class="sessions-label">Recent Conversations</span>
+          <span class="sessions-label">SESSION ARCHIVE</span>
           <span class="sessions-count" id="sessions-count-badge">0</span>
         </div>
         <div class="session-list" id="session-list">
@@ -232,8 +260,21 @@
         </div>
       </div>
 
-      <!-- Sidebar Footer -->
+      <!-- Sidebar Footer with Status Telemetry Indicators -->
       <div class="sidebar-footer">
+        <div class="sidebar-telemetry-status">
+          <div class="telemetry-status-row">
+            <span class="telemetry-beacon online"></span>
+            <span class="telemetry-label">SYSTEM ONLINE</span>
+            <span class="telemetry-grid-pattern"></span>
+          </div>
+          <div class="telemetry-status-row">
+            <span class="telemetry-beacon secure"></span>
+            <span class="telemetry-label">SECURE CONNECT</span>
+            <span class="telemetry-val">TLS 1.3</span>
+          </div>
+        </div>
+
         <button class="sidebar-footer-btn" id="open-settings-btn" title="Provider Settings &amp; API Keys">
           <div class="footer-btn-left">
             <span class="status-dot-indicator" id="sidebar-provider-dot" title="Checking providers..."></span>
@@ -258,7 +299,7 @@
     <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
     <!-- ============================================================ -->
-    <!-- 2. MAIN CENTER STAGE (CANVAS & PANELS)                       -->
+    <!-- 2. MAIN CENTER STAGE (HOLOGRAPHIC HUD CANVAS)                -->
     <!-- ============================================================ -->
     <main class="main-canvas" id="main-canvas">
       
@@ -280,12 +321,12 @@
           <!-- Strategy Pill Selector -->
           <div class="strategy-badge-pill" id="header-strategy-badge" title="Active Routing Strategy">
             <span class="pill-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-scale"/></svg></span>
-            <span class="pill-label">Balanced</span>
+            <span class="pill-label">MODE: BALANCED</span>
           </div>
           <!-- Real-Time Router Online Status -->
           <div class="engine-status-pill" id="engine-status-badge" title="Provider Connectivity &amp; Routing Engine">
             <span class="status-pulse-dot"></span>
-            <span class="status-text" id="engine-status-text">Router Online</span>
+            <span class="status-text" id="engine-status-text">ROUTER: SECURE REAL-API</span>
           </div>
           <!-- Quick Header Tools -->
           <button class="btn-icon header-tool-btn" id="header-settings-btn" title="Settings &amp; API Keys"><svg class="icon-sym" aria-hidden="true"><use href="#i-gear"/></svg></button>
@@ -302,41 +343,45 @@
         <section class="view-panel active" id="view-chat">
           <div class="chat-canvas-inner">
             
-            <!-- SLEEK 40px HORIZONTAL LIVE ROUTING TOPOLOGY BAR -->
+            <!-- DIGITAL HUD TELEMETRY & ROUTING RIBBON (TOP STREAM) -->
             <div class="architecture-ribbon" id="architecture-pipeline-card">
+              <!-- Corner Brackets -->
+              <span class="hud-corner tl"></span>
+              <span class="hud-corner tr"></span>
+              
               <div class="ribbon-bar">
                 
                 <!-- Topology Flow Nodes -->
                 <div class="topology-nodes-group">
                   <div class="topology-node analyzer" id="pnode-analyzer" title="Feature Extractor &amp; LinUCB Contextual Bandit Router">
                     <span class="top-node-icon">⚡</span>
-                    <span class="top-node-label">LinUCB</span>
-                    <span class="top-node-model" id="pnode-analyzer-state">Router</span>
+                    <span class="top-node-label">DECISION MATRIX</span>
+                    <span class="top-node-model" id="pnode-analyzer-state">ROUTER: ACTIVE</span>
                   </div>
 
                   <div class="topology-connector" id="pipeline-flow-connector" title="Dynamic Routing Pipeline">
-                    <svg class="conn-svg" width="20" height="10" viewBox="0 0 20 10" fill="none">
-                      <path d="M0 5h14m-3-3l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <svg class="conn-svg" width="24" height="10" viewBox="0 0 24 10" fill="none">
+                      <path d="M0 5h18m-4-3l4 3-4 3" stroke="#00f0ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                   </div>
 
                   <div class="topology-tiers-flow">
-                    <div class="topology-tier-node rnode-tier" id="pnode-tier_1" data-tier="tier_1" title="Tier 1: Gemini 3.5 Flash-Lite (Fast / Routine)">
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_1" data-tier="tier_1" title="T1: Gemini 3.5 Flash-Lite (Fast / Routine)">
                       <span class="node-tier-num">T1</span>
                     </div>
-                    <div class="topology-tier-node rnode-tier" id="pnode-tier_2" data-tier="tier_2" title="Tier 2: Groq GPT-OSS 20B (Fast General)">
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_2" data-tier="tier_2" title="T2: Groq GPT-OSS 20B (Fast General)">
                       <span class="node-tier-num">T2</span>
                     </div>
-                    <div class="topology-tier-node rnode-tier" id="pnode-tier_3" data-tier="tier_3" title="Tier 3: Gemini 3.6 Flash (Balanced Workhorse)">
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_3" data-tier="tier_3" title="T3: Gemini 3.6 Flash (Balanced Workhorse)">
                       <span class="node-tier-num">T3</span>
                     </div>
-                    <div class="topology-tier-node rnode-tier" id="pnode-tier_4" data-tier="tier_4" title="Tier 4: Groq Qwen3.8 27B (Coding Specialist)">
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_4" data-tier="tier_4" title="T4: Groq Qwen3.8 27B (Coding Specialist)">
                       <span class="node-tier-num">T4</span>
                     </div>
-                    <div class="topology-tier-node rnode-tier" id="pnode-tier_5" data-tier="tier_5" title="Tier 5: Groq GPT-OSS 120B (Deep Reasoning)">
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_5" data-tier="tier_5" title="T5: Groq GPT-OSS 120B (Deep Reasoning)">
                       <span class="node-tier-num">T5</span>
                     </div>
-                    <div class="topology-tier-node rnode-tier" id="pnode-tier_6" data-tier="tier_6" title="Tier 6: Gemini 3.8 Flash (High Capability)">
+                    <div class="topology-tier-node rnode-tier" id="pnode-tier_6" data-tier="tier_6" title="T6: Gemini 3.8 Flash (High Capability)">
                       <span class="node-tier-num">T6</span>
                     </div>
                   </div>
@@ -345,59 +390,93 @@
                 <!-- Live Telemetry Status Pill -->
                 <div class="ribbon-status-group">
                   <span class="status-indicator-dot" id="pipeline-status-dot"></span>
-                  <span class="ribbon-status-msg" id="pipeline-status-msg">LinUCB Contextual Router Active · 6 Model Arms Online</span>
+                  <span class="ribbon-status-msg" id="pipeline-status-msg">LINUCB BANDIT ACTIVE · 6 ARMS ONLINE · POOL KEEP-ALIVE ENGAGED</span>
                   <div class="escalation-indicator-pill hidden" id="pipeline-escalation-pill">
                     <span class="esc-icon">⚡</span>
-                    <span class="esc-text" id="pipeline-escalation-text">Escalated</span>
+                    <span class="esc-text" id="pipeline-escalation-text">ESCALATED</span>
                   </div>
                 </div>
 
                 <!-- Architecture Overview Toggle Button -->
                 <div class="ribbon-actions">
                   <button type="button" class="btn-ribbon-toggle" id="ribbon-toggle-btn" title="Toggle 6-Tier Architecture Overview">
-                    <span>Architecture Overview</span>
+                    <span>ACTIVE NODE MATRIX</span>
                     <span class="toggle-arrow" id="ribbon-toggle-arrow">▾</span>
                   </button>
                 </div>
               </div>
 
-              <!-- Collapsible Tiers Drawer -->
+              <!-- Collapsible Tiers Drawer (Holographic "Active Node" Pipeline Matrix) -->
               <div class="ribbon-drawer collapsed" id="ribbon-drawer">
                 <div class="drawer-detail-grid">
-                  <div class="drawer-tier-spec">
-                    <div class="dts-tag">LINUCB ROUTER</div>
-                    <div class="dts-name">Contextual Bandit</div>
-                    <div class="dts-desc">Online ridge regression, 8D TF-IDF + SVD features &amp; MCDA eligibility filter</div>
+                  <!-- Decision Matrix Hub -->
+                  <div class="drawer-tier-spec decision-hub">
+                    <span class="hud-corner tl"></span>
+                    <span class="hud-corner tr"></span>
+                    <span class="hud-corner bl"></span>
+                    <span class="hud-corner br"></span>
+                    <div class="dts-tag">DECISION MATRIX</div>
+                    <div class="dts-name">LinUCB Bandit</div>
+                    <div class="dts-wave-container">
+                      <svg class="dts-wave-svg" viewBox="0 0 100 20">
+                        <path d="M0 10 Q 15 2, 30 10 T 60 10 T 90 10 L 100 10" fill="none" stroke="#00f0ff" stroke-width="1.5" class="dts-wave-path"/>
+                      </svg>
+                    </div>
+                    <div class="dts-telemetry">16D VECTOR • RIDGE REGRESSION</div>
                   </div>
+
+                  <!-- T1 Node -->
                   <div class="drawer-tier-spec">
-                    <div class="dts-tag t1">TIER 1 · ROUTINE</div>
-                    <div class="dts-name">Gemini 3.5 Flash-Lite</div>
-                    <div class="dts-desc">Fast classification, summaries &amp; routine requests</div>
+                    <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
+                    <div class="dts-tag t1">T1: GEMINI 3.5 FLASH-LITE</div>
+                    <div class="dts-name">ROUTINE FASTPASS</div>
+                    <div class="dts-meter"><div class="meter-fill t1" style="width: 85%;"></div></div>
+                    <div class="dts-telemetry">LATENCY: ~300ms • $0.075/M</div>
                   </div>
+
+                  <!-- T2 Node -->
                   <div class="drawer-tier-spec">
-                    <div class="dts-tag t2">TIER 2 · GENERAL</div>
-                    <div class="dts-name">Groq GPT-OSS 20B</div>
-                    <div class="dts-desc">High token velocity general chat &amp; low latency tasks</div>
+                    <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
+                    <div class="dts-tag t2">T2: GROQ GPT-OSS 20B</div>
+                    <div class="dts-name">FAST GENERAL</div>
+                    <div class="dts-meter"><div class="meter-fill t2" style="width: 95%;"></div></div>
+                    <div class="dts-telemetry">LATENCY: ~200ms • $0.10/M</div>
                   </div>
+
+                  <!-- T3 Node -->
                   <div class="drawer-tier-spec">
-                    <div class="dts-tag t3">TIER 3 · BALANCED</div>
-                    <div class="dts-name">Gemini 3.6 Flash</div>
-                    <div class="dts-desc">Balanced performance for multi-domain problem solving</div>
+                    <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
+                    <div class="dts-tag t3">T3: GEMINI 3.6 FLASH</div>
+                    <div class="dts-name">BALANCED WORKHORSE</div>
+                    <div class="dts-meter"><div class="meter-fill t3" style="width: 78%;"></div></div>
+                    <div class="dts-telemetry">LATENCY: ~450ms • $0.15/M</div>
                   </div>
+
+                  <!-- T4 Node -->
                   <div class="drawer-tier-spec">
-                    <div class="dts-tag t4">TIER 4 · CODING</div>
-                    <div class="dts-name">Groq Qwen3.8 27B</div>
-                    <div class="dts-desc">Algorithmic coding, debugging &amp; syntax generation</div>
+                    <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
+                    <div class="dts-tag t4">T4: GROQ QWEN3.8 27B</div>
+                    <div class="dts-name">CODING SPECIALIST</div>
+                    <div class="dts-meter"><div class="meter-fill t4" style="width: 92%;"></div></div>
+                    <div class="dts-telemetry">LATENCY: ~320ms • $0.20/M</div>
                   </div>
+
+                  <!-- T5 Node -->
                   <div class="drawer-tier-spec">
-                    <div class="dts-tag t5">TIER 5 · REASONING</div>
-                    <div class="dts-name">Groq GPT-OSS 120B</div>
-                    <div class="dts-desc">Deep chain-of-thought, mathematical proofs &amp; logic</div>
+                    <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
+                    <div class="dts-tag t5">T5: GROQ GPT-OSS 120B</div>
+                    <div class="dts-name">ADVANCED REASONING</div>
+                    <div class="dts-meter"><div class="meter-fill t5" style="width: 90%;"></div></div>
+                    <div class="dts-telemetry">LATENCY: ~480ms • $0.59/M</div>
                   </div>
+
+                  <!-- T6 Node -->
                   <div class="drawer-tier-spec">
-                    <div class="dts-tag t6">TIER 6 · HIGH CAPABILITY</div>
-                    <div class="dts-name">Gemini 3.8 Flash</div>
-                    <div class="dts-desc">Frontier-grade synthesis, complex architectural analysis</div>
+                    <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
+                    <div class="dts-tag t6">T6: GEMINI 3.8 FLASH</div>
+                    <div class="dts-name">HIGH CAPABILITY</div>
+                    <div class="dts-meter"><div class="meter-fill t6" style="width: 70%;"></div></div>
+                    <div class="dts-telemetry">LATENCY: ~600ms • $0.30/M</div>
                   </div>
                 </div>
               </div>
@@ -405,12 +484,48 @@
 
             <!-- Chat Messages Container (Only Middle Container Scrolls) -->
             <div class="chat-messages" id="chat-messages">
-              <!-- Dynamically populated by app.js (Welcome Hero or Conversation turns) -->
+              <!-- Dynamically populated by chat.js (Welcome Hero or Conversation turns) -->
             </div>
 
-            <!-- Permanently Anchored Monolithic Prompt Composer Dock -->
+            <!-- Permanently Anchored Cybernetic Input Dock -->
             <div class="composer-container">
-              <form class="composer-card" id="composer-form">
+              
+              <!-- Quick Action Tag Pills as Active Data Circuits -->
+              <div class="composer-quick-chips" id="composer-quick-chips">
+                <button type="button" class="composer-chip hud-circuit-pill" data-query="Summarize the primary benefits of semantic caching in 2 bullet points." title="Summarize the primary benefits of semantic caching in 2 bullet points.">
+                  <span class="chip-circuit-pin"></span>
+                  <span class="chip-icon">✦</span>
+                  <span class="chip-text">Caching</span>
+                </button>
+                <button type="button" class="composer-chip hud-circuit-pill" data-query="Compare relational databases and document stores for high-throughput write workloads." title="Compare relational databases and document stores for high-throughput write workloads.">
+                  <span class="chip-circuit-pin"></span>
+                  <span class="chip-icon">⚖️</span>
+                  <span class="chip-text">Relational vs NoSQL</span>
+                </button>
+                <button type="button" class="composer-chip hud-circuit-pill" data-query="Write a thread-safe Python implementation of an LRU Cache with TTL expiration." title="Write a thread-safe Python implementation of an LRU Cache with TTL expiration.">
+                  <span class="chip-circuit-pin"></span>
+                  <span class="chip-icon">🔄</span>
+                  <span class="chip-text">LRU</span>
+                </button>
+                <button type="button" class="composer-chip hud-circuit-pill" data-query="Prove that the square root of 2 is irrational and analyze its algebraic implications." title="Prove that the square root of 2 is irrational and analyze its algebraic implications.">
+                  <span class="chip-circuit-pin"></span>
+                  <span class="chip-icon">📝</span>
+                  <span class="chip-text">√2</span>
+                </button>
+                <button type="button" class="composer-chip hud-circuit-pill" data-query="Explain how context-aware LLM switching optimizes API costs and latency." title="Explain how context-aware LLM switching optimizes API costs and latency.">
+                  <span class="chip-circuit-pin"></span>
+                  <span class="chip-icon">🚀</span>
+                  <span class="chip-text">Routing</span>
+                </button>
+              </div>
+
+              <!-- Cybernetic Terminal Console Input Dock -->
+              <form class="composer-card hud-terminal-dock" id="composer-form">
+                <!-- Tactical Corner Grips -->
+                <span class="hud-corner tl"></span>
+                <span class="hud-corner tr"></span>
+                <span class="hud-corner bl"></span>
+                <span class="hud-corner br"></span>
                 
                 <!-- Textarea Row at Top of Composer Dock -->
                 <div class="composer-input-row">
@@ -418,7 +533,7 @@
                     id="query-input" 
                     class="query-input" 
                     rows="1" 
-                    placeholder="Ask any question, coding task, or reasoning challenge... (Shift+Enter for newline)"
+                    placeholder="INPUT USER QUERY OR DIRECTIVE... (SHIFT+ENTER TO FORCE EXECUTION)"
                     required
                   ></textarea>
                 </div>
@@ -427,7 +542,35 @@
                 <div class="composer-action-toolbar">
                   <div class="composer-toolbar-left">
                     <div class="strategy-selector-wrapper">
-                      <div class="select-styled-wrap">
+                      <!-- Segmented Holographic Matrix Mode Pills -->
+                      <div class="composer-mode-pills" id="composer-mode-pills">
+                        <button type="button" class="composer-mode-pill active" data-mode-id="smart" data-strategy="balanced" title="Smart LinUCB Contextual Bandit Dynamic Routing">
+                          <span class="mode-led"></span>
+                          <span class="mode-pill-label">Smart LinUCB</span>
+                        </button>
+                        <button type="button" class="composer-mode-pill" data-mode-id="balanced" data-strategy="balanced" title="Balanced Cost &amp; Capability Tradeoff">
+                          <span class="mode-led"></span>
+                          <span class="mode-pill-label">Balanced</span>
+                        </button>
+                        <button type="button" class="composer-mode-pill" data-mode-id="lowest_cost" data-strategy="lowest_cost" title="Lowest Cost Optimization Priority">
+                          <span class="mode-led"></span>
+                          <span class="mode-pill-label">Cost</span>
+                        </button>
+                        <button type="button" class="composer-mode-pill" data-mode-id="fastest" data-strategy="fastest" title="Lowest Latency Velocity Priority">
+                          <span class="mode-led"></span>
+                          <span class="mode-pill-label">Fast</span>
+                        </button>
+                        <button type="button" class="composer-mode-pill" data-mode-id="highest_quality" data-strategy="highest_quality" title="Frontier Highest Intelligence Tier">
+                          <span class="mode-led"></span>
+                          <span class="mode-pill-label">Quality</span>
+                        </button>
+                        <button type="button" class="composer-mode-pill" data-mode-id="direct" data-strategy="lowest_cost" title="Direct Gemini Flash-Lite Single-Pass">
+                          <span class="mode-led"></span>
+                          <span class="mode-pill-label">Direct</span>
+                        </button>
+                      </div>
+
+                      <div class="select-styled-wrap" style="display:none;">
                         <select id="strategy-select" class="strategy-select" title="Active Routing Strategy">
                           <option value="balanced" selected>Balanced Strategy</option>
                           <option value="lowest_cost">Lowest Cost</option>
@@ -437,9 +580,9 @@
                       </div>
                     </div>
 
-                    <div class="context-pill" id="context-pill" title="Conversation Memory Window">
+                    <div class="context-pill hud-memory-pill" id="context-pill" title="Conversation Memory Window">
                       <span class="context-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-cpu"/></svg></span>
-                      <span>Memory: <strong id="context-turn-count">0</strong> turns</span>
+                      <span>MEM: <strong id="context-turn-count">0</strong> TURNS</span>
                       <button type="button" class="btn-clear-context" id="clear-context-btn" title="Reset Conversation Memory" aria-label="Clear Memory">
                         <svg class="icon-sym" aria-hidden="true"><use href="#i-trash"/></svg>
                       </button>
@@ -447,10 +590,10 @@
                   </div>
 
                   <div class="composer-toolbar-right">
-                    <span class="kbd-hint"><kbd>Enter</kbd></span>
-                    <!-- Send / Stop Button (High-Contrast 32px x 32px) -->
-                    <button type="submit" id="send-stop-btn" class="btn-send-stop" title="Send Message (Enter)">
-                      <span class="btn-icon-inner" id="send-btn-icon"><svg class="icon-sym" aria-hidden="true"><use href="#i-arrow-up"/></svg></span>
+                    <span class="kbd-hint" id="kbd-shortcut-hint" title="Send message (Enter or Cmd/Ctrl+Enter) · Shift+Enter for newline"><kbd class="kbd-mod">Ctrl</kbd><kbd class="kbd-sym">↵</kbd></span>
+                    <!-- Send / Stop Button (Pulsing Triangular Cyber Trigger) -->
+                    <button type="submit" id="send-stop-btn" class="btn-send-stop hud-trigger-btn" title="EXECUTE DIRECTIVE (Enter)">
+                      <span class="btn-icon-inner" id="send-btn-icon"><span class="hud-triangle-trigger">▲</span></span>
                     </button>
                   </div>
                 </div>
@@ -1009,7 +1152,9 @@
   <script src="/static/vendor/katex.min.js"></script>
   <script src="/static/vendor/katex-auto-render.min.js"></script>
 
-  <!-- Application Script -->
-  <script src="/static/app.js?v=2.7"></script>
+  <!-- S-Tier Modular Application Architecture (ES Modules) -->
+  <script type="module" src="/static/js/main.js?v=3.3"></script>
+  <!-- Fallback Legacy Bundle (Runs only on legacy non-module browsers) -->
+  <script nomodule src="/static/app.js?v=3.3"></script>
 </body>
 </html>

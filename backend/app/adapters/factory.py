@@ -63,5 +63,14 @@ class AdapterFactory:
         """List all registered provider names."""
         return list(self._adapters.keys())
 
+    async def aclose(self) -> None:
+        """Gracefully close all registered adapter connection pools."""
+        for adapter in list(self._adapters.values()):
+            if hasattr(adapter, "aclose"):
+                try:
+                    await adapter.aclose()
+                except Exception:
+                    pass
+
 
 adapter_factory = AdapterFactory()

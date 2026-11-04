@@ -1,0 +1,668 @@
+/**
+ * Context-Aware Smart LLM Switcher — Research Benchmark Lab Stylesheet
+ * Chunk 11: Modular Benchmark Architecture
+ *
+ * Implements:
+ * 1. Apple HIG & Claude Design: Liquid glass surfaces, OLED black contrast, specular hairlines.
+ * 2. Critically damped spring physics: cubic-bezier(0.16, 1, 0.3, 1) and 0-latency pointer-down response.
+ * 3. Strict typography scale floors (min 12px) and tabular numerals (tnum) for jitter-free telemetry.
+ * 4. Micro-metered comparative evaluation matrix with multi-domain badges and latency speedup pills.
+ */
+
+/* ============================================================================
+   1. Benchmark Container Stage
+   ============================================================================ */
+.benchmark-container {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: clamp(20px, 3.2vw, 36px) clamp(20px, 3.5vw, 40px) 72px;
+  max-width: 1340px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Slim Apple Specular Scrollbar */
+.benchmark-container::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.benchmark-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.benchmark-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full, 9999px);
+}
+
+.benchmark-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+[data-theme="light"] .benchmark-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .benchmark-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+/* ============================================================================
+   2. Benchmark Header & Primary CTA Action
+   ============================================================================ */
+.benchmark-container .view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+
+.benchmark-container .view-title-group {
+  flex: 1 1 480px;
+  min-width: 280px;
+}
+
+.benchmark-container .view-title-group h2 {
+  font-size: var(--font-size-title-1, 24px);
+  font-weight: 650;
+  letter-spacing: var(--tracking-tight, -0.025em);
+  color: var(--text-primary, #FFFFFF);
+  margin: 0 0 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.benchmark-container .view-title-group .subtitle {
+  font-size: 13px;
+  line-height: var(--leading-normal, 1.5);
+  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+  max-width: 760px;
+  margin: 0;
+}
+
+/* Benchmark Run CTA Button */
+#run-benchmark-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 22px;
+  background-color: var(--accent-primary, #FFFFFF);
+  color: var(--accent-primary-text, #000000);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full, 9999px);
+  font-size: var(--font-size-callout, 13px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 2px 10px rgba(0, 0, 0, 0.35);
+  transition: transform var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
+              background-color var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
+              box-shadow var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
+              opacity var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1));
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#run-benchmark-btn:hover:not(:disabled) {
+  background-color: var(--accent-primary-hover, #E4E4E7);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 4px 16px rgba(255, 255, 255, 0.18);
+}
+
+/* Instant 0-Latency Pointer Down Feedback (Apple Spec) */
+#run-benchmark-btn:active:not(:disabled) {
+  transform: scale(0.97);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+#run-benchmark-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-app, #000000), 0 0 0 4px var(--signal-indigo, #6366F1);
+}
+
+/* Loading & Disabled States */
+#run-benchmark-btn:disabled,
+#run-benchmark-btn.loading {
+  opacity: 0.82;
+  cursor: wait;
+  transform: none !important;
+  box-shadow: none;
+}
+
+#run-benchmark-btn .btn-play-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* Crisp Apple Native Spinning Wheel */
+.btn-loading-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: bmSpinnerRotate 0.65s linear infinite;
+  box-sizing: border-box;
+}
+
+@keyframes bmSpinnerRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+[data-theme="light"] #run-benchmark-btn {
+  background-color: #000000;
+  color: #FFFFFF;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] #run-benchmark-btn:hover:not(:disabled) {
+  background-color: #1A1A1E;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* ============================================================================
+   3. Benchmark Summary KPI Cards Grid
+   ============================================================================ */
+.benchmark-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+  animation: bmCardsEntrance 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes bmCardsEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.benchmark-summary-grid .summary-card {
+  padding: 18px 22px;
+  background: var(--bg-surface, rgba(18, 18, 22, 0.72));
+  backdrop-filter: var(--backdrop-glass, blur(24px) saturate(190%));
+  -webkit-backdrop-filter: var(--backdrop-glass, blur(24px) saturate(190%));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-lg, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.5));
+  transition: transform var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
+              border-color var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
+              box-shadow var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+.benchmark-summary-grid .summary-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-mid, rgba(255, 255, 255, 0.12));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), var(--shadow-md, 0 8px 24px -4px rgba(0, 0, 0, 0.6));
+}
+
+/* Card 1: Highlighted Overall Cost Savings */
+.benchmark-summary-grid .summary-card.highlight {
+  border-color: var(--signal-emerald-border, rgba(48, 209, 88, 0.28));
+  background: linear-gradient(175deg, rgba(48, 209, 88, 0.08) 0%, var(--bg-surface, rgba(18, 18, 22, 0.72)) 45%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
+              0 6px 24px -4px var(--signal-emerald-glow, rgba(48, 209, 88, 0.25));
+}
+
+.benchmark-summary-grid .summary-card.highlight:hover {
+  border-color: rgba(48, 209, 88, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16),
+              0 10px 32px -4px var(--signal-emerald-glow, rgba(48, 209, 88, 0.35));
+}
+
+.summary-card .card-title {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-caption-1, 12px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wider, 0.08em);
+  color: var(--text-muted, rgba(235, 235, 245, 0.40));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summary-card .big-metric {
+  font-family: var(--font-mono, monospace);
+  font-size: clamp(26px, 2.5vw, 34px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: var(--tracking-tight, -0.025em);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--font-features-tabular, "cv02", "cv03", "cv04", "cv11", "tnum");
+  color: var(--text-primary, #FFFFFF);
+}
+
+.summary-card .card-desc {
+  font-size: var(--font-size-callout, 13px);
+  line-height: 1.4;
+  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+  font-variant-numeric: tabular-nums;
+}
+
+/* Apple Semantic Signals */
+.text-green {
+  color: var(--signal-emerald, #30D158) !important;
+}
+
+.text-blue {
+  color: var(--signal-indigo, #818CF8) !important;
+}
+
+.text-amber {
+  color: var(--signal-amber, #FFB340) !important;
+}
+
+.text-red {
+  color: var(--signal-red, #FF6961) !important;
+}
+
+[data-theme="light"] .benchmark-summary-grid .summary-card {
+  background: var(--bg-surface, rgba(255, 255, 255, 0.85));
+  border-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+}
+
+[data-theme="light"] .benchmark-summary-grid .summary-card.highlight {
+  border-color: var(--signal-emerald-border, rgba(40, 205, 65, 0.28));
+  background: linear-gradient(175deg, rgba(40, 205, 65, 0.08) 0%, var(--bg-surface, rgba(255, 255, 255, 0.9)) 45%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95),
+              0 6px 20px -4px var(--signal-emerald-glow, rgba(40, 205, 65, 0.20));
+}
+
+/* ============================================================================
+   4. Evaluation Matrix Table Panel
+   ============================================================================ */
+.benchmark-container .table-panel {
+  background: var(--bg-surface, rgba(18, 18, 22, 0.72));
+  backdrop-filter: var(--backdrop-glass, blur(24px) saturate(190%));
+  -webkit-backdrop-filter: var(--backdrop-glass, blur(24px) saturate(190%));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-lg, 16px);
+  margin-bottom: 28px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+.benchmark-container .table-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.benchmark-container .table-title-group h3 {
+  font-size: var(--font-size-headline, 16px);
+  font-weight: 650;
+  letter-spacing: var(--tracking-tight, -0.025em);
+  color: var(--text-primary, #FFFFFF);
+  margin: 0;
+}
+
+.benchmark-container .table-hint {
+  font-size: var(--font-size-caption-1, 12px);
+  color: var(--text-muted, rgba(235, 235, 245, 0.40));
+  margin-top: 2px;
+  display: block;
+}
+
+.benchmark-container .table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Slim Table Scrollbar */
+.benchmark-container .table-responsive::-webkit-scrollbar {
+  height: 5px;
+}
+
+.benchmark-container .table-responsive::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 9999px;
+}
+
+/* ============================================================================
+   5. Evaluation Matrix Table Structure & Typography
+   ============================================================================ */
+.benchmark-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-callout, 13px);
+  text-align: left;
+}
+
+.benchmark-table thead th {
+  padding: 13px 20px;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-caption-1, 12px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide, 0.04em);
+  color: var(--text-muted, rgba(235, 235, 245, 0.40));
+  background-color: rgba(255, 255, 255, 0.025);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  white-space: nowrap;
+}
+
+.benchmark-table tbody td {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: var(--font-features-tabular, "cv02", "cv03", "cv04", "cv11", "tnum");
+  vertical-align: middle;
+  transition: background-color var(--transition-instant, 0.08s ease);
+}
+
+.benchmark-table tbody tr {
+  transition: background-color var(--transition-fast, 0.14s ease);
+}
+
+.benchmark-table tbody tr:hover td {
+  background-color: var(--bg-surface-hover, rgba(255, 255, 255, 0.04));
+  color: var(--text-primary, #FFFFFF);
+}
+
+.benchmark-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Column 1: Query & Domain Specifics */
+.benchmark-table td.col-query {
+  max-width: 340px;
+  min-width: 240px;
+}
+
+.bm-query-title {
+  display: block;
+  font-size: var(--font-size-callout, 13px);
+  font-weight: 600;
+  color: var(--text-primary, #FFFFFF);
+  line-height: 1.4;
+  margin-bottom: 5px;
+  word-break: break-word;
+}
+
+.bm-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Task Domain & Complexity Badges */
+.bm-domain-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs, 5px);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+}
+
+.bm-domain-badge.domain-coding {
+  background: var(--signal-cyan-bg, rgba(100, 210, 255, 0.12));
+  border-color: var(--signal-cyan-border, rgba(100, 210, 255, 0.28));
+  color: var(--signal-cyan-text, #64D2FF);
+}
+
+.bm-domain-badge.domain-reasoning {
+  background: var(--signal-indigo-bg, rgba(99, 102, 241, 0.12));
+  border-color: var(--signal-indigo-border, rgba(99, 102, 241, 0.30));
+  color: var(--signal-indigo-text, #818CF8);
+}
+
+.bm-domain-badge.domain-factual {
+  background: var(--signal-emerald-bg, rgba(48, 209, 88, 0.12));
+  border-color: var(--signal-emerald-border, rgba(48, 209, 88, 0.28));
+  color: var(--signal-emerald-text, #30D158);
+}
+
+.bm-domain-badge.domain-planning {
+  background: var(--signal-amber-bg, rgba(255, 159, 10, 0.12));
+  border-color: var(--signal-amber-border, rgba(255, 159, 10, 0.30));
+  color: var(--signal-amber-text, #FFB340);
+}
+
+.bm-complexity-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs, 5px);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-muted, rgba(235, 235, 245, 0.40));
+  text-transform: capitalize;
+}
+
+/* Columns 2, 3, 4: Model Specifications */
+.bm-model-pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-caption-1, 12px);
+  font-weight: 550;
+  padding: 2px 7px;
+  border-radius: var(--radius-xs, 5px);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary, #FFFFFF);
+  margin-bottom: 4px;
+}
+
+.bm-model-pill.b1-model {
+  background: rgba(255, 69, 58, 0.08);
+  border-color: rgba(255, 69, 58, 0.20);
+  color: var(--signal-red-text, #FF6961);
+}
+
+.bm-model-pill.b2-model {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, rgba(235, 235, 245, 0.75));
+}
+
+.bm-model-pill.smart-model {
+  background: var(--signal-indigo-bg, rgba(99, 102, 241, 0.14));
+  border-color: var(--signal-indigo-border, rgba(99, 102, 241, 0.32));
+  color: var(--signal-indigo-text, #818CF8);
+  font-weight: 600;
+}
+
+.bm-submetric {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-caption-1, 12px);
+  color: var(--text-muted, rgba(235, 235, 245, 0.40));
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Column 5 & 6: Delta KPI Highlights */
+.bm-savings-pill,
+.bm-speedup-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-caption-1, 12px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bm-savings-pill {
+  background: var(--signal-emerald-bg, rgba(48, 209, 88, 0.12));
+  border: 1px solid var(--signal-emerald-border, rgba(48, 209, 88, 0.28));
+  color: var(--signal-emerald-text, #30D158);
+}
+
+.bm-savings-pill.neutral {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--text-muted, rgba(235, 235, 245, 0.6));
+}
+
+.bm-savings-pill.negative {
+  background: rgba(255, 159, 10, 0.12);
+  border-color: rgba(255, 159, 10, 0.28);
+  color: var(--signal-amber, #FF9F0A);
+}
+
+.bm-speedup-pill {
+  background: var(--signal-indigo-bg, rgba(99, 102, 241, 0.12));
+  border: 1px solid var(--signal-indigo-border, rgba(99, 102, 241, 0.30));
+  color: var(--signal-indigo-text, #818CF8);
+}
+
+.bm-speedup-pill.neutral {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--text-muted, rgba(235, 235, 245, 0.6));
+}
+
+.bm-speedup-pill.negative {
+  background: rgba(255, 69, 58, 0.12);
+  border-color: rgba(255, 69, 58, 0.28);
+  color: var(--signal-red, #FF453A);
+}
+
+/* Empty State & Error States */
+.benchmark-table td.empty-state {
+  text-align: center;
+  padding: 56px 24px;
+  color: var(--text-muted, rgba(235, 235, 245, 0.40));
+  font-size: var(--font-size-callout, 13px);
+  line-height: 1.6;
+}
+
+.bm-empty-icon {
+  display: block;
+  font-size: 28px;
+  margin-bottom: 10px;
+  opacity: 0.6;
+}
+
+.benchmark-table tr.bm-row-error td {
+  background-color: var(--signal-red-bg, rgba(255, 69, 58, 0.08));
+  border-bottom-color: var(--signal-red-border, rgba(255, 69, 58, 0.25));
+}
+
+/* Light Theme Overrides */
+[data-theme="light"] .benchmark-container .table-panel {
+  background: var(--bg-surface, rgba(255, 255, 255, 0.85));
+  border-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+}
+
+[data-theme="light"] .benchmark-table thead th {
+  background-color: rgba(0, 0, 0, 0.02);
+  border-bottom-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
+  color: var(--text-muted, #86868B);
+}
+
+[data-theme="light"] .benchmark-table tbody td {
+  border-bottom-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
+  color: var(--text-secondary, #6E6E73);
+}
+
+[data-theme="light"] .benchmark-table tbody tr:hover td {
+  background-color: rgba(0, 0, 0, 0.03);
+  color: var(--text-primary, #1D1D1F);
+}
+
+[data-theme="light"] .bm-query-title {
+  color: var(--text-primary, #1D1D1F);
+}
+
+[data-theme="light"] .bm-model-pill {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary, #1D1D1F);
+}
+
+[data-theme="light"] .bm-model-pill.b1-model {
+  background: rgba(255, 59, 48, 0.08);
+  border-color: rgba(255, 59, 48, 0.22);
+  color: var(--signal-red-text, #DC2626);
+}
+
+[data-theme="light"] .bm-model-pill.smart-model {
+  background: rgba(88, 86, 214, 0.10);
+  border-color: rgba(88, 86, 214, 0.25);
+  color: var(--signal-indigo-text, #4F46E5);
+}
+
+[data-theme="light"] .bm-savings-pill {
+  background: var(--signal-emerald-bg, rgba(40, 205, 65, 0.12));
+  border-color: var(--signal-emerald-border, rgba(40, 205, 65, 0.28));
+  color: var(--signal-emerald-text, #1CA835);
+}
+
+[data-theme="light"] .bm-speedup-pill {
+  background: var(--signal-indigo-bg, rgba(88, 86, 214, 0.12));
+  border-color: var(--signal-indigo-border, rgba(88, 86, 214, 0.28));
+  color: var(--signal-indigo-text, #4F46E5);
+}
+
+/* ============================================================================
+   6. Responsive Layout Media Queries
+   ============================================================================ */
+@media (max-width: 960px) {
+  .benchmark-container {
+    padding: 20px 16px 60px;
+  }
+
+  .benchmark-container .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  #run-benchmark-btn {
+    width: 100%;
+  }
+
+  .benchmark-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}

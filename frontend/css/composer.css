@@ -1,0 +1,947 @@
+/* ============================================================
+   Smart LLM Switcher — Modularized Floating Island Prompt Composer
+   Chunk 6: composer.css (Apple HIG & Claude Design Architecture)
+   
+   Design Philosophy:
+   - Floating monolithic island anchored to viewport bottom with backdrop blur
+   - Liquid glass with 28px blur & 190% saturation
+   - Specular hairlines with subtle top light refraction
+   - Critically damped spring physics on hover / active press
+   - High-contrast circular action button (Send / Stop states)
+   - Zero-jitter auto-expanding typography container (38px to 180px)
+   - Routing mode selector pills (Smart LinUCB, Balanced, Cost, Fast, Quality, Direct)
+   - Quick prompt suggestion chips with one-click insertion
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   1. Monolithic Anchored Floating Composer Island
+   ------------------------------------------------------------ */
+.composer-container {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  width: 100%;
+  padding: 0 20px;
+  pointer-events: none; /* Let empty background clicks pass through to canvas */
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------
+   1.1 Quick Prompt Suggestion Chips (Floating Above Composer)
+   ------------------------------------------------------------ */
+.composer-quick-chips {
+  pointer-events: auto;
+  width: 100%;
+  max-width: var(--composer-max-width, 780px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 4px 2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  user-select: none;
+  animation: chipsEntrance 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.composer-quick-chips::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes chipsEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: rgba(20, 20, 26, 0.75);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: var(--radius-full, 9999px);
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary, rgba(235, 235, 245, 0.75));
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  transition: 
+    background var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
+    border-color var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
+    transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1),
+    color var(--transition-fast, 0.14s ease);
+}
+
+.composer-chip:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #FFFFFF;
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+.composer-chip:active {
+  transform: scale(0.94);
+  transition-duration: 0.06s;
+}
+
+.composer-chip .chip-icon {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.composer-chip .chip-text {
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
+}
+
+/* ------------------------------------------------------------
+   1.2 Floating Island Monolithic Card Dock
+   ------------------------------------------------------------ */
+.composer-card {
+  pointer-events: auto; /* Re-enable pointer events inside composer */
+  width: 100%;
+  max-width: var(--composer-max-width, 780px);
+  margin: 0 auto;
+  background: var(--bg-dock, rgba(16, 16, 20, 0.82));
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid var(--border-specular, rgba(255, 255, 255, 0.15));
+  border-radius: var(--radius-xl, 20px);
+  box-shadow: var(--shadow-dock, 0 24px 56px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.15));
+  padding: 12px 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: 
+    border-color var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+    box-shadow var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+    transform var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1));
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* Apple Specular Focus Ring Glow */
+.composer-card:focus-within {
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 
+    0 28px 64px -8px rgba(0, 0, 0, 0.9), 
+    0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+
+.composer-card.disabled {
+  opacity: 0.55;
+  pointer-events: none;
+  filter: grayscale(0.5);
+}
+
+/* ------------------------------------------------------------
+   2. Auto-Resizing Textarea Input Row (38px to 180px)
+   ------------------------------------------------------------ */
+.composer-input-row {
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  position: relative;
+}
+
+.query-input {
+  width: 100%;
+  min-height: 38px;
+  max-height: 180px;
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", -system-ui, sans-serif);
+  font-size: var(--font-size-body, 15px);
+  line-height: var(--leading-relaxed, 1.55);
+  font-weight: 400;
+  color: var(--text-primary, #FFFFFF);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0;
+  margin: 0;
+  box-sizing: border-box;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.query-input::placeholder {
+  color: var(--text-muted, rgba(235, 235, 245, 0.38));
+  font-weight: 400;
+  transition: color 0.15s ease;
+}
+
+.query-input:focus::placeholder {
+  color: rgba(235, 235, 245, 0.25);
+}
+
+/* Subtle Apple Scrollbar for overflowing queries */
+.query-input::-webkit-scrollbar {
+  width: 5px;
+}
+
+.query-input::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.query-input::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full, 9999px);
+}
+
+.query-input::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* ------------------------------------------------------------
+   3. Integrated Action Toolbar
+   ------------------------------------------------------------ */
+.composer-action-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  user-select: none;
+  gap: 12px;
+}
+
+/* Toolbar Left: Strategy Selector, Routing Pills & Memory Context */
+.composer-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------
+   3.1 Routing Mode Selector Pills
+   ------------------------------------------------------------ */
+.composer-mode-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-full, 9999px);
+  user-select: none;
+}
+
+.composer-mode-pill {
+  appearance: none;
+  border: none;
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full, 9999px);
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+  background: transparent;
+  cursor: pointer;
+  transition: 
+    background var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+    color var(--transition-fast, 0.12s ease),
+    transform 0.1s ease,
+    box-shadow var(--transition-fast, 0.12s ease);
+}
+
+.composer-mode-pill:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #FFFFFF;
+}
+
+.composer-mode-pill:active {
+  transform: scale(0.94);
+}
+
+.composer-mode-pill.active {
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.28);
+}
+
+/* Strategy Selector Wrapper with Hairline & Custom Chevron */
+.strategy-selector-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.select-styled-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  transition: 
+    background var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+    border-color var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+    transform 0.1s ease;
+}
+
+.select-styled-wrap:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--border-mid, rgba(255, 255, 255, 0.10));
+}
+
+.select-styled-wrap:active {
+  transform: scale(0.98);
+}
+
+.strategy-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: var(--font-size-subhead, 12px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding-right: 18px; /* Room for custom chevron */
+  margin: 0;
+}
+
+.select-styled-wrap::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 7px;
+  height: 4px;
+  background-color: var(--text-muted, rgba(235, 235, 245, 0.38));
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  pointer-events: none;
+  transition: transform var(--transition-fast, 0.12s ease), background-color var(--transition-fast, 0.12s ease);
+}
+
+.select-styled-wrap:hover::after {
+  background-color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+}
+
+.strategy-select option {
+  background-color: #16161A;
+  color: #FFFFFF;
+  padding: 6px 10px;
+}
+
+/* Context Memory Pill */
+.context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-full, 9999px);
+  font-size: var(--font-size-caption-1, 11px);
+  color: var(--text-muted, rgba(235, 235, 245, 0.38));
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  transition: 
+    background var(--transition-fast, 0.12s ease),
+    border-color var(--transition-fast, 0.12s ease);
+}
+
+.context-pill:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-mid, rgba(255, 255, 255, 0.10));
+}
+
+.context-pill .context-icon {
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.75;
+}
+
+.context-pill .context-icon svg {
+  width: 11px;
+  height: 11px;
+}
+
+#context-turn-count {
+  font-weight: 600;
+  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+  font-variant-numeric: tabular-nums;
+}
+
+/* Clear Memory Context Button */
+.btn-clear-context {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, rgba(235, 235, 245, 0.38));
+  cursor: pointer;
+  transition: 
+    color var(--transition-fast, 0.12s ease),
+    background-color var(--transition-fast, 0.12s ease),
+    transform 0.1s ease;
+  margin-left: 2px;
+  padding: 0;
+}
+
+.btn-clear-context:hover {
+  color: var(--signal-red, #FF453A);
+  background: var(--signal-red-bg, rgba(255, 69, 58, 0.12));
+  transform: scale(1.12);
+}
+
+.btn-clear-context:active {
+  transform: scale(0.92);
+}
+
+.btn-clear-context svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* Toolbar Right: Shortcut Badge & Send/Stop Pill */
+.composer-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Responsive Keyboard Shortcut Badge (Cmd/Ctrl+Enter, Shift+Enter) */
+.kbd-hint {
+  font-size: var(--font-size-caption-1, 11px);
+  font-family: var(--font-mono, "SF Mono", Menlo, monospace);
+  color: var(--text-muted, rgba(235, 235, 245, 0.38));
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: default;
+}
+
+.kbd-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 4px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  line-height: 1;
+}
+
+.kbd-hint kbd.kbd-mod {
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.kbd-hint kbd.kbd-sym {
+  font-size: 10.5px;
+  padding: 2px 4px;
+}
+
+/* ------------------------------------------------------------
+   4. Primary Circular Send / Stop Spring Action Button
+   ------------------------------------------------------------ */
+.btn-send-stop {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full, 9999px);
+  background-color: var(--accent-primary, #FFFFFF);
+  color: var(--accent-primary-text, #000000);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 
+    transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), 
+    background-color var(--transition-fast, 0.12s ease), 
+    box-shadow var(--transition-fast, 0.12s ease);
+  flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(255, 255, 255, 0.18);
+  border: none;
+  outline: none;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-send-stop:hover {
+  background-color: var(--accent-primary-hover, #E4E4E7);
+  transform: scale(1.08);
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.28);
+}
+
+/* Tactile Press Feedback */
+.btn-send-stop:active {
+  transform: scale(0.88);
+  transition-duration: 0.06s;
+}
+
+.btn-send-stop:focus-visible {
+  outline: 2px solid var(--signal-indigo, #6366F1);
+  outline-offset: 2px;
+}
+
+.btn-send-stop .btn-icon-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  transition: transform 0.15s ease;
+}
+
+.btn-send-stop .btn-icon-inner svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Streaming / Stop State (Apple HIG Alert Red Pill) */
+.btn-send-stop.stop-state {
+  background-color: var(--signal-red, #FF453A);
+  color: #FFFFFF;
+  box-shadow: 0 2px 12px rgba(255, 69, 58, 0.45);
+  animation: stopPulseRing 2.0s infinite ease-in-out;
+}
+
+.btn-send-stop.stop-state:hover {
+  background-color: #FF5B52;
+  transform: scale(1.08);
+  box-shadow: 0 4px 18px rgba(255, 69, 58, 0.60);
+}
+
+.btn-send-stop.stop-state:active {
+  transform: scale(0.88);
+}
+
+@keyframes stopPulseRing {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 69, 58, 0.5), 0 2px 10px rgba(255, 69, 58, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(255, 69, 58, 0), 0 2px 18px rgba(255, 69, 58, 0.7);
+  }
+}
+
+/* ------------------------------------------------------------
+   5. Crisp Light Theme Overrides (Apple Clean Paper White)
+   ------------------------------------------------------------ */
+[data-theme="light"] .composer-card {
+  background: var(--bg-dock, rgba(255, 255, 255, 0.90));
+  border-color: var(--border-specular, rgba(0, 0, 0, 0.16));
+  box-shadow: var(--shadow-dock, 0 20px 48px -10px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.08));
+}
+
+[data-theme="light"] .composer-card:focus-within {
+  border-color: rgba(0, 0, 0, 0.35);
+  box-shadow: 
+    0 24px 54px -10px rgba(0, 0, 0, 0.16), 
+    0 0 0 1px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+[data-theme="light"] .composer-chip {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.10);
+  color: var(--text-secondary, #6E6E73);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .composer-chip:hover {
+  background: #FFFFFF;
+  border-color: rgba(0, 0, 0, 0.22);
+  color: #1D1D1F;
+}
+
+[data-theme="light"] .composer-mode-pills {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .composer-mode-pill {
+  color: var(--text-secondary, #6E6E73);
+}
+
+[data-theme="light"] .composer-mode-pill:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1D1D1F;
+}
+
+[data-theme="light"] .composer-mode-pill.active {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: var(--signal-indigo, #6366F1);
+}
+
+[data-theme="light"] .query-input {
+  color: var(--text-primary, #1D1D1F);
+}
+
+[data-theme="light"] .query-input::placeholder {
+  color: var(--text-muted, #86868B);
+}
+
+[data-theme="light"] .query-input::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .query-input::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .composer-action-toolbar {
+  border-top-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
+}
+
+[data-theme="light"] .select-styled-wrap {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
+}
+
+[data-theme="light"] .select-styled-wrap:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: var(--border-mid, rgba(0, 0, 0, 0.12));
+}
+
+[data-theme="light"] .select-styled-wrap::after {
+  background-color: var(--text-muted, #86868B);
+}
+
+[data-theme="light"] .strategy-select {
+  color: var(--text-secondary, #6E6E73);
+}
+
+[data-theme="light"] .strategy-select option {
+  background-color: #FFFFFF;
+  color: #1D1D1F;
+}
+
+[data-theme="light"] .context-pill {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
+  color: var(--text-muted, #86868B);
+}
+
+[data-theme="light"] .context-pill:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: var(--border-mid, rgba(0, 0, 0, 0.12));
+}
+
+[data-theme="light"] #context-turn-count {
+  color: var(--text-secondary, #6E6E73);
+}
+
+[data-theme="light"] .btn-clear-context {
+  color: var(--text-muted, #86868B);
+}
+
+[data-theme="light"] .kbd-hint {
+  color: var(--text-muted, #86868B);
+}
+
+[data-theme="light"] .kbd-hint kbd {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.10);
+  color: var(--text-secondary, #6E6E73);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .btn-send-stop {
+  background-color: #1D1D1F;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .btn-send-stop:hover {
+  background-color: #000000;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="light"] .btn-send-stop.stop-state {
+  background-color: var(--signal-red, #FF3B30);
+  color: #FFFFFF;
+  box-shadow: 0 2px 10px rgba(255, 59, 48, 0.35);
+}
+
+/* ------------------------------------------------------------
+   6. Responsive Adaptations (iPad, Mobile, Compact Screens)
+   ------------------------------------------------------------ */
+@media (max-width: 768px) {
+  .composer-container {
+    padding: 0 12px;
+    bottom: 12px;
+  }
+
+  .composer-card {
+    padding: 10px 12px 8px;
+    border-radius: var(--radius-lg, 16px);
+  }
+
+  .query-input {
+    font-size: 14px;
+    min-height: 36px;
+  }
+
+  .kbd-hint {
+    display: none; /* Hide keyboard shortcut on touch screens */
+  }
+
+  .select-styled-wrap {
+    padding: 3px 8px;
+  }
+
+  .context-pill {
+    padding: 3px 8px;
+  }
+}
+
+@media (max-width: 520px) {
+  .composer-action-toolbar {
+    gap: 8px;
+  }
+
+  .composer-toolbar-left {
+    gap: 6px;
+  }
+
+  .composer-mode-pills {
+    display: none; /* Prefer dropdown selector on ultra-compact mobile */
+  }
+
+  .strategy-select {
+    max-width: 110px;
+    text-overflow: ellipsis;
+  }
+
+  .context-pill span.mem-text-label {
+    display: none; /* Show only icon + count on ultra-narrow screens */
+  }
+}
+
+/* ============================================================
+   J.A.R.V.I.S. CYBERNETIC INPUT DOCK EXTENSIONS
+   ============================================================ */
+
+/* 1. Active Data Circuit Pills */
+.composer-chip.hud-circuit-pill {
+  background: rgba(3, 5, 8, 0.85) !important;
+  border: 1px solid rgba(0, 240, 255, 0.25) !important;
+  border-radius: 2px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-family: var(--font-mono, "SF Mono", monospace) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.04em !important;
+  padding: 4px 10px !important;
+  position: relative;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5), inset 0 0 6px rgba(0, 240, 255, 0.05) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.composer-chip.hud-circuit-pill:hover {
+  background: rgba(0, 240, 255, 0.12) !important;
+  border-color: #00f0ff !important;
+  color: #00f0ff !important;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.35), inset 0 0 8px rgba(0, 240, 255, 0.15) !important;
+  transform: translateY(-2px);
+}
+
+.chip-circuit-pin {
+  width: 4px;
+  height: 4px;
+  background: #00f0ff;
+  border-radius: 1px;
+  box-shadow: 0 0 4px #00f0ff;
+  display: inline-block;
+  margin-right: 2px;
+}
+
+/* 2. Floating Terminal Dock Console */
+.composer-card.hud-terminal-dock {
+  background: rgba(3, 5, 8, 0.94) !important;
+  border: 1px solid rgba(0, 240, 255, 0.28) !important;
+  border-radius: 2px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 18px rgba(0, 240, 255, 0.12), inset 0 0 12px rgba(0, 240, 255, 0.04) !important;
+  backdrop-filter: blur(20px) !important;
+  position: relative;
+  padding: 12px 16px 10px !important;
+}
+
+.composer-card.hud-terminal-dock:focus-within {
+  border-color: #00f0ff !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.95), 0 0 28px rgba(0, 240, 255, 0.35), inset 0 0 16px rgba(0, 240, 255, 0.08) !important;
+}
+
+/* 3. Cybernetic Monospace Directive Input */
+.query-input {
+  font-family: var(--font-mono, "SF Mono", monospace) !important;
+  font-size: 13.5px !important;
+  letter-spacing: 0.03em !important;
+  color: #ffffff !important;
+  caret-color: #00f0ff !important;
+}
+
+.query-input::placeholder {
+  font-family: var(--font-mono, "SF Mono", monospace) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.05em !important;
+  color: rgba(0, 240, 255, 0.42) !important;
+  text-transform: uppercase;
+}
+
+/* 4. Segmented Matrix Mode Pills with LED Indicators */
+.composer-mode-pills {
+  background: rgba(0, 240, 255, 0.04) !important;
+  border: 1px solid rgba(0, 240, 255, 0.2) !important;
+  border-radius: 2px !important;
+  padding: 2px !important;
+}
+
+.composer-mode-pill {
+  border-radius: 2px !important;
+  font-family: var(--font-mono, "SF Mono", monospace) !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.04em !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 3px 8px !important;
+  border: 1px solid transparent !important;
+  transition: all 0.16s ease !important;
+}
+
+.mode-led {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  display: inline-block;
+  transition: all 0.2s ease;
+}
+
+.composer-mode-pill:hover {
+  color: #00f0ff !important;
+  background: rgba(0, 240, 255, 0.08) !important;
+}
+
+.composer-mode-pill:hover .mode-led {
+  background: #00f0ff;
+  box-shadow: 0 0 6px #00f0ff;
+}
+
+.composer-mode-pill.active {
+  background: rgba(0, 240, 255, 0.15) !important;
+  border-color: rgba(0, 240, 255, 0.45) !important;
+  color: #00f0ff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.25) !important;
+}
+
+.composer-mode-pill.active .mode-led {
+  background: #00ff66;
+  box-shadow: 0 0 8px #00ff66;
+  animation: ledPulse 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes ledPulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.3); opacity: 1; }
+}
+
+/* 5. Memory Pill */
+.context-pill.hud-memory-pill {
+  background: rgba(0, 240, 255, 0.04) !important;
+  border: 1px solid rgba(0, 240, 255, 0.2) !important;
+  border-radius: 2px !important;
+  font-family: var(--font-mono, "SF Mono", monospace) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.06em !important;
+  color: rgba(0, 240, 255, 0.75) !important;
+}
+
+/* 6. High-Tech Execution Trigger Button (▲) */
+.btn-send-stop.hud-trigger-btn {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 2px !important;
+  background: #00f0ff !important;
+  color: #030508 !important;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.75), inset 0 0 4px rgba(255, 255, 255, 0.5) !important;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  border: 1px solid #00f0ff !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.btn-send-stop.hud-trigger-btn:hover {
+  background: #38bdf8 !important;
+  box-shadow: 0 0 22px rgba(0, 240, 255, 0.95), inset 0 0 8px #ffffff !important;
+  transform: scale(1.08) !important;
+}
+
+.hud-triangle-trigger {
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 900;
+  color: #030508;
+  display: block;
+  transform: translateY(-0.5px);
+}
+
+.btn-send-stop.hud-trigger-btn.stop-state {
+  background: #ff3366 !important;
+  border-color: #ff3366 !important;
+  box-shadow: 0 0 18px rgba(255, 51, 102, 0.8) !important;
+}
+
+.btn-send-stop.hud-trigger-btn.stop-state .hud-triangle-trigger {
+  display: none;
+}

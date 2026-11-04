@@ -1,0 +1,911 @@
+/* ============================================================
+   Smart LLM Switcher — Model Registry & Architecture Tiers CSS
+   Chunk 9 Frontend Modularization
+   Apple HIG & Claude Design Standards:
+   - Pure OLED Dark Canvas & Translucent Specular Glass
+   - Tabular Mono Precision & Micro-Meter Visualizations
+   - Spring Physics Transitions & 60fps Direct Tactile Tracking
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   1. View Container & Header
+   ------------------------------------------------------------ */
+.registry-container {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 32px 36px 64px;
+  max-width: 1320px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  animation: registryFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes registryFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.registry-container .view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  gap: 20px;
+}
+
+.registry-container .view-title-group h2 {
+  font-size: var(--font-size-title-1, 24px);
+  font-weight: 650;
+  letter-spacing: var(--tracking-tight, -0.025em);
+  color: var(--text-primary, #ffffff);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.registry-container .view-title-group .subtitle {
+  font-size: 13.5px;
+  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+  margin-top: 6px;
+  line-height: 1.5;
+  max-width: 820px;
+}
+
+/* Refresh Button Tactile Physics */
+#refresh-registry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-surface, rgba(18, 18, 22, 0.72));
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-mid, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-sm, 8px);
+  color: var(--text-primary, #ffffff);
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: background var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+              border-color var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+              transform var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+              box-shadow var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1));
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#refresh-registry-btn:hover {
+  background: var(--bg-surface-hover, rgba(255, 255, 255, 0.08));
+  border-color: var(--border-focus, rgba(255, 255, 255, 0.32));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+#refresh-registry-btn:active {
+  transform: scale(0.97);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+#refresh-registry-btn .refresh-icon {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#refresh-registry-btn.is-loading .refresh-icon,
+#refresh-registry-btn.spinning .refresh-icon {
+  animation: refreshSpin 0.75s linear infinite;
+}
+
+@keyframes refreshSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ------------------------------------------------------------
+   2. Summary Cards Grid (Apple Health / Widgets Layout)
+   ------------------------------------------------------------ */
+.registry-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 1080px) {
+  .registry-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 580px) {
+  .registry-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.registry-summary-grid .summary-card {
+  position: relative;
+  padding: 18px 20px;
+  background: var(--bg-surface, rgba(18, 18, 22, 0.72));
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: transform var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+              border-color var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+              box-shadow var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1));
+  overflow: hidden;
+}
+
+.registry-summary-grid .summary-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  pointer-events: none;
+}
+
+.registry-summary-grid .summary-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-mid, rgba(255, 255, 255, 0.16));
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.registry-summary-grid .summary-card .card-title {
+  font-size: 11px;
+  color: var(--text-muted, rgba(235, 235, 245, 0.38));
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: var(--tracking-wide, 0.05em);
+  text-transform: uppercase;
+}
+
+.registry-summary-grid .summary-card .big-metric {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--font-mono, "SF Mono", Menlo, monospace);
+  color: var(--text-primary, #ffffff);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-tight, -0.025em);
+  line-height: 1.15;
+  margin-top: 2px;
+}
+
+.registry-summary-grid .summary-card .big-metric.text-green {
+  color: var(--signal-emerald, #30D158) !important;
+  text-shadow: 0 0 16px rgba(48, 209, 88, 0.25);
+}
+
+.registry-summary-grid .summary-card .big-metric.text-blue {
+  color: var(--signal-indigo, #6366F1) !important;
+  text-shadow: 0 0 16px rgba(99, 102, 241, 0.25);
+}
+
+.registry-summary-grid .summary-card .card-desc {
+  font-size: 12px;
+  color: var(--text-muted, rgba(235, 235, 245, 0.45));
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+/* ------------------------------------------------------------
+   3. Specifications Table Panel & Data Table
+   ------------------------------------------------------------ */
+.panel-card.table-panel {
+  background: var(--bg-surface, rgba(18, 18, 22, 0.72));
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 12px);
+  margin-bottom: 28px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.panel-card .table-header {
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.panel-card .table-title-group h3 {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text-primary, #ffffff);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.panel-card .table-title-group .table-hint {
+  font-size: 12px;
+  color: var(--text-muted, rgba(235, 235, 245, 0.45));
+  margin-top: 4px;
+  display: inline-block;
+}
+
+.panel-card .table-title-group .table-hint code {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-secondary, rgba(235, 235, 245, 0.75));
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.data-table thead {
+  background: rgba(255, 255, 255, 0.025);
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.data-table th {
+  padding: 12px 18px;
+  font-weight: 600;
+  font-size: 11px;
+  font-family: var(--font-mono, "SF Mono", Menlo, monospace);
+  color: var(--text-muted, rgba(235, 235, 245, 0.45));
+  letter-spacing: var(--tracking-wide, 0.06em);
+  text-transform: uppercase;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.data-table td {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  color: var(--text-secondary, rgba(235, 235, 245, 0.75));
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+  transition: background var(--transition-fast, 0.12s ease);
+}
+
+.data-table tbody tr {
+  transition: background var(--transition-fast, 0.12s ease);
+}
+
+.data-table tbody tr:hover td {
+  background-color: var(--bg-surface-hover, rgba(255, 255, 255, 0.04));
+  color: var(--text-primary, #ffffff);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ------------------------------------------------------------
+   4. Table Cell Components & Micro-Visualizers
+   ------------------------------------------------------------ */
+
+/* Tier Badges / Pills */
+.routing-tier-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 10.5px;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: var(--radius-full, 9999px);
+  text-transform: uppercase;
+  white-space: nowrap;
+  border: 1px solid var(--signal-indigo-border, rgba(99, 102, 241, 0.3));
+  background-color: var(--signal-indigo-bg, rgba(99, 102, 241, 0.12));
+  color: var(--signal-indigo, #6366F1);
+}
+
+.tier-pill-analyzer {
+  background-color: rgba(168, 85, 247, 0.14) !important;
+  border-color: rgba(168, 85, 247, 0.32) !important;
+  color: #c084fc !important;
+}
+
+.tier-pill-t1, .tier-pill-tier1 {
+  background-color: var(--signal-emerald-bg, rgba(48, 209, 88, 0.12)) !important;
+  border-color: var(--signal-emerald-border, rgba(48, 209, 88, 0.28)) !important;
+  color: var(--signal-emerald, #30D158) !important;
+}
+
+.tier-pill-t2, .tier-pill-tier2 {
+  background-color: rgba(6, 182, 212, 0.12) !important;
+  border-color: rgba(6, 182, 212, 0.30) !important;
+  color: #22d3ee !important;
+}
+
+.tier-pill-t3, .tier-pill-tier3 {
+  background-color: var(--signal-indigo-bg, rgba(99, 102, 241, 0.12)) !important;
+  border-color: var(--signal-indigo-border, rgba(99, 102, 241, 0.30)) !important;
+  color: #818cf8 !important;
+}
+
+.tier-pill-t4, .tier-pill-tier4 {
+  background-color: var(--signal-amber-bg, rgba(255, 159, 10, 0.12)) !important;
+  border-color: var(--signal-amber-border, rgba(255, 159, 10, 0.30)) !important;
+  color: var(--signal-amber, #FF9F0A) !important;
+}
+
+.tier-pill-t5, .tier-pill-tier5 {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+  border-color: rgba(244, 63, 94, 0.30) !important;
+  color: #fb7185 !important;
+}
+
+.tier-pill-t6, .tier-pill-tier6 {
+  background-color: rgba(217, 70, 239, 0.14) !important;
+  border-color: rgba(217, 70, 239, 0.32) !important;
+  color: #e879f9 !important;
+}
+
+/* Model Name Cell */
+.model-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.model-name-title {
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  font-size: 13.5px;
+  line-height: 1.25;
+}
+
+.model-endpoint-id {
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted, rgba(235, 235, 245, 0.4));
+  letter-spacing: -0.01em;
+}
+
+/* Provider Tags */
+.prov-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs, 5px);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.prov-tag::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.prov-tag.gemini {
+  background: rgba(66, 133, 244, 0.12);
+  border: 1px solid rgba(66, 133, 244, 0.28);
+  color: #60a5fa;
+}
+.prov-tag.gemini::before {
+  background: #60a5fa;
+  box-shadow: 0 0 6px #60a5fa;
+}
+
+.prov-tag.groq {
+  background: rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(249, 115, 22, 0.28);
+  color: #fb923c;
+}
+.prov-tag.groq::before {
+  background: #fb923c;
+  box-shadow: 0 0 6px #fb923c;
+}
+
+.prov-tag.openrouter {
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  color: #c084fc;
+}
+.prov-tag.openrouter::before {
+  background: #c084fc;
+}
+
+.prov-tag.openai {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #34d399;
+}
+.prov-tag.openai::before {
+  background: #34d399;
+}
+
+/* Capability Micro-Meters (Quality, Reasoning, Coding) */
+.metric-meter-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.metric-meter-cell .meter-val {
+  font-size: 12.5px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  color: var(--text-primary, #ffffff);
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-meter-cell .meter-track {
+  width: 48px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.metric-meter-cell .meter-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.meter-bar.bar-quality {
+  background: linear-gradient(90deg, #6366F1, #818cf8);
+}
+
+.meter-bar.bar-reasoning {
+  background: linear-gradient(90deg, #a855f7, #c084fc);
+}
+
+.meter-bar.bar-coding {
+  background: linear-gradient(90deg, #06b6d4, #30D158);
+}
+
+/* Pricing Cell */
+.pricing-cell {
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pricing-cell .price-in {
+  color: var(--text-primary, #ffffff);
+  font-weight: 550;
+}
+
+.pricing-cell .price-sep {
+  color: var(--text-muted, rgba(235, 235, 245, 0.35));
+}
+
+.pricing-cell .price-out {
+  color: var(--signal-emerald, #30D158);
+  font-weight: 550;
+}
+
+/* Latency Cell */
+.latency-cell {
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.latency-cell.speed-fast {
+  color: var(--signal-emerald, #30D158);
+  font-weight: 600;
+}
+
+/* Context Window Cell */
+.context-cell {
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary, rgba(235, 235, 245, 0.8));
+  white-space: nowrap;
+}
+
+/* Status Indicator */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.status-indicator .status-dot {
+  width: 6.5px;
+  height: 6.5px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-indicator.active {
+  color: var(--signal-emerald, #30D158);
+}
+
+.status-indicator.active .status-dot {
+  background: var(--signal-emerald, #30D158);
+  box-shadow: 0 0 8px rgba(48, 209, 88, 0.6);
+  animation: statusPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.status-indicator.active.ping-ok .mode-badge.ping-badge {
+  background: rgba(48, 209, 88, 0.15);
+  color: var(--signal-emerald, #30D158);
+  border: 1px solid rgba(48, 209, 88, 0.3);
+  font-weight: 600;
+}
+
+.status-indicator.demo {
+  color: var(--signal-amber, #FF9F0A);
+}
+
+.status-indicator.demo .status-dot {
+  background: var(--signal-amber, #FF9F0A);
+  box-shadow: 0 0 6px rgba(255, 159, 10, 0.4);
+}
+
+.status-indicator.demo .mode-badge {
+  background: rgba(255, 159, 10, 0.12);
+  color: var(--signal-amber, #FF9F0A);
+  border: 1px solid rgba(255, 159, 10, 0.25);
+}
+
+.status-indicator.error {
+  color: var(--signal-red, #FF453A);
+}
+
+.status-indicator.error .status-dot {
+  background: var(--signal-red, #FF453A);
+  box-shadow: 0 0 6px rgba(255, 69, 58, 0.4);
+}
+
+.status-indicator.inactive {
+  color: var(--text-muted, rgba(235, 235, 245, 0.4));
+}
+
+.status-indicator.inactive .status-dot {
+  background: rgba(235, 235, 245, 0.3);
+}
+
+/* Live Provider Ping Strip */
+.provider-ping-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.ping-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 11.5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  color: var(--text-secondary, rgba(235, 235, 245, 0.7));
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ping-pill .ping-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ping-pill .ping-provider {
+  font-weight: 600;
+  color: var(--text-primary, #FFFFFF);
+}
+
+.ping-pill .ping-val {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ping-pill.connected {
+  border-color: rgba(48, 209, 88, 0.25);
+  background: rgba(48, 209, 88, 0.08);
+  color: var(--signal-emerald, #30D158);
+}
+
+.ping-pill.connected .ping-dot {
+  background: var(--signal-emerald, #30D158);
+  box-shadow: 0 0 6px rgba(48, 209, 88, 0.6);
+  animation: statusPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.ping-pill.demo {
+  border-color: rgba(255, 159, 10, 0.25);
+  background: rgba(255, 159, 10, 0.08);
+  color: var(--signal-amber, #FF9F0A);
+}
+
+.ping-pill.demo .ping-dot {
+  background: var(--signal-amber, #FF9F0A);
+}
+
+.ping-pill.error {
+  border-color: rgba(255, 69, 58, 0.25);
+  background: rgba(255, 69, 58, 0.08);
+  color: var(--signal-red, #FF453A);
+}
+
+.ping-pill.error .ping-dot {
+  background: var(--signal-red, #FF453A);
+}
+
+.status-indicator .mode-badge {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary, rgba(235, 235, 245, 0.7));
+  margin-left: 2px;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
+
+/* Empty State / Loading State in Table */
+.data-table td.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted, rgba(235, 235, 245, 0.45));
+  font-style: italic;
+  font-size: 13.5px;
+}
+
+/* ------------------------------------------------------------
+   5. Tier Guidelines Grid (Role Profiles & Cost Profiles)
+   ------------------------------------------------------------ */
+.tier-guidelines-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 16px;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+@media (max-width: 768px) {
+  .tier-guidelines-grid {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+}
+
+.guideline-card,
+.tier-guideline-card {
+  position: relative;
+  padding: 18px 20px;
+  background: var(--bg-surface, rgba(18, 18, 22, 0.72));
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: transform var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+              border-color var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1)),
+              box-shadow var(--transition-fast, 0.12s cubic-bezier(0.16, 1, 0.3, 1));
+  overflow: hidden;
+}
+
+.guideline-card::before,
+.tier-guideline-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.4), transparent);
+  pointer-events: none;
+}
+
+.guideline-card:hover,
+.tier-guideline-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-mid, rgba(255, 255, 255, 0.18));
+  box-shadow: 0 10px 28px -6px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.guideline-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.guideline-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.guideline-title {
+  font-size: 14.5px;
+  font-weight: 650;
+  color: var(--text-primary, #ffffff);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.guideline-role-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-secondary, rgba(235, 235, 245, 0.7));
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+.guideline-desc {
+  font-size: 12.5px;
+  color: var(--text-secondary, rgba(235, 235, 245, 0.75));
+  line-height: 1.5;
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+/* Guideline Cost & Specs Box */
+.guideline-cost-profile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-radius: var(--radius-sm, 8px);
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-muted, rgba(235, 235, 245, 0.6));
+  margin-top: auto;
+}
+
+.guideline-cost-profile .cost-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.guideline-cost-profile .cost-stat strong {
+  color: var(--text-primary, #ffffff);
+  font-weight: 600;
+}
+
+.guideline-cost-profile .cost-stat.highlight strong {
+  color: var(--signal-emerald, #30D158);
+}
+
+.guideline-cost-profile .cost-sep {
+  color: rgba(255, 255, 255, 0.15);
+}
+
+/* ------------------------------------------------------------
+   6. Light Theme Overrides (Apple Paper White Canvas)
+   ------------------------------------------------------------ */
+[data-theme="light"] .registry-container {
+  background: transparent;
+}
+
+[data-theme="light"] #refresh-registry-btn {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #1d1d1f;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] #refresh-registry-btn:hover {
+  background: #f5f5f7;
+  border-color: rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .registry-summary-grid .summary-card,
+[data-theme="light"] .panel-card.table-panel,
+[data-theme="light"] .guideline-card,
+[data-theme="light"] .tier-guideline-card {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .registry-summary-grid .summary-card::before,
+[data-theme="light"] .guideline-card::before,
+[data-theme="light"] .tier-guideline-card::before {
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.08), transparent);
+}
+
+[data-theme="light"] .data-table thead {
+  background: rgba(0, 0, 0, 0.03);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .data-table th {
+  color: #6e6e73;
+}
+
+[data-theme="light"] .data-table td {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+  color: #3a3a3c;
+}
+
+[data-theme="light"] .data-table tbody tr:hover td {
+  background-color: rgba(0, 0, 0, 0.03);
+  color: #1d1d1f;
+}
+
+[data-theme="light"] .tier-guidelines-grid {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .guideline-cost-profile {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: #6e6e73;
+}
+
+[data-theme="light"] .guideline-cost-profile .cost-stat strong {
+  color: #1d1d1f;
+}
+
+[data-theme="light"] .metric-meter-cell .meter-track {
+  background: rgba(0, 0, 0, 0.08);
+}
