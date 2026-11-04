@@ -120,6 +120,11 @@ class Tracker:
             return self._memory_conn
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+        except Exception:
+            pass
         return conn
 
     def _init_db(self):
@@ -273,14 +278,14 @@ class Tracker:
                 savings_percent = (savings_usd / baseline_cost * 100.0)
 
         measured_ms = total_latency_ms if total_latency_ms else latency_ms
-        if success and selected_model and measured_ms:
-            prev = self._ewma.get(selected_model)
-            if prev and prev[1] > 0:
-                self._ewma[selected_model] = (prev[0] + self._ewma_alpha * (measured_ms - prev[0]), prev[1] + 1)
-            else:
-                self._ewma[selected_model] = (measured_ms, 1)
 
         with self._lock, self._connect() as conn:
+            if success and selected_model and measured_ms:
+                prev = self._ewma.get(selected_model)
+                if prev and prev[1] > 0:
+                    self._ewma[selected_model] = (prev[0] + self._ewma_alpha * (measured_ms - prev[0]), prev[1] + 1)
+                else:
+                    self._ewma[selected_model] = (measured_ms, 1)
             cur = conn.execute(
                 """
                 INSERT INTO requests (
@@ -403,6 +408,8 @@ class Tracker:
         out["routed_model"] = out.get("selected_model")
         tot_cost = (out.get("estimated_cost") or 0.0) + (out.get("analyzer_cost") or 0.0)
         out["total_cost_usd"] = tot_cost
+        out["prompt_tokens"] = out.get("input_tokens") or 0
+        out["completion_tokens"] = out.get("output_tokens") or 0
         if row["candidates_json"]:
             try:
                 out["candidates"] = json.loads(row["candidates_json"])
@@ -661,8 +668,8 @@ def _row_to_history(r) -> HistoryRow:
         total_tokens=r["total_tokens"] if "total_tokens" in r.keys() else None,
         estimated_cost_usd=r["estimated_cost"],
         total_cost_usd=tot_cost,
-        latency_ms=round(r["latency_ms"], 1),
-        total_latency_ms=round(tot_lat, 1),
+        latency_ms=round(r["latency_ms"], 1) if r["latency_ms"] is not None else 0.0,
+        total_latency_ms=round(tot_lat, 1) if tot_lat is not None else 0.0,
         success=bool(r["success"]),
         feedback=r["feedback"],
         routing_reason=r["routing_reason"] if "routing_reason" in r.keys() else None,

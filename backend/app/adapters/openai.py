@@ -313,10 +313,26 @@ class OpenAICompatibleAdapter(LLMAdapter):
                 raise
             # Fallback to non-streaming generate if stream connection fails midway
             res = await self.generate(model, messages, **kwargs)
-            if res.reasoning_content:
+            already_sent = "".join(full_content_parts)
+            already_reasoning = "".join(full_reasoning_parts)
+            if res.reasoning_content and not full_reasoning_parts:
                 yield StreamChunk(reasoning_text=res.reasoning_content)
+            elif res.reasoning_content and already_reasoning and res.reasoning_content.startswith(already_reasoning):
+                remaining_reasoning = res.reasoning_content[len(already_reasoning):]
+                if remaining_reasoning:
+                    yield StreamChunk(reasoning_text=remaining_reasoning)
             if res.content:
-                yield StreamChunk(text=res.content)
+                if res.content.startswith(already_sent):
+                    remaining = res.content[len(already_sent):]
+                    if remaining:
+                        yield StreamChunk(text=remaining)
+                elif already_sent in res.content:
+                    idx = res.content.find(already_sent) + len(already_sent)
+                    remaining = res.content[idx:]
+                    if remaining:
+                        yield StreamChunk(text=remaining)
+                else:
+                    yield StreamChunk(text=res.content)
             yield StreamChunk(
                 is_final=True,
                 tokens_in=res.input_tokens,

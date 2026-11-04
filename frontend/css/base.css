@@ -1,19 +1,19 @@
 /**
  * ============================================================================
- * J.A.R.V.I.S. HUD — Base Stylesheet & Cybernetic Architecture
- * Sci-Fi Holographic Command Interface (Tony Stark / J.A.R.V.I.S. Standard)
+ * S-Tier Base Stylesheet & Spatial Layout System
+ * Inspired by Linear, Apple Human Interface Guidelines & Claude Web
  *
  * Implements:
- * 1. Global Viewport Lock with CRT Scanline & Micro Cyber-Grid Backdrop.
- * 2. Tactical Monospace Telemetry & Cybernetic Corner Brackets (┌ ┐ └ ┘).
- * 3. High-Energy Laser Borders & Glassmorphic Reflection Blurs.
- * 4. Micro-Dotted Target Crosshairs & Precision Data Streams.
- * 5. Holographic Ambient Glowing Scrollbars & SVG Symbol Foundations.
+ * 1. Global Viewport Lock with Pure OLED Black Canvas (#000000).
+ * 2. Zero Ambient Clutter: No CRT scanlines, no animated radar, no laser borders.
+ * 3. High-Legibility Typography with Optical Kerning & Tabular Figures.
+ * 4. Micro Spring Feedback (0-latency pointerdown response).
+ * 5. Minimalist Translucent Scrollbars & Clean Header Shell.
  * ============================================================================
  */
 
 /* --------------------------------------------------------------------------
- * 1. Global Box-Sizing Reset & Element Hygiene
+ * 1. Global Reset & Box Hygiene
  * -------------------------------------------------------------------------- */
 *,
 *::before,
@@ -24,7 +24,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 2. Global Viewport Lock & Cybernetic Canvas Foundation
+ * 2. Canvas Viewport Lock
  * -------------------------------------------------------------------------- */
 html,
 body {
@@ -41,9 +41,12 @@ body {
   font-size: var(--font-size-body);
   line-height: var(--leading-normal);
   font-feature-settings: var(--font-features-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
   letter-spacing: var(--tracking-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
   overscroll-behavior: none;
   touch-action: manipulation;
@@ -51,45 +54,7 @@ body {
   position: relative;
 }
 
-/* Cybernetic CRT Scanlines & Vector Matrix Grid Overlay */
-body::before {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: 
-    linear-gradient(rgba(0, 240, 255, 0) 50%, rgba(0, 0, 0, 0.35) 50%),
-    linear-gradient(90deg, rgba(0, 240, 255, 0.02), rgba(0, 255, 102, 0.01), rgba(0, 240, 255, 0.02));
-  background-size: 100% 3px, 6px 100%;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0.45;
-}
-
-/* Animated subtle horizontal scanning radar beam */
-body::after {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 4px;
-  background: linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.4) 50%, transparent 100%);
-  box-shadow: 0 0 16px rgba(0, 240, 255, 0.6);
-  pointer-events: none;
-  z-index: 9998;
-  opacity: 0.3;
-  animation: hudRadarScan 10s linear infinite;
-}
-
-@keyframes hudRadarScan {
-  0% { transform: translateY(-10px); }
-  100% { transform: translateY(100vh); }
-}
-
-/* Permit text selection in content zones and code blocks */
+/* Allow text selection in readable message content, inputs, and code */
 p,
 span,
 pre,
@@ -101,57 +66,41 @@ textarea,
   user-select: text;
 }
 
-/* Holographic Cyber Selection */
+/* Refined Calm Selection Highlight */
 ::selection {
-  background-color: rgba(0, 240, 255, 0.30);
-  color: #00f0ff;
-  text-shadow: 0 0 8px rgba(0, 240, 255, 0.8);
+  background-color: rgba(255, 255, 255, 0.20);
+  color: #FFFFFF;
 }
 
-/* Sci-Fi Typographic Scale */
+/* --------------------------------------------------------------------------
+ * 3. Typography Scale & Hierarchy
+ * -------------------------------------------------------------------------- */
 h1 {
-  font-size: var(--font-size-display);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-wide);
+  font-size: var(--font-size-hero, 24px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
   line-height: var(--leading-tight);
-  text-transform: uppercase;
 }
 
 h2 {
-  font-size: var(--font-size-title-1);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--tracking-wide);
+  font-size: var(--font-size-title, 18px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: var(--leading-tight);
 }
 
 h3 {
-  font-size: var(--font-size-title-2);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--tracking-normal);
-  line-height: var(--leading-tight);
-}
-
-h4 {
-  font-size: var(--font-size-title-3);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--tracking-normal);
+  font-size: var(--font-size-h2, 16px);
+  font-weight: 600;
+  letter-spacing: -0.015em;
   line-height: var(--leading-normal);
 }
 
-h5 {
-  font-size: var(--font-size-headline);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--tracking-normal);
+h4, h5, h6 {
+  font-size: var(--font-size-body, 14px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
   line-height: var(--leading-normal);
-}
-
-h6 {
-  font-size: var(--font-size-subhead);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--tracking-wider);
-  line-height: var(--leading-normal);
-  text-transform: uppercase;
-  color: var(--text-cyan);
 }
 
 code,
@@ -162,7 +111,7 @@ kbd {
 }
 
 /* --------------------------------------------------------------------------
- * 3. Normalized Interactive Elements & Form Controls
+ * 4. Interactive Form Controls Reset
  * -------------------------------------------------------------------------- */
 button,
 input,
@@ -195,61 +144,69 @@ textarea:disabled {
   pointer-events: none;
 }
 
-/* Tactical Cyan Target Lock Focus Ring */
+/* Subtle, Accessible Focus Ring */
 :focus-visible {
-  outline: 1px solid var(--border-focus);
+  outline: 1.5px solid var(--border-active);
   outline-offset: 2px;
-  box-shadow: 0 0 10px rgba(0, 240, 255, 0.45);
 }
 
-/* --------------------------------------------------------------------------
- * 4. Micro Spring Feedback & Cyber Click Triggers
- * -------------------------------------------------------------------------- */
+/* Micro Spring Feedback on Press */
 button:active,
 .btn-icon:active,
-.btn-new-chat:active,
 .btn-primary:active,
 .btn-secondary:active,
 .sidebar-nav-item:active,
-.quick-chip-card:active,
-.session-item:active,
-.strategy-badge-pill:active,
-.header-tool-btn:active,
-.btn-ribbon-toggle:active {
-  transform: scale(0.98);
-  transition: transform var(--transition-instant);
+.session-item:active {
+  transform: scale(0.985);
+  transition: transform var(--spring-instant);
 }
 
 /* --------------------------------------------------------------------------
- * 5. Holographic Laser Scrollbar
+ * 5. Minimalist Translucent Scrollbars
  * -------------------------------------------------------------------------- */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(3, 5, 8, 0.7);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 240, 255, 0.35);
-  border-radius: var(--radius-xs);
-  transition: background var(--transition-fast), box-shadow var(--transition-fast);
+  background: rgba(255, 255, 255, 0.14);
+  background-clip: padding-box;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  transition: background var(--spring-fast);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00f0ff;
-  box-shadow: 0 0 10px #00f0ff;
+  background: rgba(255, 255, 255, 0.28);
+  background-clip: padding-box;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.16);
+  background-clip: padding-box;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.32);
+  background-clip: padding-box;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 240, 255, 0.35) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+[data-theme="light"] * {
+  scrollbar-color: rgba(0, 0, 0, 0.16) transparent;
 }
 
 /* --------------------------------------------------------------------------
- * 6. Vector SVG Symbol Foundations
+ * 6. Vector SVG Symbols
  * -------------------------------------------------------------------------- */
 .icon-sym {
   width: 15px;
@@ -260,11 +217,10 @@ button:active,
   stroke: currentColor;
   fill: none;
   pointer-events: none;
-  transition: filter var(--transition-fast);
 }
 
 /* --------------------------------------------------------------------------
- * 7. Root Layout Containers (J.A.R.V.I.S. Command Center)
+ * 7. Master Layout & Shell
  * -------------------------------------------------------------------------- */
 .app-layout {
   display: flex;
@@ -272,16 +228,10 @@ button:active,
   width: 100vw;
   overflow: hidden;
   background-color: var(--bg-app);
-  /* Precision Cyan Micro-Grid Backdrop */
-  background-image: 
-    radial-gradient(circle, rgba(0, 240, 255, 0.08) 1px, transparent 1px),
-    linear-gradient(to right, rgba(0, 240, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 240, 255, 0.02) 1px, transparent 1px);
-  background-size: 24px 24px, 120px 120px, 120px 120px;
   position: relative;
 }
 
-/* Center Stage Canvas */
+/* Main Canvas Area */
 .main-canvas {
   flex: 1 1 0;
   min-width: 0;
@@ -289,14 +239,14 @@ button:active,
   display: flex;
   flex-direction: column;
   position: relative;
-  background-color: transparent;
+  background-color: var(--bg-app);
   overflow: hidden;
 }
 
-/* Top Workspace Header (Holographic HUD Top Stream) */
+/* Topbar Header */
 .canvas-header {
   height: var(--header-height);
-  padding: 0 18px;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -304,25 +254,11 @@ button:active,
   background: var(--bg-glass);
   backdrop-filter: var(--backdrop-glass);
   -webkit-backdrop-filter: var(--backdrop-glass);
-  box-shadow: 0 1px 12px rgba(0, 240, 255, 0.08), inset 0 1px 0 rgba(0, 240, 255, 0.25);
-  z-index: var(--z-header);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.02);
+  z-index: 20;
   flex-shrink: 0;
   position: relative;
 }
-
-/* Tactical Corner Brackets on Header */
-.canvas-header::before,
-.canvas-header::after {
-  content: "";
-  position: absolute;
-  bottom: -1px;
-  width: 10px;
-  height: 3px;
-  background: #00f0ff;
-  box-shadow: 0 0 8px #00f0ff;
-}
-.canvas-header::before { left: 0; }
-.canvas-header::after { right: 0; }
 
 .header-left {
   display: flex;
@@ -335,64 +271,61 @@ button:active,
 .workspace-crumb {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: var(--font-size-callout);
-  font-family: var(--font-mono);
+  gap: 8px;
+  font-size: 13px;
   color: var(--text-muted);
   min-width: 0;
-  letter-spacing: var(--tracking-normal);
 }
 
 .crumb-icon {
   display: inline-flex;
   align-items: center;
-  color: var(--text-cyan);
+  color: var(--text-muted);
 }
 
 .crumb-project {
   color: var(--text-secondary);
-  font-weight: var(--font-weight-medium, 500);
-  text-transform: none;
-  font-size: 12.5px;
+  font-weight: 500;
+  font-size: 13px;
   letter-spacing: -0.01em;
 }
 
 .crumb-sep {
   color: var(--text-muted);
   font-size: 12px;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .crumb-active-title {
   color: var(--text-primary);
-  font-weight: var(--font-weight-semibold);
-  max-width: 320px;
+  font-weight: 500;
+  font-size: 13px;
+  max-width: 340px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
 }
 
 /* Sidebar Toggle Trigger when collapsed */
 .sidebar-open-btn {
   display: none;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-xs);
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
   align-items: center;
   justify-content: center;
-  color: var(--text-cyan);
-  background: rgba(0, 240, 255, 0.08);
+  color: var(--text-secondary);
+  background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--spring-fast);
 }
 
 .sidebar.collapsed ~ .main-canvas .sidebar-open-btn {
@@ -400,51 +333,48 @@ button:active,
 }
 
 .sidebar-open-btn:hover {
-  color: #ffffff;
-  border-color: #00f0ff;
-  box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
-  background-color: rgba(0, 240, 255, 0.18);
+  color: var(--text-primary);
+  border-color: var(--border-mid);
+  background-color: var(--bg-surface-hover);
 }
 
-/* Header Action Buttons */
+/* Header Tool Buttons */
 .header-tool-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-xs);
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
-  background: rgba(0, 240, 255, 0.04);
+  background: var(--bg-surface);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--spring-fast);
 }
 
 .header-tool-btn:hover {
-  color: var(--text-cyan);
-  border-color: var(--border-specular-hi);
+  color: var(--text-primary);
+  border-color: var(--border-mid);
   background-color: var(--bg-surface-hover);
-  box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
 }
 
-/* Status & Strategy HUD Stream Badges */
+/* Engine Status & Strategy Pills */
 .strategy-badge-pill,
 .engine-status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: var(--radius-xs);
-  background: rgba(0, 240, 255, 0.06);
-  border: 1px solid var(--border-mid);
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-cyan);
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
   user-select: none;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  box-shadow: inset 0 0 8px rgba(0, 240, 255, 0.1);
+  letter-spacing: -0.01em;
+  transition: border-color var(--spring-fast), color var(--spring-fast);
 }
 
 .status-pulse-dot {
@@ -452,13 +382,7 @@ button:active,
   height: 6px;
   border-radius: var(--radius-full);
   background-color: var(--signal-emerald);
-  box-shadow: 0 0 10px var(--signal-emerald);
-  animation: radarPulse 2s infinite ease-in-out;
-}
-
-@keyframes radarPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.85); }
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
 }
 
 /* --------------------------------------------------------------------------
@@ -485,79 +409,34 @@ button:active,
 .view-panel.active {
   display: flex;
   flex-direction: column;
-  animation: hudPanelBoot 0.22s var(--ease-spring);
+  animation: panelFadeIn 0.20s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes hudPanelBoot {
+@keyframes panelFadeIn {
   from {
     opacity: 0;
-    transform: scale(0.995);
-    filter: brightness(1.3);
+    transform: translateY(2px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
-    filter: brightness(1);
+    transform: translateY(0);
   }
 }
 
 /* --------------------------------------------------------------------------
- * 9. Tactical Sci-Fi HUD Utilities (Corner Brackets ┌ ┐ └ ┘)
+ * 9. Utilities & Accessibility
  * -------------------------------------------------------------------------- */
-.hud-card {
-  position: relative;
-  background: var(--bg-surface);
-  backdrop-filter: var(--backdrop-glass);
-  -webkit-backdrop-filter: var(--backdrop-glass);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
-}
-
-/* Corner bracket indicators */
-.hud-corner {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border-color: #00f0ff;
-  border-style: solid;
-  pointer-events: none;
-  transition: all var(--transition-fast);
-  box-shadow: 0 0 4px rgba(0, 240, 255, 0.4);
-  z-index: 5;
-}
-.hud-corner.tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
-.hud-corner.tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
-.hud-corner.bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
-.hud-corner.br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
-
-.hud-card:hover .hud-corner,
-.quick-chip-card:hover .hud-corner,
-.drawer-tier-spec:hover .hud-corner,
-.composer-card:hover .hud-corner {
-  border-color: #00ff66;
-  box-shadow: 0 0 8px #00ff66;
-}
-
-/* Specular Hairline Top Highlight */
-.hairline-highlight {
-  box-shadow: var(--hairline-top);
-}
-
-/* Tabular Mono Telemetry Text */
 .tabular-mono {
   font-family: var(--font-mono);
   font-feature-settings: var(--font-features-tabular);
 }
 
-/* Truncation helper */
 .truncate {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Screen reader accessible utility */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -571,15 +450,15 @@ button:active,
 }
 
 /* --------------------------------------------------------------------------
- * 10. Responsive Breakpoint Standards
+ * 10. Responsive Breakpoint Overrides
  * -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
   .canvas-header {
-    padding: 0 12px;
+    padding: 0 14px;
   }
 
   .crumb-active-title {
-    max-width: clamp(100px, 32vw, 180px);
+    max-width: clamp(100px, 34vw, 200px);
   }
 
   .sidebar-open-btn {
@@ -598,21 +477,14 @@ button:active,
   }
 }
 
-/* --------------------------------------------------------------------------
- * 11. Reduced Motion Accessibility Override
- * -------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  body::after,
   .view-panel.active {
     animation: none !important;
   }
-
   button:active,
   .btn-icon:active,
-  .btn-new-chat:active,
   .btn-primary:active,
-  .sidebar-nav-item:active,
-  .quick-chip-card:active {
+  .sidebar-nav-item:active {
     transform: none !important;
   }
 }

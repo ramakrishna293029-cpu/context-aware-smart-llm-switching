@@ -119,7 +119,7 @@ ANALYZER_DECISIONS = {
     "debug": {
         "answer_mode": "switch", "task_type": "coding", "complexity": "high", "complexity_score": 0.85,
         "reasoning_required": True, "coding_required": True, "context_required": False,
-        "target_tier": "coding", "target_provider": "groq", "target_model": "qwen/qwen3.6-27b",
+        "target_tier": "coding", "target_provider": "groq", "target_model": "qwen/qwen3.8-27b",
         "reason": "Debugging code requires specialized high-performance coding model.",
         "answer": None
     },
@@ -272,10 +272,10 @@ class MockAdapter(LLMAdapter):
         is_analyzer = self._is_analyzer_call(model, messages, json_mode)
         if is_analyzer:
             query = self._extract_user_query(messages)
-            has_history = any("CONVERSATION HISTORY:" in m.content or "HISTORY" in m.content for m in messages)
+            has_history = any("CONVERSATION HISTORY:" in (m.content or "") or "HISTORY" in (m.content or "") for m in messages)
             decision = self._get_analyzer_decision(query, has_history)
             reply = json.dumps(decision)
-            tokens_in = max(1, sum(len(m.content) for m in messages) // 4) + 15
+            tokens_in = max(1, sum(len(m.content or "") for m in messages) // 4) + 15
             tokens_out = max(1, len(reply) // 4)
             reasoning_content = None
         else:

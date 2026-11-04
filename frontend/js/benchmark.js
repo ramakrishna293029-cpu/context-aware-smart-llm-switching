@@ -216,7 +216,7 @@ async function runBenchmarkSuite(options = {}) {
     if (tbody && tbody.children.length <= 1) {
       tbody.innerHTML = `
         <tr class="bm-row-error">
-          <td colspan="6" class="empty-state">
+          <td colspan="7" class="empty-state">
             <span class="bm-empty-icon">⚠️</span>
             <strong style="color:var(--signal-red, #FF453A);">Benchmark execution failed</strong><br>
             <span style="font-size:12px;color:var(--text-muted);">${safeEscape(err.message)}</span>
@@ -293,7 +293,7 @@ function renderBenchmarkMatrix(items) {
   if (!Array.isArray(items) || items.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="empty-state">
+        <td colspan="7" class="empty-state">
           <span class="bm-empty-icon">📊</span>
           <span>No benchmark evaluation records returned from server.</span>
         </td>
@@ -346,32 +346,32 @@ function renderBenchmarkMatrix(items) {
 
     return `
       <tr class="${hasError ? "bm-row-error" : ""}">
+        <td class="col-domain">
+          <span class="bm-domain-badge ${cssClass}">${safeEscape(label)}</span>
+        </td>
         <td class="col-query">
           <span class="bm-query-title">${safeEscape(item.query)}</span>
-          <div class="bm-meta-row">
-            <span class="bm-domain-badge ${cssClass}">${safeEscape(label)}</span>
-            <span class="bm-complexity-badge">${safeEscape(complexity)}</span>
-            ${hasError ? `<span class="bm-domain-badge" style="color:var(--signal-red,#FF453A);">ERROR</span>` : ""}
-          </div>
+          <span class="bm-complexity-badge">${safeEscape(complexity)}</span>
+          ${hasError ? `<span class="bm-domain-badge" style="color:var(--signal-red,#FF453A);margin-left:4px;">ERROR</span>` : ""}
         </td>
-        <td>
+        <td class="col-b1">
           <span class="bm-model-pill b1-model">${safeEscape(item.baseline1_model || "Tier 6 Gemini 3.8 Flash")}</span>
-          <span class="bm-submetric" style="font-variant-numeric:tabular-nums;">${b1Cost} · ${b1Lat}</span>
+          <span class="bm-submetric">${b1Cost} · ${b1Lat}</span>
         </td>
-        <td>
+        <td class="col-b2">
           <span class="bm-model-pill b2-model">${safeEscape(item.baseline2_model || "Static Routing")}</span>
-          <span class="bm-submetric" style="font-variant-numeric:tabular-nums;">${b2Cost} · ${b2Lat}</span>
+          <span class="bm-submetric">${b2Cost} · ${b2Lat}</span>
         </td>
-        <td>
+        <td class="col-smart">
           <span class="bm-model-pill smart-model">${safeEscape(item.smart_model || "Smart LLM Switcher")}</span>
-          <span class="bm-submetric" style="font-variant-numeric:tabular-nums;">${smartCost} · ${smartLat}</span>
+          <span class="bm-submetric">${smartCost} · ${smartLat}</span>
         </td>
-        <td>
+        <td class="col-speedup">
+          <span class="${speedupClass}">${speedupText}</span>
+        </td>
+        <td class="col-savings">
           <span class="${savingsClass}">${savingsText}</span>
           ${deltaSub}
-        </td>
-        <td>
-          <span class="${speedupClass}">${speedupText}</span>
         </td>
       </tr>
     `;

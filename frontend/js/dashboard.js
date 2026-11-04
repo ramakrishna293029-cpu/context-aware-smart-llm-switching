@@ -188,12 +188,12 @@ function renderBarChart(containerId, data) {
     let hexColor = "#6366F1";
     if (isTierChart) {
       const norm = normalizeTierKey(d.name);
-      if (norm === "tier_1") hexColor = "#38BDF8";
-      else if (norm === "tier_2") hexColor = "#FB923C";
-      else if (norm === "tier_3") hexColor = "#6366F1";
-      else if (norm === "tier_4") hexColor = "#30D158";
-      else if (norm === "tier_5") hexColor = "#C084FC";
-      else if (norm === "tier_6") hexColor = "#FF9F0A";
+      if (norm === "tier_1") hexColor = "#10B981";      // Emerald (T1: Gemini 3.5 Flash-Lite)
+      else if (norm === "tier_2") hexColor = "#06B6D4"; // Cyan (T2: Groq GPT-OSS 20B)
+      else if (norm === "tier_3") hexColor = "#0EA5E9"; // Sky (T3: Gemini 3.6 Flash)
+      else if (norm === "tier_4") hexColor = "#8B5CF6"; // Violet (T4: Groq Qwen3.8 27B)
+      else if (norm === "tier_5") hexColor = "#F59E0B"; // Amber (T5: Groq GPT-OSS 120B)
+      else if (norm === "tier_6") hexColor = "#F43F5E"; // Rose (T6: Gemini 3.8 Flash)
     } else if (isComplexityChart) {
       const c = String(d.name).toLowerCase();
       if (c.includes("low")) hexColor = "#30D158";

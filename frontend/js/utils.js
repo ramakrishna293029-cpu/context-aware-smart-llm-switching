@@ -74,7 +74,12 @@ function formatMarkdown(text) {
         const language = (lang || "code").trim();
         return `<div class="code-block-wrap">
           <div class="code-block-header">
-            <span class="code-lang-tag">${escapeHtml(language)}</span>
+            <div class="code-header-left">
+              <span class="window-dot red"></span>
+              <span class="window-dot yellow"></span>
+              <span class="window-dot green"></span>
+              <span class="code-lang-tag">${escapeHtml(language)}</span>
+            </div>
             <button type="button" class="btn-copy-code" title="Copy code" aria-label="Copy code">
               <svg class="icon-sym" aria-hidden="true"><use href="#i-copy"/></svg>
               <span>Copy</span>

@@ -67,10 +67,13 @@ def _to_gemini_payload(
                 system_instruction = m.content
         else:
             role = "user" if m.role == "user" else "model"
+            clean_text = (m.content or "").strip()
+            if not clean_text:
+                continue
             if gemini_contents and gemini_contents[-1]["role"] == role:
-                gemini_contents[-1]["parts"].append({"text": m.content})
+                gemini_contents[-1]["parts"].append({"text": clean_text})
             else:
-                gemini_contents.append({"role": role, "parts": [{"text": m.content}]})
+                gemini_contents.append({"role": role, "parts": [{"text": clean_text}]})
 
     if not gemini_contents:
         gemini_contents = [{"role": "user", "parts": [{"text": "Hello"}]}]
@@ -284,8 +287,19 @@ class GeminiAdapter(LLMAdapter):
             if not full_text_parts:
                 raise
             res = await self.generate(model, messages, **kwargs)
+            already_sent = "".join(full_text_parts)
             if res.content:
-                yield StreamChunk(text=res.content)
+                if res.content.startswith(already_sent):
+                    remaining = res.content[len(already_sent):]
+                    if remaining:
+                        yield StreamChunk(text=remaining)
+                elif already_sent in res.content:
+                    idx = res.content.find(already_sent) + len(already_sent)
+                    remaining = res.content[idx:]
+                    if remaining:
+                        yield StreamChunk(text=remaining)
+                else:
+                    yield StreamChunk(text=res.content)
             yield StreamChunk(
                 is_final=True,
                 tokens_in=res.input_tokens,

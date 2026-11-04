@@ -20,7 +20,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -251,92 +251,86 @@ async def health(request: Request):
 
 @app.get("/api/providers/health", response_model=ProviderHealthResponse)
 async def provider_health(request: Request):
-    """Performs live connectivity check on each configured provider using request or server credentials."""
+    """Performs live connectivity check on each configured provider concurrently using request or server credentials."""
     creds, reg = _get_request_context(request)
-    results = {}
 
-    # Gemini check (Tier 1 or Analyzer)
-    if creds.has_gemini:
+    async def _check_gemini():
+        if not creds.has_gemini:
+            return "gemini", ProviderStatusItem(status="missing_api_key")
         m = reg.get_by_tier("tier_1") or reg.get_analyzer()
-        if m:
-            try:
-                t0 = time.perf_counter()
-                adapter = adapter_factory.get("gemini")
-                res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
-                lat = (time.perf_counter() - t0) * 1000.0
-                results["gemini"] = ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
-            except Exception as e:
-                results["gemini"] = ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
-        else:
-            results["gemini"] = ProviderStatusItem(status="disabled")
-    else:
-        results["gemini"] = ProviderStatusItem(status="missing_api_key")
+        if not m:
+            return "gemini", ProviderStatusItem(status="disabled")
+        try:
+            t0 = time.perf_counter()
+            adapter = adapter_factory.get("gemini")
+            res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
+            lat = (time.perf_counter() - t0) * 1000.0
+            return "gemini", ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
+        except Exception as e:
+            return "gemini", ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
 
-    # Groq check (Tier 2 or Tier 4)
-    if creds.has_groq:
+    async def _check_groq():
+        if not creds.has_groq:
+            return "groq", ProviderStatusItem(status="missing_api_key")
         m = reg.get_by_tier("tier_2") or reg.get_by_tier("tier_4") or reg.get_by_tier("tier_5")
-        if m:
-            try:
-                t0 = time.perf_counter()
-                adapter = adapter_factory.get("groq")
-                res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
-                lat = (time.perf_counter() - t0) * 1000.0
-                results["groq"] = ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
-            except Exception as e:
-                results["groq"] = ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
-        else:
-            results["groq"] = ProviderStatusItem(status="disabled")
-    else:
-        results["groq"] = ProviderStatusItem(status="missing_api_key")
+        if not m:
+            return "groq", ProviderStatusItem(status="disabled")
+        try:
+            t0 = time.perf_counter()
+            adapter = adapter_factory.get("groq")
+            res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
+            lat = (time.perf_counter() - t0) * 1000.0
+            return "groq", ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
+        except Exception as e:
+            return "groq", ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
 
-    # OpenRouter check (optional)
-    if creds.has_openrouter:
+    async def _check_openrouter():
+        if not creds.has_openrouter:
+            return "openrouter", ProviderStatusItem(status="missing_api_key")
         m = reg.get_by_provider_and_tier("openrouter", "fast-backup") or reg.get_by_provider_and_tier("openrouter", "powerful")
-        if m:
-            try:
-                t0 = time.perf_counter()
-                adapter = adapter_factory.get("openrouter")
-                res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
-                lat = (time.perf_counter() - t0) * 1000.0
-                results["openrouter"] = ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
-            except Exception as e:
-                results["openrouter"] = ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
-        else:
-            results["openrouter"] = ProviderStatusItem(status="disabled")
-    else:
-        results["openrouter"] = ProviderStatusItem(status="missing_api_key")
+        if not m:
+            return "openrouter", ProviderStatusItem(status="disabled")
+        try:
+            t0 = time.perf_counter()
+            adapter = adapter_factory.get("openrouter")
+            res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
+            lat = (time.perf_counter() - t0) * 1000.0
+            return "openrouter", ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
+        except Exception as e:
+            return "openrouter", ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
 
-    # OpenAI direct check (optional)
-    if creds.has_openai:
+    async def _check_openai():
+        if not creds.has_openai:
+            return "openai", ProviderStatusItem(status="missing_api_key")
         m = reg.get_by_provider_and_tier("openai", "tier_1") or reg.get_by_provider_and_tier("openai", "fast-backup")
-        if m:
-            try:
-                t0 = time.perf_counter()
-                adapter = adapter_factory.get("openai")
-                res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
-                lat = (time.perf_counter() - t0) * 1000.0
-                results["openai"] = ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
-            except Exception as e:
-                results["openai"] = ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
-        else:
-            results["openai"] = ProviderStatusItem(status="disabled")
-    else:
-        results["openai"] = ProviderStatusItem(status="missing_api_key")
+        if not m:
+            return "openai", ProviderStatusItem(status="disabled")
+        try:
+            t0 = time.perf_counter()
+            adapter = adapter_factory.get("openai")
+            res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
+            lat = (time.perf_counter() - t0) * 1000.0
+            return "openai", ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
+        except Exception as e:
+            return "openai", ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
 
-    # Custom check (optional)
-    if creds.has_custom:
+    async def _check_custom():
+        if not creds.has_custom:
+            return "custom", None
         m = reg.get_by_provider_and_tier("custom", "custom")
-        if m:
-            try:
-                t0 = time.perf_counter()
-                adapter = adapter_factory.get("custom")
-                res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
-                lat = (time.perf_counter() - t0) * 1000.0
-                results["custom"] = ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
-            except Exception as e:
-                results["custom"] = ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
-        else:
-            results["custom"] = ProviderStatusItem(status="disabled")
+        if not m:
+            return "custom", ProviderStatusItem(status="disabled")
+        try:
+            t0 = time.perf_counter()
+            adapter = adapter_factory.get("custom")
+            res = await adapter.generate(m, [ChatMessage(role="user", content="ping")])
+            lat = (time.perf_counter() - t0) * 1000.0
+            return "custom", ProviderStatusItem(status="connected", latency_ms=round(lat, 1), model=m.endpoint_model)
+        except Exception as e:
+            return "custom", ProviderStatusItem(status="error", error=str(e), model=m.endpoint_model)
+
+    checks = await asyncio.gather(_check_gemini(), _check_groq(), _check_openrouter(), _check_openai(), _check_custom())
+    results = {k: v for k, v in checks if v is not None}
 
     overall = "connected" if any(v.status == "connected" for v in results.values()) else ("missing_api_key" if not creds.has_real_providers else "degraded")
 
@@ -651,6 +645,21 @@ async def feedback(req: FeedbackRequest):
     ok = tracker.record_feedback(req.request_id, req.rating)
     if not ok:
         raise HTTPException(status_code=404, detail="Request not found.")
+    
+    # Train LinUCB bandit arm with explicit human feedback
+    req_row = tracker.get_request(req.request_id)
+    if req_row:
+        model_id = req_row.get("selected_model")
+        query = req_row.get("query")
+        if model_id and query:
+            try:
+                x_t = feature_extractor.extract(query)
+                reward = 1.0 if req.rating == 1 else -1.0
+                linucb_router.update(model_id, x_t, reward)
+                linucb_router.save_state()
+            except Exception as e:
+                logging.getLogger("uvicorn.error").warning(f"Failed to update LinUCB on feedback: {e}")
+
     return FeedbackResponse(ok=True, message="Feedback recorded.")
 
 

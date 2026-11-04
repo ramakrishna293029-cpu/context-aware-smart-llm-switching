@@ -1,25 +1,35 @@
 /**
  * ============================================================================
  * Smart LLM Switcher — Modals, Overlays & Toast Notification System
- * Apple HIG & Claude Design Standards
+ * Apple HIG & Linear Craftsmanship Standards (Round 8 Approved Specification)
  *
  * Implements:
- * 1. Translucent liquid glass modal backdrop (blur(16px), 0.65 alpha).
- * 2. Elevated glass dialog sheet (--bg-surface-elevated, specular hairline,
- *    --shadow-lg, top illumination hairline, spring physics).
- * 3. Settings modal segmented tabs (.settings-nav-tabs, .settings-tab) with
+ * 1. Body scroll lock via CSS :has(.modal:not(.hidden)).
+ * 2. Translucent liquid glass modal backdrop (blur(24px) saturate(190%), rgba(0, 0, 0, 0.72)).
+ * 3. Elevated obsidian sheet (--bg-surface-elevated, specular hairline,
+ *    --shadow-lg, top illumination hairline, modalSheetIn spring physics).
+ * 4. Settings modal segmented tabs (.settings-nav-tabs, .settings-tab) with
  *    critically damped active pill state.
- * 4. Password masking wraps (.input-password-wrap) with instant eye toggle feedback.
- * 5. Live connection testing buttons & micro-status badges (.status-test-badge).
- * 6. High-contrast client-side security guarantee box (WebCrypto AES-GCM notice).
- * 7. Telemetry Inspector layout: Prompt quote card, 6-cell drawer grid with
- *    tabular numeric telemetry, and formatted JSON code viewer.
- * 8. Toast notification system (.toast-container, .toast) with Apple spring entrance/exit.
+ * 5. Password masking wraps (.input-password-wrap) with instant eye toggle feedback.
+ * 6. Live connection testing buttons & micro-status badges (.status-test-badge).
+ * 7. High-contrast client-side security guarantee box (WebCrypto AES-GCM notice).
+ * 8. Telemetry Inspector layout: Prompt quote card, 6-cell drawer grid with
+ *    tabular numeric telemetry, LinUCB scoreboard, 16D feature bars, and formatted JSON code viewer.
+ * 9. Toast notification system (.toast-container, .toast) with Apple spring entrance/exit.
+ * 10. Mobile responsive sheet adaptation (bottom sheet, 38px x 4px iOS grab handle).
+ * 11. Dual-polarity light theme overrides ([data-theme="light"]).
  * ============================================================================
  */
 
 /* --------------------------------------------------------------------------
- * 1. Modal Container & Translucent Liquid Glass Backdrop
+ * 1. Body Scroll Lock
+ * -------------------------------------------------------------------------- */
+body:has(.modal:not(.hidden)) {
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+ * 2. Modal Container & Translucent Liquid Glass Backdrop
  * -------------------------------------------------------------------------- */
 .modal {
   position: fixed;
@@ -45,28 +55,28 @@
 .modal-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--bg-overlay, rgba(0, 0, 0, 0.65));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: var(--bg-overlay, rgba(0, 0, 0, 0.72));
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
   cursor: pointer;
   z-index: 1;
 }
 
 [data-theme="light"] .modal-backdrop {
   background: rgba(0, 0, 0, 0.40);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 /* --------------------------------------------------------------------------
- * 2. Elevated Modal Sheet (Apple Liquid Glass)
+ * 3. Elevated Modal Sheet (Apple Obsidian Sheet)
  * -------------------------------------------------------------------------- */
 .modal-content {
   position: relative;
   width: 100%;
-  max-width: 660px;
+  max-width: 680px;
   max-height: calc(100dvh - 56px);
-  background: var(--bg-surface-elevated, rgba(26, 26, 32, 0.88));
+  background: var(--bg-surface-elevated, #111114);
   backdrop-filter: var(--backdrop-glass, blur(28px) saturate(190%));
   -webkit-backdrop-filter: var(--backdrop-glass, blur(28px) saturate(190%));
   border: 1px solid var(--border-specular, rgba(255, 255, 255, 0.12));
@@ -93,7 +103,7 @@
 }
 
 #inspector-modal .modal-content {
-  max-width: 720px;
+  max-width: 760px;
 }
 
 @keyframes modalSheetIn {
@@ -108,7 +118,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 3. Modal Header & Close Chrome
+ * 4. Modal Header & Close Chrome
  * -------------------------------------------------------------------------- */
 .modal-header {
   padding: 18px 24px 14px;
@@ -200,7 +210,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 4. Modal Body
+ * 5. Modal Body
  * -------------------------------------------------------------------------- */
 .modal-body {
   padding: 20px 24px;
@@ -229,7 +239,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 5. Settings Modal Navigation Tabs (Apple Segmented Control Pill)
+ * 6. Settings Modal Navigation Tabs (Apple Segmented Control Pill)
  * -------------------------------------------------------------------------- */
 .settings-nav-tabs {
   display: flex;
@@ -305,7 +315,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 6. Tab Panels & Transition Physics
+ * 7. Tab Panels & Transition Physics
  * -------------------------------------------------------------------------- */
 .settings-panels-container {
   min-height: 220px;
@@ -359,7 +369,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 7. Form Groups, Grid Rows & Input Controls
+ * 8. Form Groups, Grid Rows & Input Controls
  * -------------------------------------------------------------------------- */
 .form-group {
   display: flex;
@@ -453,7 +463,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 8. Password Masking Wrap & Instant Eye Toggle
+ * 9. Password Masking Wrap & Instant Eye Toggle
  * -------------------------------------------------------------------------- */
 .input-password-wrap {
   display: flex;
@@ -528,7 +538,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 9. Test Connection Buttons & Telemetry Status Badges
+ * 10. Test Connection Buttons & Telemetry Status Badges
  * -------------------------------------------------------------------------- */
 .test-connection-row {
   display: flex;
@@ -627,7 +637,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 10. Security Guarantee Box (WebCrypto AES-GCM)
+ * 11. Security Guarantee Box (WebCrypto AES-GCM)
  * -------------------------------------------------------------------------- */
 .settings-security-box {
   display: flex;
@@ -685,7 +695,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 11. Modal Footer Actions
+ * 12. Modal Footer Actions
  * -------------------------------------------------------------------------- */
 .modal-footer {
   padding: 14px 24px;
@@ -730,7 +740,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 12. Telemetry Inspector Layout
+ * 13. Telemetry Inspector Layout
  * -------------------------------------------------------------------------- */
 .inspector-prompt-box {
   padding: 12px 16px;
@@ -864,7 +874,7 @@
 }
 
 .selected-arm-row {
-  background: rgba(48, 209, 88, 0.08) !important;
+  background: rgba(48, 209, 88, 0.07) !important;
   border-left: 2px solid var(--signal-emerald, #30D158);
 }
 
@@ -952,7 +962,7 @@
 .feature-dim-bar {
   height: 100%;
   border-radius: var(--radius-full, 9999px);
-  background: linear-gradient(90deg, var(--signal-indigo, #6366F1), #38BDF8);
+  background: linear-gradient(90deg, #6366F1, #38BDF8);
   transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1020,7 +1030,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 13. Toast Notifications (Apple Floating Glass Pill)
+ * 14. Toast Notifications (Apple Floating Glass Pill)
  * -------------------------------------------------------------------------- */
 .toast-container {
   position: fixed;
@@ -1101,7 +1111,7 @@
 }
 
 /* --------------------------------------------------------------------------
- * 14. Mobile Responsive Sheet Adaptation
+ * 15. Mobile Responsive Sheet Adaptation (Apple iOS Bottom Sheet)
  * -------------------------------------------------------------------------- */
 @media (max-width: 640px) {
   .modal {
@@ -1118,6 +1128,22 @@
     border-left: none;
     border-right: none;
     border-bottom: none;
+    animation: sheetSlideUp 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .modal-content::before {
+    content: "";
+    display: block;
+    width: 38px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.24);
+    margin: 10px auto 2px;
+    flex-shrink: 0;
+  }
+
+  [data-theme="light"] .modal-content::before {
+    background: rgba(0, 0, 0, 0.20);
   }
 
   .settings-modal-content,
@@ -1134,5 +1160,14 @@
   .toast {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@keyframes sheetSlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
   }
 }

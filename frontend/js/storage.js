@@ -324,6 +324,24 @@ class SettingsManager {
     if (providerModels.custom?.trim()) {
       headers["X-Custom-Model"] = providerModels.custom.trim();
     }
+    if (providerModels.geminiTier1?.trim()) {
+      headers["X-Gemini-Tier1-Model"] = providerModels.geminiTier1.trim();
+    }
+    if (providerModels.groqTier2?.trim()) {
+      headers["X-Groq-Tier2-Model"] = providerModels.groqTier2.trim();
+    }
+    if (providerModels.geminiTier3?.trim()) {
+      headers["X-Gemini-Tier3-Model"] = providerModels.geminiTier3.trim();
+    }
+    if (providerModels.groqTier4?.trim()) {
+      headers["X-Groq-Tier4-Model"] = providerModels.groqTier4.trim();
+    }
+    if (providerModels.groqTier5?.trim()) {
+      headers["X-Groq-Tier5-Model"] = providerModels.groqTier5.trim();
+    }
+    if (providerModels.geminiTier6?.trim()) {
+      headers["X-Gemini-Tier6-Model"] = providerModels.geminiTier6.trim();
+    }
 
     return headers;
   }

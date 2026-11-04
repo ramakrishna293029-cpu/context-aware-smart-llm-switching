@@ -10,8 +10,9 @@ Capability 1: Context ingestion for conversation history, project documents,
 code, and current requirements, with source provenance and timestamps.
 """
 
-from typing import Dict, List, Optional
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Dict, List, Optional
 
 from .config import settings
 from .schemas import ChatMessage
@@ -187,7 +188,7 @@ class ContextManager:
         )
 
         # Also add as active constraint with relevance based on content length
-        relevance = min(1.0, len(content) / 5000)  # Longer docs get higher relevance default
+        relevance = min(1.0, len(content or "") / 5000)  # Longer docs get higher relevance default
         constraint_key = f"constraint_{source_id}"
         constraint = ActiveConstraint(
             id=req_id,
@@ -221,7 +222,8 @@ class ContextManager:
         """
         now = datetime.now(timezone.utc).isoformat()
         # Create summary of code for provenance
-        code_summary = code[:300] + ("..." if len(code) > 300 else "")
+        clean_code = code or ""
+        code_summary = clean_code[:300] + ("..." if len(clean_code) > 300 else "")
         lang = metadata.get("language", "unknown") if metadata else "unknown"
 
         req_id = self.ledger.add_requirement(
@@ -315,11 +317,20 @@ class ContextManager:
         if history_budget < 0:
             history_budget = 0
 
+        # Ensure current query is not already duplicated at the end of history
+        clean_history = list(history) if history else []
+        if (
+            clean_history
+            and clean_history[-1].role == "user"
+            and clean_history[-1].content.strip() == query.strip()
+        ):
+            clean_history.pop()
+
         kept: List[ChatMessage] = []
         used = 0
 
         # Traverse backwards from newest to oldest
-        for msg in reversed(history):
+        for msg in reversed(clean_history):
             cost = self.estimate_tokens(msg.content) + 4
             if used + cost > history_budget:
                 break
@@ -327,8 +338,8 @@ class ContextManager:
             used += cost
 
         # Retain original conversation anchor (first message) if it fits and isn't already included
-        if kept and history and kept[-1] is not history[0]:
-            anchor = history[0]
+        if kept and clean_history and kept[-1] is not clean_history[0]:
+            anchor = clean_history[0]
             anchor_cost = self.estimate_tokens(anchor.content) + 4
             if used + anchor_cost <= history_budget:
                 kept.append(anchor)

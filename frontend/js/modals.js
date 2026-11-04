@@ -585,9 +585,9 @@ async function openInspectorModal(requestId) {
     const tierName = formatTier(data.target_tier ?? data.tier);
     const cost = Number(data.total_cost_usd ?? data.estimated_cost ?? 0);
     const latency = Math.round(Number(data.total_latency_ms ?? data.latency_ms ?? 0));
-    const tokens = Number(data.total_tokens ?? 0);
-    const promptTokens = Number(data.prompt_tokens ?? 0);
-    const completionTokens = Number(data.completion_tokens ?? 0);
+    const promptTokens = Number(data.prompt_tokens ?? data.input_tokens ?? data.in_tok ?? 0);
+    const completionTokens = Number(data.completion_tokens ?? data.output_tokens ?? data.out_tok ?? 0);
+    const tokens = Number(data.total_tokens ?? (promptTokens + completionTokens) ?? 0);
     const strategy = data.strategy || "Balanced";
     const rawQuery = data.query || data.prompt || "(No prompt captured)";
     const jsonString = JSON.stringify(data, null, 2);
@@ -595,6 +595,22 @@ async function openInspectorModal(requestId) {
     const features16d = resolve16DFeatures(rawQuery, data);
     const scoreboardHtml = renderLinUCBScoreboard(data.candidates, servedModel);
     const featuresHtml = render16DFeatureGrid(features16d);
+
+    const rawTierVal = String(data.target_tier ?? data.tier ?? "");
+    let tierColorStyle = 'style="color: var(--tier-2-text, #22D3EE);"';
+    if (rawTierVal.includes("1")) {
+      tierColorStyle = 'style="color: var(--tier-1-text, #34D399);"';
+    } else if (rawTierVal.includes("2")) {
+      tierColorStyle = 'style="color: var(--tier-2-text, #22D3EE);"';
+    } else if (rawTierVal.includes("3")) {
+      tierColorStyle = 'style="color: var(--tier-3-text, #60A5FA);"';
+    } else if (rawTierVal.includes("4")) {
+      tierColorStyle = 'style="color: var(--tier-4-text, #C084FC);"';
+    } else if (rawTierVal.includes("5")) {
+      tierColorStyle = 'style="color: var(--tier-5-text, #FBBF24);"';
+    } else if (rawTierVal.includes("6")) {
+      tierColorStyle = 'style="color: var(--tier-6-text, #FB7185);"';
+    }
 
     body.innerHTML = `
       <div style="display:flex;flex-direction:column;gap:14px;">
@@ -613,7 +629,7 @@ async function openInspectorModal(requestId) {
 
           <div class="drawer-cell">
             <span class="drawer-cell-label">Architecture Tier</span>
-            <span class="drawer-cell-val text-blue" title="${safeEscape(tierName)}">${safeEscape(tierName.split(":")[0] || "Tier")}</span>
+            <span class="drawer-cell-val" ${tierColorStyle} title="${safeEscape(tierName)}">${safeEscape(tierName.split(":")[0] || "Tier")}</span>
           </div>
 
           <div class="drawer-cell">

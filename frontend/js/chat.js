@@ -83,9 +83,9 @@ export function formatMarkdown(text) {
         return `<div class="code-block-wrap">
           <div class="code-block-header">
             <div class="code-header-left">
-              <span class="window-dot red"></span>
-              <span class="window-dot yellow"></span>
-              <span class="window-dot green"></span>
+              <span class="window-dot red" title="Close"></span>
+              <span class="window-dot yellow" title="Minimize"></span>
+              <span class="window-dot green" title="Maximize"></span>
               <span class="code-lang-tag">${escapeHtml(language)}</span>
             </div>
             <button type="button" class="btn-copy-code" title="Copy code snippet">
@@ -147,7 +147,13 @@ export function _renderMathInElement(elem) {
  */
 export function smoothScrollToBottom(container) {
   if (!container) return;
-  if (typeof window !== "undefined" && window.isUserScrolledUp) return;
+  const threshold = 48;
+  const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+  if (distFromBottom > threshold) {
+    if (typeof window !== "undefined") window.isUserScrolledUp = true;
+    return;
+  }
+  if (typeof window !== "undefined") window.isUserScrolledUp = false;
   if (typeof container.scrollTo === "function") {
     container.scrollTo({
       top: container.scrollHeight,
@@ -280,94 +286,71 @@ export function renderActiveSessionMessages(sessionMgr = null) {
   // Zero-State: Welcome Hero with Architectural Routing Scenarios
   if (!active || !Array.isArray(active.messages) || active.messages.length === 0) {
     container.innerHTML = `
-      <div class="welcome-hero hud-welcome-hero" id="welcome-hero">
-        <div class="welcome-eyebrow-badge hud-eyebrow">
-          <span class="hud-blink-dot"></span>
-          <span>✦ ROUTING ENGAGED ✦</span>
+      <div class="welcome-hero" id="welcome-hero">
+        <div class="welcome-eyebrow-badge">
+          <span class="badge-dot"></span>
+          <span>✦ Intelligent LLM Router</span>
         </div>
-        <h2 class="welcome-title hud-glitch-title">AUTONOMOUS PROMPT OPTIMIZATION IN PROGRESS... ESCALATING TIER CAPABILITY.</h2>
-        <p class="welcome-desc hud-telemetry-lead">
-          DISPATCH DIRECTIVE TO NEURAL MATRIX. REAL-TIME MULTI-TIER METERING AND CAPABILITY RESOLUTION ACTIVE.
+        <h2 class="welcome-title">Where intelligence meets cost efficiency.</h2>
+        <p class="welcome-subtitle">
+          Autonomous multi-model routing across 6 specialized tiers. Queries are evaluated by a Contextual Bandit router to select the optimal model for speed, intelligence, and price.
         </p>
 
-        <div class="welcome-prompts-section">
-          <span class="welcome-prompts-label">TACTICAL SCENARIO NODES // SELECT DIRECTIVE</span>
-          <div class="welcome-prompts-grid hud-scenarios-grid" id="welcome-quick-chips">
-            
-            <!-- SCENARIO NODE 1: T1 ROUTINE DIRECTIVE -->
-            <button type="button" class="quick-chip-card hud-scenario-node t1-node" data-query="Summarize the primary benefits of semantic caching in 2 bullet points.">
-              <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
-              <span class="hud-corner bl"></span><span class="hud-corner br"></span>
-              <div class="chip-top">
-                <span class="hud-bracket-label">[ T1: ROUTINE DIRECTIVE ]</span>
-                <span class="hud-status-badge armed">STATUS: ARMED</span>
-              </div>
-              <div class="chip-telemetry">TARGET MODEL: gemini-3.5-flash-lite</div>
-              <div class="chip-title">Semantic Caching Benefits</div>
-              <div class="chip-query">Summarize the primary benefits of semantic caching in 2 bullet points.</div>
-              <div class="chip-footer-hud">
-                <span class="hud-indicator-txt">READY FOR DISPATCH</span>
-                <span class="hud-pulse-ping"></span>
-              </div>
-            </button>
+        <div class="welcome-prompts-grid" id="welcome-quick-chips">
+          
+          <!-- SCENARIO CARD 1: T1 ROUTINE DIRECTIVE -->
+          <button type="button" class="welcome-prompt-card quick-chip-card" data-query="Summarize the primary benefits of semantic caching in 2 bullet points.">
+            <div class="welcome-prompt-header">
+              <span class="welcome-prompt-icon">⚡</span>
+              <span class="welcome-prompt-title">Fast Caching</span>
+              <span class="node-tier-pill t1" style="margin-left:auto; font-size:10.5px; padding:2px 7px; border-radius:9999px; background:rgba(16,185,129,0.12); color:#10B981; border:1px solid rgba(16,185,129,0.25); font-family:var(--font-mono, monospace);">Tier 1</span>
+            </div>
+            <div class="welcome-prompt-desc" style="font-size:12.5px; color:var(--text-secondary); line-height:1.45; margin-top:4px;">
+              Summarize the primary benefits of semantic caching in 2 bullet points.
+            </div>
+          </button>
 
-            <!-- SCENARIO NODE 2: T3 BALANCED SYNTHESIS -->
-            <button type="button" class="quick-chip-card hud-scenario-node t3-node" data-query="Compare relational databases and document stores for high-throughput write workloads.">
-              <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
-              <span class="hud-corner bl"></span><span class="hud-corner br"></span>
-              <div class="chip-top">
-                <span class="hud-bracket-label">[ T3: BALANCED SYNTHESIS ]</span>
-                <span class="hud-status-badge armed">STATUS: ARMED</span>
-              </div>
-              <div class="chip-telemetry">TARGET MODEL: gemini-3.6-flash</div>
-              <div class="chip-title">Database Workload Tradeoffs</div>
-              <div class="chip-query">Compare relational databases and document stores for high-throughput write workloads.</div>
-              <div class="chip-footer-hud">
-                <span class="hud-indicator-txt">READY FOR DISPATCH</span>
-                <span class="hud-pulse-ping"></span>
-              </div>
-            </button>
+          <!-- SCENARIO CARD 2: T3 BALANCED SYNTHESIS -->
+          <button type="button" class="welcome-prompt-card quick-chip-card" data-query="Compare relational databases and document stores for high-throughput write workloads.">
+            <div class="welcome-prompt-header">
+              <span class="welcome-prompt-icon">⚖️</span>
+              <span class="welcome-prompt-title">Database Workloads</span>
+              <span class="node-tier-pill t3" style="margin-left:auto; font-size:10.5px; padding:2px 7px; border-radius:9999px; background:rgba(56,189,248,0.12); color:#38BDF8; border:1px solid rgba(56,189,248,0.25); font-family:var(--font-mono, monospace);">Tier 3</span>
+            </div>
+            <div class="welcome-prompt-desc" style="font-size:12.5px; color:var(--text-secondary); line-height:1.45; margin-top:4px;">
+              Compare relational databases and document stores for high-throughput write workloads.
+            </div>
+          </button>
 
-            <!-- SCENARIO NODE 3: T4 CODING SPECIALIST -->
-            <button type="button" class="quick-chip-card hud-scenario-node t4-node" data-query="Write a thread-safe Python implementation of an LRU Cache with TTL expiration.">
-              <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
-              <span class="hud-corner bl"></span><span class="hud-corner br"></span>
-              <div class="chip-top">
-                <span class="hud-bracket-label">[ T4: CODING SPECIALIST ]</span>
-                <span class="hud-status-badge armed">STATUS: ARMED</span>
-              </div>
-              <div class="chip-telemetry">TARGET MODEL: qwen3.8-27b</div>
-              <div class="chip-title">Thread-Safe LRU Cache</div>
-              <div class="chip-query">Write a thread-safe Python implementation of an LRU Cache with TTL expiration.</div>
-              <div class="chip-footer-hud">
-                <span class="hud-indicator-txt">READY FOR DISPATCH</span>
-                <span class="hud-pulse-ping"></span>
-              </div>
-            </button>
+          <!-- SCENARIO CARD 3: T4 CODING SPECIALIST -->
+          <button type="button" class="welcome-prompt-card quick-chip-card" data-query="Write a thread-safe Python implementation of an LRU Cache with TTL expiration.">
+            <div class="welcome-prompt-header">
+              <span class="welcome-prompt-icon">🐍</span>
+              <span class="welcome-prompt-title">Thread-Safe LRU</span>
+              <span class="node-tier-pill t4" style="margin-left:auto; font-size:10.5px; padding:2px 7px; border-radius:9999px; background:rgba(139,92,246,0.12); color:#A78BFA; border:1px solid rgba(139,92,246,0.25); font-family:var(--font-mono, monospace);">Tier 4</span>
+            </div>
+            <div class="welcome-prompt-desc" style="font-size:12.5px; color:var(--text-secondary); line-height:1.45; margin-top:4px;">
+              Write a thread-safe Python implementation of an LRU Cache with TTL expiration.
+            </div>
+          </button>
 
-            <!-- SCENARIO NODE 4: T5 DEEP REASONING -->
-            <button type="button" class="quick-chip-card hud-scenario-node t5-node" data-query="Prove that the square root of 2 is irrational and analyze its algebraic implications.">
-              <span class="hud-corner tl"></span><span class="hud-corner tr"></span>
-              <span class="hud-corner bl"></span><span class="hud-corner br"></span>
-              <div class="chip-top">
-                <span class="hud-bracket-label">[ T5: DEEP REASONING ]</span>
-                <span class="hud-status-badge armed">STATUS: ARMED</span>
-              </div>
-              <div class="chip-telemetry">TARGET MODEL: gpt-oss-120b</div>
-              <div class="chip-title">Irrationality of √2 Proof</div>
-              <div class="chip-query">Prove that the square root of 2 is irrational and analyze its algebraic implications.</div>
-              <div class="chip-footer-hud">
-                <span class="hud-indicator-txt">READY FOR DISPATCH</span>
-                <span class="hud-pulse-ping"></span>
-              </div>
-            </button>
-          </div>
+          <!-- SCENARIO CARD 4: T5 DEEP REASONING -->
+          <button type="button" class="welcome-prompt-card quick-chip-card" data-query="Prove that the square root of 2 is irrational and analyze its algebraic implications.">
+            <div class="welcome-prompt-header">
+              <span class="welcome-prompt-icon">📐</span>
+              <span class="welcome-prompt-title">Mathematical Proof</span>
+              <span class="node-tier-pill t5" style="margin-left:auto; font-size:10.5px; padding:2px 7px; border-radius:9999px; background:rgba(245,158,11,0.12); color:#FBBF24; border:1px solid rgba(245,158,11,0.25); font-family:var(--font-mono, monospace);">Tier 5</span>
+            </div>
+            <div class="welcome-prompt-desc" style="font-size:12.5px; color:var(--text-secondary); line-height:1.45; margin-top:4px;">
+              Prove that the square root of 2 is irrational and analyze its algebraic implications.
+            </div>
+          </button>
         </div>
       </div>
     `;
 
     // Attach click listeners to quick chip cards
-    container.querySelectorAll(".quick-chip-card").forEach((chip) => {
+    container.querySelectorAll(".quick-chip-card, .welcome-prompt-card").forEach((chip) => {
       chip.addEventListener("click", () => {
         const query = chip.dataset.query;
         const input = $("query-input");
@@ -477,8 +460,21 @@ export function createStreamingPlaceholder(initialQuery = "") {
   const bodyEl = $(`${cardId}_body`);
   let currentText = "";
   let currentReasoning = "";
+  let reasoningStartTime = 0;
   let routingMeta = {};
   let userPrompt = initialQuery;
+
+  const finishCoT = () => {
+    const thoughtAccordion = $(`${cardId}_thought`);
+    if (thoughtAccordion && thoughtAccordion.classList.contains("streaming")) {
+      const elapsedSec = reasoningStartTime > 0 ? ((Date.now() - reasoningStartTime) / 1000).toFixed(1) : "0.5";
+      const status = thoughtAccordion.querySelector(".thought-status");
+      const badge = thoughtAccordion.querySelector(".thought-badge");
+      if (status) status.textContent = `Thought for ${elapsedSec}s`;
+      if (badge) badge.textContent = "CoT Completed";
+      thoughtAccordion.classList.remove("streaming");
+    }
+  };
 
   return {
     card: msgEl,
@@ -513,6 +509,9 @@ export function createStreamingPlaceholder(initialQuery = "") {
     },
     appendReasoningDelta: (reasoning) => {
       if (!reasoning) return;
+      if (reasoningStartTime === 0) {
+        reasoningStartTime = Date.now();
+      }
       currentReasoning = reasoning;
       let thoughtAccordion = $(`${cardId}_thought`);
       const body = $(`${cardId}_body`);
@@ -543,20 +542,23 @@ export function createStreamingPlaceholder(initialQuery = "") {
       if (container) smoothScrollToBottom(container);
     },
     startResponse: () => {
+      finishCoT();
       const body = $(`${cardId}_body`);
-      if (body) body.innerHTML = "";
+      if (body) body.innerHTML = '<span class="typing-cursor"></span>';
     },
     appendDelta: (text) => {
+      finishCoT();
       currentText = text;
       const body = $(`${cardId}_body`);
       if (body) {
-        body.innerHTML = formatMarkdown(text);
+        body.innerHTML = formatMarkdown(text) + '<span class="typing-cursor"></span>';
         _renderMathInElement(body);
         attachCodeBlockCopyHandlers(body);
       }
       if (container) smoothScrollToBottom(container);
     },
     finalize: (finalData) => {
+      finishCoT();
       const merged = { ...(routingMeta || {}), ...(finalData || {}) };
       if (!merged.reasoning && currentReasoning) {
         merged.reasoning = currentReasoning;
@@ -571,17 +573,31 @@ export function createStreamingPlaceholder(initialQuery = "") {
       return finalCard;
     },
     showError: (err) => {
+      finishCoT();
       const body = $(`${cardId}_body`);
       if (body) {
-        body.innerHTML = `<span style="color:var(--signal-red, #FF453A);">Stream error: ${escapeHtml(err)}</span>`;
+        body.innerHTML = `
+          <div style="padding:10px 14px;background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.25);border-radius:8px;color:var(--signal-rose, #F43F5E);font-size:13px;display:flex;align-items:center;gap:8px;">
+            <span>⚠️</span>
+            <span>${escapeHtml(err || "Stream connection failed")}</span>
+          </div>`;
       }
     },
     showStoppedState: (text) => {
+      finishCoT();
       const body = $(`${cardId}_body`);
       if (body && text) {
-        body.innerHTML = formatMarkdown(text) + `<p style="color:var(--text-muted);font-style:italic;margin-top:8px;">[Generation stopped by user]</p>`;
+        body.innerHTML = formatMarkdown(text) + `
+          <div class="generation-stopped-notice">
+            <svg class="icon-sym" aria-hidden="true"><use href="#i-stop"/></svg>
+            <span>Generation stopped by user</span>
+          </div>`;
         _renderMathInElement(body);
         attachCodeBlockCopyHandlers(body);
+      }
+      const tracetext = $(`${cardId}_tracetext`);
+      if (tracetext) {
+        tracetext.textContent = "Generation halted by user";
       }
     },
   };

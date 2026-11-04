@@ -446,7 +446,16 @@ def _completion_key(query: str, history: List[ChatMessage], strategy: str, model
     h = hashlib.sha1()
     h.update(query.strip().encode("utf-8"))
     h.update(b"\x00")
-    h.update("\n".join(m.content for m in history[-10:]).encode("utf-8"))
+    history_texts = []
+    for m in (history or [])[-10:]:
+        if hasattr(m, "content"):
+            val = m.content
+        elif isinstance(m, dict):
+            val = m.get("content", "")
+        else:
+            val = str(m)
+        history_texts.append(str(val) if val is not None else "")
+    h.update("\n".join(history_texts).encode("utf-8"))
     h.update(f"\x00{strategy}\x00{model_ids}".encode("utf-8"))
     return h.hexdigest()
 
@@ -601,7 +610,11 @@ def persist_outcome(query: str, outcome: ChatOutcome) -> int:
         escalated_tier=outcome.escalated_tier,
         required_capability=d.required_capability,
         strategy=outcome.strategy,
-        candidates_json=json.dumps(routing.candidates()) if routing else None,
+        candidates_json=(
+            json.dumps([c.model_dump() if hasattr(c, "model_dump") else c for c in outcome.candidates_list])
+            if outcome.candidates_list is not None
+            else (json.dumps(routing.candidates()) if routing else None)
+        ),
     )
     outcome.request_id = req_id
     return req_id
@@ -1217,7 +1230,7 @@ async def run_unary_chat(
 
     # Step 4: Hard-constraint eligibility filter
     in_tok = estimate_tokens(query) + (
-        sum(estimate_tokens(m.content if hasattr(m, "content") else str(m)) for m in (history or []))
+        sum(estimate_tokens(m.content if hasattr(m, "content") else (m.get("content", "") if isinstance(m, dict) else str(m))) for m in (history or []))
         if decision.context_required
         else 0
     )
@@ -1448,7 +1461,6 @@ async def iter_chat_sse(
     cached = completion_cache_get(cache_key)
     if cached and cached.get("response"):
         text = cached["response"]
-        yield {"event": "content_delta", "text": text}
         yield {"event": "delta", "text": text}
         cached_mid = cached.get("model_id")
         cached_model = reg.get(cached_mid) if cached_mid else (available[0] if available else None)
@@ -1517,7 +1529,7 @@ async def iter_chat_sse(
 
     # Step 4: Hard-constraint eligibility filter
     in_tok = estimate_tokens(query) + (
-        sum(estimate_tokens(m.content if hasattr(m, "content") else str(m)) for m in (history or []))
+        sum(estimate_tokens(m.content if hasattr(m, "content") else (m.get("content", "") if isinstance(m, dict) else str(m))) for m in (history or []))
         if decision.context_required
         else 0
     )
@@ -1607,7 +1619,6 @@ async def iter_chat_sse(
         outcome.scores = scores_dict
         outcome.candidates_list = candidates_list
         persist_outcome(query, outcome)
-        yield {"event": "content_delta", "text": outcome.response_text}
         yield {"event": "delta", "text": outcome.response_text}
         yield done_event_payload(outcome)
         return
@@ -1651,7 +1662,6 @@ async def iter_chat_sse(
                 if chunk.reasoning_text:
                     yield {"event": "reasoning_delta", "text": chunk.reasoning_text}
                 if chunk.text:
-                    yield {"event": "content_delta", "text": chunk.text}
                     yield {"event": "delta", "text": chunk.text}
             elif kind == "complete":
                 exec_res = payload

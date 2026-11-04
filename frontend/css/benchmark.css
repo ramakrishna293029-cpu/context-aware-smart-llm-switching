@@ -1,66 +1,59 @@
 /**
- * Context-Aware Smart LLM Switcher — Research Benchmark Lab Stylesheet
- * Chunk 11: Modular Benchmark Architecture
+ * ============================================================================
+ * S-Tier Research Benchmark Lab Stylesheet
+ * Inspired by Linear, Apple Human Interface Guidelines & Claude Web
  *
  * Implements:
- * 1. Apple HIG & Claude Design: Liquid glass surfaces, OLED black contrast, specular hairlines.
- * 2. Critically damped spring physics: cubic-bezier(0.16, 1, 0.3, 1) and 0-latency pointer-down response.
- * 3. Strict typography scale floors (min 12px) and tabular numerals (tnum) for jitter-free telemetry.
- * 4. Micro-metered comparative evaluation matrix with multi-domain badges and latency speedup pills.
+ * 1. Centered 1340px Benchmark Stage with Pure OLED Canvas.
+ * 2. 4-Card Executive KPI Summary Strip with Quiet Specular Hairlines.
+ * 3. 7-Column Side-by-Side Evaluation Matrix with Strict Tabular Numerals.
+ * 4. Canonical Domain Accents (Coding: Violet, Reasoning: Amber, Factual: Emerald,
+ *    Planning: Sky, General: Cyan).
+ * 5. Tactile CTA Physics (scale(0.97)) with Micro Spinning Loader.
+ * 6. Dual-Polarity Light Theme Overrides with Zero Neon Halos.
+ * ============================================================================
  */
 
-/* ============================================================================
-   1. Benchmark Container Stage
-   ============================================================================ */
+/* ------------------------------------------------------------
+ * 1. Benchmark Container Stage
+ * ------------------------------------------------------------ */
 .benchmark-container {
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: clamp(20px, 3.2vw, 36px) clamp(20px, 3.5vw, 40px) 72px;
+  padding: 28px 36px 72px;
   max-width: 1340px;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   -webkit-overflow-scrolling: touch;
+  animation: benchmarkFadeIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Slim Apple Specular Scrollbar */
-.benchmark-container::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+@keyframes benchmarkFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.benchmark-container::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.benchmark-container::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: var(--radius-full, 9999px);
-}
-
-.benchmark-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
-}
-
-[data-theme="light"] .benchmark-container::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
-}
-
-[data-theme="light"] .benchmark-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.28);
-}
-
-/* ============================================================================
-   2. Benchmark Header & Primary CTA Action
-   ============================================================================ */
+/* ------------------------------------------------------------
+ * 2. Benchmark Header & Primary CTA Action
+ * ------------------------------------------------------------ */
 .benchmark-container .view-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 20px;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
@@ -70,21 +63,19 @@
 }
 
 .benchmark-container .view-title-group h2 {
-  font-size: var(--font-size-title-1, 24px);
-  font-weight: 650;
-  letter-spacing: var(--tracking-tight, -0.025em);
-  color: var(--text-primary, #FFFFFF);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
   margin: 0 0 6px 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  line-height: 1.25;
 }
 
 .benchmark-container .view-title-group .subtitle {
   font-size: 13px;
-  line-height: var(--leading-normal, 1.5);
-  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
-  max-width: 760px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-width: 780px;
   margin: 0;
 }
 
@@ -94,575 +85,457 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 22px;
+  padding: 9px 20px;
   background-color: var(--accent-primary, #FFFFFF);
-  color: var(--accent-primary-text, #000000);
+  color: var(--accent-primary-text, #09090B);
   border: 1px solid transparent;
-  border-radius: var(--radius-full, 9999px);
-  font-size: var(--font-size-callout, 13px);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 2px 10px rgba(0, 0, 0, 0.35);
-  transition: transform var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
-              background-color var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
-              box-shadow var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
-              opacity var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1));
   user-select: none;
-  -webkit-user-select: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: all var(--spring-fast);
 }
 
-#run-benchmark-btn:hover:not(:disabled) {
+#run-benchmark-btn:hover {
   background-color: var(--accent-primary-hover, #E4E4E7);
   transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 4px 16px rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
-/* Instant 0-Latency Pointer Down Feedback (Apple Spec) */
-#run-benchmark-btn:active:not(:disabled) {
+#run-benchmark-btn:active {
   transform: scale(0.97);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 4px rgba(0, 0, 0, 0.4);
+  transition: transform var(--spring-instant);
 }
 
-#run-benchmark-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--bg-app, #000000), 0 0 0 4px var(--signal-indigo, #6366F1);
-}
-
-/* Loading & Disabled States */
 #run-benchmark-btn:disabled,
 #run-benchmark-btn.loading {
-  opacity: 0.82;
-  cursor: wait;
-  transform: none !important;
-  box-shadow: none;
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
 }
 
 #run-benchmark-btn .btn-play-icon {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 
-/* Crisp Apple Native Spinning Wheel */
-.btn-loading-spinner {
+#run-benchmark-btn .btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: currentColor;
+  border-radius: var(--radius-full);
+  animation: bmSpin 0.7s linear infinite;
   display: inline-block;
-  width: 13px;
-  height: 13px;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: bmSpinnerRotate 0.65s linear infinite;
-  box-sizing: border-box;
 }
 
-@keyframes bmSpinnerRotate {
+@keyframes bmSpin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
 [data-theme="light"] #run-benchmark-btn {
-  background-color: #000000;
+  background: #18181B;
   color: #FFFFFF;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
-[data-theme="light"] #run-benchmark-btn:hover:not(:disabled) {
-  background-color: #1A1A1E;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.25);
+[data-theme="light"] #run-benchmark-btn:hover {
+  background: #27272A;
 }
 
-/* ============================================================================
-   3. Benchmark Summary KPI Cards Grid
-   ============================================================================ */
+[data-theme="light"] #run-benchmark-btn .btn-spinner {
+  border-color: rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
+}
+
+/* ------------------------------------------------------------
+ * 3. Executive KPI Summary Cards Strip (4-Card Grid)
+ * ------------------------------------------------------------ */
 .benchmark-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 28px;
-  animation: bmCardsEntrance 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes bmCardsEntrance {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.99);
+@media (max-width: 1100px) {
+  .benchmark-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+}
+
+@media (max-width: 580px) {
+  .benchmark-summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 
 .benchmark-summary-grid .summary-card {
-  padding: 18px 22px;
-  background: var(--bg-surface, rgba(18, 18, 22, 0.72));
-  backdrop-filter: var(--backdrop-glass, blur(24px) saturate(190%));
-  -webkit-backdrop-filter: var(--backdrop-glass, blur(24px) saturate(190%));
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-  border-radius: var(--radius-lg, 16px);
+  position: relative;
+  padding: 18px 20px;
+  background: var(--bg-surface, #111114);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--hairline-specular);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  position: relative;
+  gap: 6px;
   overflow: hidden;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.5));
-  transition: transform var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
-              border-color var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1)),
-              box-shadow var(--transition-fast, 0.14s cubic-bezier(0.16, 1, 0.3, 1));
+  transition: transform var(--spring-fast), border-color var(--spring-fast);
 }
 
 .benchmark-summary-grid .summary-card:hover {
   transform: translateY(-2px);
-  border-color: var(--border-mid, rgba(255, 255, 255, 0.12));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), var(--shadow-md, 0 8px 24px -4px rgba(0, 0, 0, 0.6));
-}
-
-/* Card 1: Highlighted Overall Cost Savings */
-.benchmark-summary-grid .summary-card.highlight {
-  border-color: var(--signal-emerald-border, rgba(48, 209, 88, 0.28));
-  background: linear-gradient(175deg, rgba(48, 209, 88, 0.08) 0%, var(--bg-surface, rgba(18, 18, 22, 0.72)) 45%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
-              0 6px 24px -4px var(--signal-emerald-glow, rgba(48, 209, 88, 0.25));
-}
-
-.benchmark-summary-grid .summary-card.highlight:hover {
-  border-color: rgba(48, 209, 88, 0.45);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16),
-              0 10px 32px -4px var(--signal-emerald-glow, rgba(48, 209, 88, 0.35));
-}
-
-.summary-card .card-title {
-  font-family: var(--font-mono, monospace);
-  font-size: var(--font-size-caption-1, 12px);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wider, 0.08em);
-  color: var(--text-muted, rgba(235, 235, 245, 0.40));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.summary-card .big-metric {
-  font-family: var(--font-mono, monospace);
-  font-size: clamp(26px, 2.5vw, 34px);
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: var(--tracking-tight, -0.025em);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: var(--font-features-tabular, "cv02", "cv03", "cv04", "cv11", "tnum");
-  color: var(--text-primary, #FFFFFF);
-}
-
-.summary-card .card-desc {
-  font-size: var(--font-size-callout, 13px);
-  line-height: 1.4;
-  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
-  font-variant-numeric: tabular-nums;
-}
-
-/* Apple Semantic Signals */
-.text-green {
-  color: var(--signal-emerald, #30D158) !important;
-}
-
-.text-blue {
-  color: var(--signal-indigo, #818CF8) !important;
-}
-
-.text-amber {
-  color: var(--signal-amber, #FFB340) !important;
-}
-
-.text-red {
-  color: var(--signal-red, #FF6961) !important;
+  border-color: var(--border-mid);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 [data-theme="light"] .benchmark-summary-grid .summary-card {
-  background: var(--bg-surface, rgba(255, 255, 255, 0.85));
-  border-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+  background: #FFFFFF;
+  border-color: var(--border-mid);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.benchmark-summary-grid .summary-card .card-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-features-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.benchmark-summary-grid .summary-card .big-metric {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-features-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--text-primary);
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin-top: 2px;
+}
+
+.benchmark-summary-grid .summary-card .card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-features-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Cumulative Cost Savings Card Highlight (Quiet Specular Hairline, No Neon Halo) */
+.benchmark-summary-grid .summary-card.highlight {
+  border-color: rgba(16, 185, 129, 0.28);
+  background: linear-gradient(
+    175deg,
+    rgba(16, 185, 129, 0.08) 0%,
+    var(--bg-surface, #111114) 45%
+  );
+  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(16, 185, 129, 0.20);
+}
+
+.benchmark-summary-grid .summary-card.highlight:hover {
+  border-color: var(--signal-emerald);
+}
+
+.benchmark-summary-grid .summary-card.highlight .big-metric {
+  color: var(--signal-emerald-text, #34D399);
+}
+
+.benchmark-summary-grid .summary-card .big-metric.text-cyan {
+  color: var(--signal-cyan-text, #38BDF8);
 }
 
 [data-theme="light"] .benchmark-summary-grid .summary-card.highlight {
-  border-color: var(--signal-emerald-border, rgba(40, 205, 65, 0.28));
-  background: linear-gradient(175deg, rgba(40, 205, 65, 0.08) 0%, var(--bg-surface, rgba(255, 255, 255, 0.9)) 45%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95),
-              0 6px 20px -4px var(--signal-emerald-glow, rgba(40, 205, 65, 0.20));
+  border-color: rgba(5, 150, 105, 0.35);
+  background: linear-gradient(
+    175deg,
+    rgba(5, 150, 105, 0.08) 0%,
+    #FFFFFF 50%
+  );
+  box-shadow: 0 4px 16px -2px rgba(5, 150, 105, 0.12);
 }
 
-/* ============================================================================
-   4. Evaluation Matrix Table Panel
-   ============================================================================ */
-.benchmark-container .table-panel {
-  background: var(--bg-surface, rgba(18, 18, 22, 0.72));
-  backdrop-filter: var(--backdrop-glass, blur(24px) saturate(190%));
-  -webkit-backdrop-filter: var(--backdrop-glass, blur(24px) saturate(190%));
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-  border-radius: var(--radius-lg, 16px);
+/* ------------------------------------------------------------
+ * 4. Specifications Table Panel & 7-Column Evaluation Matrix
+ * ------------------------------------------------------------ */
+.panel-card.table-panel {
+  background: var(--bg-surface, #111114);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--hairline-specular);
   margin-bottom: 28px;
   overflow: hidden;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.5));
+  display: flex;
+  flex-direction: column;
 }
 
-.benchmark-container .table-header {
-  padding: 18px 24px;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+[data-theme="light"] .panel-card.table-panel {
+  background: #FFFFFF;
+  border-color: var(--border-mid);
+}
+
+.panel-card .table-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
-.benchmark-container .table-title-group h3 {
-  font-size: var(--font-size-headline, 16px);
-  font-weight: 650;
-  letter-spacing: var(--tracking-tight, -0.025em);
-  color: var(--text-primary, #FFFFFF);
+.panel-card .table-title-group h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
-.benchmark-container .table-hint {
-  font-size: var(--font-size-caption-1, 12px);
-  color: var(--text-muted, rgba(235, 235, 245, 0.40));
-  margin-top: 2px;
-  display: block;
+.panel-card .table-title-group .table-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  display: inline-block;
 }
 
-.benchmark-container .table-responsive {
-  width: 100%;
+.table-responsive {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Slim Table Scrollbar */
-.benchmark-container .table-responsive::-webkit-scrollbar {
-  height: 5px;
-}
-
-.benchmark-container .table-responsive::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.10);
-  border-radius: 9999px;
-}
-
-/* ============================================================================
-   5. Evaluation Matrix Table Structure & Typography
-   ============================================================================ */
-.benchmark-table {
+.data-table.benchmark-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--font-size-callout, 13px);
+  font-size: 13px;
   text-align: left;
 }
 
-.benchmark-table thead th {
-  padding: 13px 20px;
-  font-family: var(--font-mono, monospace);
-  font-size: var(--font-size-caption-1, 12px);
+.data-table.benchmark-table thead {
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.data-table.benchmark-table th {
+  padding: 11px 16px;
   font-weight: 600;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-features-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: var(--tracking-wide, 0.04em);
-  color: var(--text-muted, rgba(235, 235, 245, 0.40));
-  background-color: rgba(255, 255, 255, 0.025);
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
   white-space: nowrap;
+  user-select: none;
 }
 
-.benchmark-table tbody td {
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: var(--font-features-tabular, "cv02", "cv03", "cv04", "cv11", "tnum");
+.data-table.benchmark-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums lining-nums;
   vertical-align: middle;
-  transition: background-color var(--transition-instant, 0.08s ease);
+  transition: background var(--spring-fast);
 }
 
-.benchmark-table tbody tr {
-  transition: background-color var(--transition-fast, 0.14s ease);
+.data-table.benchmark-table tbody tr:hover td {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
 }
 
-.benchmark-table tbody tr:hover td {
-  background-color: var(--bg-surface-hover, rgba(255, 255, 255, 0.04));
-  color: var(--text-primary, #FFFFFF);
-}
-
-.benchmark-table tbody tr:last-child td {
+.data-table.benchmark-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-/* Column 1: Query & Domain Specifics */
+/* 7 Discrete Column Dimensions */
+.benchmark-table td.col-domain {
+  width: 110px;
+  min-width: 100px;
+  white-space: nowrap;
+}
+
 .benchmark-table td.col-query {
-  max-width: 340px;
-  min-width: 240px;
+  min-width: 220px;
+  max-width: 320px;
 }
 
-.bm-query-title {
-  display: block;
-  font-size: var(--font-size-callout, 13px);
-  font-weight: 600;
-  color: var(--text-primary, #FFFFFF);
-  line-height: 1.4;
-  margin-bottom: 5px;
-  word-break: break-word;
+.benchmark-table td.col-b1,
+.benchmark-table td.col-b2,
+.benchmark-table td.col-smart {
+  min-width: 140px;
+  white-space: nowrap;
 }
 
-.bm-meta-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+.benchmark-table td.col-speedup,
+.benchmark-table td.col-savings {
+  min-width: 110px;
+  white-space: nowrap;
 }
 
-/* Task Domain & Complexity Badges */
+/* ------------------------------------------------------------
+ * 5. Matrix Cell Components & Domain Accents
+ * ------------------------------------------------------------ */
+
+/* Canonical Domain Badges */
 .bm-domain-badge {
   display: inline-flex;
   align-items: center;
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
+  gap: 5px;
+  font-size: 10.5px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
   padding: 2px 7px;
-  border-radius: var(--radius-xs, 5px);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-  color: var(--text-secondary, rgba(235, 235, 245, 0.65));
+  border-radius: var(--radius-xs);
+  text-transform: uppercase;
+  border: 1px solid transparent;
 }
 
 .bm-domain-badge.domain-coding {
-  background: var(--signal-cyan-bg, rgba(100, 210, 255, 0.12));
-  border-color: var(--signal-cyan-border, rgba(100, 210, 255, 0.28));
-  color: var(--signal-cyan-text, #64D2FF);
+  background: var(--tier-4-bg, rgba(139, 92, 246, 0.12));
+  border-color: var(--tier-4-border, rgba(139, 92, 246, 0.28));
+  color: var(--tier-4-text, #C084FC);
 }
 
 .bm-domain-badge.domain-reasoning {
-  background: var(--signal-indigo-bg, rgba(99, 102, 241, 0.12));
-  border-color: var(--signal-indigo-border, rgba(99, 102, 241, 0.30));
-  color: var(--signal-indigo-text, #818CF8);
+  background: var(--tier-5-bg, rgba(245, 158, 11, 0.12));
+  border-color: var(--tier-5-border, rgba(245, 158, 11, 0.28));
+  color: var(--tier-5-text, #FBBF24);
 }
 
 .bm-domain-badge.domain-factual {
-  background: var(--signal-emerald-bg, rgba(48, 209, 88, 0.12));
-  border-color: var(--signal-emerald-border, rgba(48, 209, 88, 0.28));
-  color: var(--signal-emerald-text, #30D158);
+  background: var(--tier-1-bg, rgba(16, 185, 129, 0.12));
+  border-color: var(--tier-1-border, rgba(16, 185, 129, 0.28));
+  color: var(--tier-1-text, #34D399);
 }
 
 .bm-domain-badge.domain-planning {
-  background: var(--signal-amber-bg, rgba(255, 159, 10, 0.12));
-  border-color: var(--signal-amber-border, rgba(255, 159, 10, 0.30));
-  color: var(--signal-amber-text, #FFB340);
+  background: var(--tier-3-bg, rgba(14, 165, 233, 0.12));
+  border-color: var(--tier-3-border, rgba(14, 165, 233, 0.28));
+  color: var(--tier-3-text, #60A5FA);
+}
+
+.bm-domain-badge.domain-general {
+  background: var(--tier-2-bg, rgba(6, 182, 212, 0.12));
+  border-color: var(--tier-2-border, rgba(6, 182, 212, 0.28));
+  color: var(--tier-2-text, #22D3EE);
+}
+
+/* Query Cell Styling */
+.bm-query-title {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+  display: block;
 }
 
 .bm-complexity-badge {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 6px;
-  border-radius: var(--radius-xs, 5px);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  color: var(--text-muted, rgba(235, 235, 245, 0.40));
-  text-transform: capitalize;
+  display: inline-block;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-features-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  margin-top: 2px;
 }
 
-/* Columns 2, 3, 4: Model Specifications */
+/* Model Comparison Pills */
 .bm-model-pill {
-  display: inline-flex;
-  align-items: center;
-  font-family: var(--font-mono, monospace);
-  font-size: var(--font-size-caption-1, 12px);
-  font-weight: 550;
-  padding: 2px 7px;
-  border-radius: var(--radius-xs, 5px);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-  color: var(--text-primary, #FFFFFF);
-  margin-bottom: 4px;
-}
-
-.bm-model-pill.b1-model {
-  background: rgba(255, 69, 58, 0.08);
-  border-color: rgba(255, 69, 58, 0.20);
-  color: var(--signal-red-text, #FF6961);
-}
-
-.bm-model-pill.b2-model {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: var(--border-subtle, rgba(255, 255, 255, 0.08));
-  color: var(--text-secondary, rgba(235, 235, 245, 0.75));
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.3;
 }
 
 .bm-model-pill.smart-model {
-  background: var(--signal-indigo-bg, rgba(99, 102, 241, 0.14));
-  border-color: var(--signal-indigo-border, rgba(99, 102, 241, 0.32));
-  color: var(--signal-indigo-text, #818CF8);
+  color: var(--signal-cyan-text, #38BDF8);
   font-weight: 600;
 }
 
 .bm-submetric {
   display: block;
-  font-family: var(--font-mono, monospace);
-  font-size: var(--font-size-caption-1, 12px);
-  color: var(--text-muted, rgba(235, 235, 245, 0.40));
-  line-height: 1.35;
-  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-features-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
 
-/* Column 5 & 6: Delta KPI Highlights */
+/* Savings & Speedup Metric Pills */
 .bm-savings-pill,
 .bm-speedup-pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
-  border-radius: var(--radius-full, 9999px);
-  font-family: var(--font-mono, monospace);
-  font-size: var(--font-size-caption-1, 12px);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-features-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
+  background: var(--signal-emerald-bg);
+  color: var(--signal-emerald-text, #34D399);
+  border: 1px solid var(--signal-emerald-border);
 }
 
-.bm-savings-pill {
-  background: var(--signal-emerald-bg, rgba(48, 209, 88, 0.12));
-  border: 1px solid var(--signal-emerald-border, rgba(48, 209, 88, 0.28));
-  color: var(--signal-emerald-text, #30D158);
-}
-
-.bm-savings-pill.neutral {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: var(--text-muted, rgba(235, 235, 245, 0.6));
-}
-
-.bm-savings-pill.negative {
-  background: rgba(255, 159, 10, 0.12);
-  border-color: rgba(255, 159, 10, 0.28);
-  color: var(--signal-amber, #FF9F0A);
-}
-
-.bm-speedup-pill {
-  background: var(--signal-indigo-bg, rgba(99, 102, 241, 0.12));
-  border: 1px solid var(--signal-indigo-border, rgba(99, 102, 241, 0.30));
-  color: var(--signal-indigo-text, #818CF8);
-}
-
+.bm-savings-pill.neutral,
 .bm-speedup-pill.neutral {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: var(--text-muted, rgba(235, 235, 245, 0.6));
+  color: var(--text-secondary);
+  border-color: var(--border-subtle);
 }
 
+.bm-savings-pill.negative,
 .bm-speedup-pill.negative {
-  background: rgba(255, 69, 58, 0.12);
-  border-color: rgba(255, 69, 58, 0.28);
-  color: var(--signal-red, #FF453A);
+  background: var(--signal-rose-bg);
+  color: var(--signal-rose-text, #FB7185);
+  border-color: var(--signal-rose-border);
 }
 
-/* Empty State & Error States */
-.benchmark-table td.empty-state {
+.bm-delta-cost {
+  display: block;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-feature-settings: var(--font-features-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Empty State / Loading State */
+.data-table .empty-state {
   text-align: center;
-  padding: 56px 24px;
-  color: var(--text-muted, rgba(235, 235, 245, 0.40));
-  font-size: var(--font-size-callout, 13px);
+  padding: 48px 24px;
+  color: var(--text-muted);
+  font-size: 13px;
   line-height: 1.6;
 }
 
 .bm-empty-icon {
+  font-size: 20px;
   display: block;
-  font-size: 28px;
-  margin-bottom: 10px;
-  opacity: 0.6;
+  margin-bottom: 6px;
 }
 
-.benchmark-table tr.bm-row-error td {
-  background-color: var(--signal-red-bg, rgba(255, 69, 58, 0.08));
-  border-bottom-color: var(--signal-red-border, rgba(255, 69, 58, 0.25));
-}
-
-/* Light Theme Overrides */
-[data-theme="light"] .benchmark-container .table-panel {
-  background: var(--bg-surface, rgba(255, 255, 255, 0.85));
-  border-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
-}
-
-[data-theme="light"] .benchmark-table thead th {
-  background-color: rgba(0, 0, 0, 0.02);
-  border-bottom-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
-  color: var(--text-muted, #86868B);
-}
-
-[data-theme="light"] .benchmark-table tbody td {
-  border-bottom-color: var(--border-subtle, rgba(0, 0, 0, 0.06));
-  color: var(--text-secondary, #6E6E73);
-}
-
-[data-theme="light"] .benchmark-table tbody tr:hover td {
-  background-color: rgba(0, 0, 0, 0.03);
-  color: var(--text-primary, #1D1D1F);
-}
-
-[data-theme="light"] .bm-query-title {
-  color: var(--text-primary, #1D1D1F);
-}
-
-[data-theme="light"] .bm-model-pill {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.08);
-  color: var(--text-primary, #1D1D1F);
-}
-
-[data-theme="light"] .bm-model-pill.b1-model {
-  background: rgba(255, 59, 48, 0.08);
-  border-color: rgba(255, 59, 48, 0.22);
-  color: var(--signal-red-text, #DC2626);
-}
-
-[data-theme="light"] .bm-model-pill.smart-model {
-  background: rgba(88, 86, 214, 0.10);
-  border-color: rgba(88, 86, 214, 0.25);
-  color: var(--signal-indigo-text, #4F46E5);
-}
-
-[data-theme="light"] .bm-savings-pill {
-  background: var(--signal-emerald-bg, rgba(40, 205, 65, 0.12));
-  border-color: var(--signal-emerald-border, rgba(40, 205, 65, 0.28));
-  color: var(--signal-emerald-text, #1CA835);
-}
-
-[data-theme="light"] .bm-speedup-pill {
-  background: var(--signal-indigo-bg, rgba(88, 86, 214, 0.12));
-  border-color: var(--signal-indigo-border, rgba(88, 86, 214, 0.28));
-  color: var(--signal-indigo-text, #4F46E5);
-}
-
-/* ============================================================================
-   6. Responsive Layout Media Queries
-   ============================================================================ */
-@media (max-width: 960px) {
-  .benchmark-container {
-    padding: 20px 16px 60px;
-  }
-
-  .benchmark-container .view-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
-  }
-
-  #run-benchmark-btn {
-    width: 100%;
-  }
-
-  .benchmark-summary-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
+.bm-row-error td {
+  background-color: rgba(244, 63, 94, 0.04) !important;
 }

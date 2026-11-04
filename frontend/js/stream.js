@@ -346,12 +346,12 @@ async function executeUnaryFallback(payload, signal, callbacks) {
   }
 
   const routeInfo = {
-    target_tier: data.tier || "tier_1",
-    target_model: data.model_id || "fallback-model",
-    target_name: data.model_name || data.model_id || "Fallback Model",
-    provider: data.provider || "gateway",
-    cost_usd: data.cost_usd ?? 0.0,
-    latency_ms: data.latency_ms ?? 0.0,
+    target_tier: data.tier || data.target_tier || data.model?.tier || "tier_1",
+    target_model: data.model?.model_id || data.model_id || data.selected_model || "fallback-model",
+    target_name: data.model?.model_name || data.model_name || data.model?.name || data.model_id || "Fallback Model",
+    provider: data.provider || data.model?.provider || "gateway",
+    cost_usd: data.total_cost_usd ?? data.cost_usd ?? 0.0,
+    latency_ms: data.total_latency_ms ?? data.latency_ms ?? 0.0,
   };
   if (typeof onPipelineStatus === "function") {
     onPipelineStatus("routing", routeInfo);

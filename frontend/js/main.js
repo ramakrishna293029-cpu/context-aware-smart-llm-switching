@@ -132,7 +132,7 @@ export function switchView(viewName) {
 
   if (normalized === "chat") {
     focusComposer();
-    const chatContainer = $("chat-container");
+    const chatContainer = $("chat-messages") || $("chat-container");
     if (chatContainer) smoothScrollToBottom(chatContainer);
   }
 
@@ -295,9 +295,13 @@ async function handleChatSubmission(queryText, strategyOverride) {
   let accumulatedReasoning = "";
   let routingMetadata = {};
 
-  // 5. Build request payload from conversation history
+  // 5. Build request payload from conversation history (excluding the current query just appended)
   const activeSession = sessionManager.getActiveSession();
-  const messagesPayload = (activeSession?.messages || []).map((m) => ({
+  const allMessages = activeSession?.messages || [];
+  const historyMessages = allMessages.length > 0 && allMessages[allMessages.length - 1].content === query
+    ? allMessages.slice(0, -1)
+    : allMessages;
+  const messagesPayload = historyMessages.map((m) => ({
     role: m.role,
     content: m.content,
   }));
